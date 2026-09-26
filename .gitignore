@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+backend/.env
+backend/data/*.db
+node_modules/
+dist/
+.DS_Store
+backend/data/seed_truth.json
+.env.local
+.env*.local
+
+# SQLite WAL 부산물 — `backend/data/*.db` 패턴에 안 걸린다
+backend/data/*.db-shm
+backend/data/*.db-wal
+backend/data/*.db-journal
+.claude/
+*.log

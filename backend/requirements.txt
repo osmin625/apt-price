@@ -1,0 +1,15 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+python-dotenv==1.0.1
+
+# 헤도닉 회귀 전용. services/hedonic.py 안에서만 import 하며(지연 import),
+# 설치돼 있지 않아도 기존 3개 탭은 정상 동작한다. scipy는 statsmodels 전이 의존.
+# statsmodels 0.14.x 는 scipy>=1.16 에서 깨진다(_lazywhere 제거). 0.15 이상 필요.
+numpy==2.2.1
+pandas==2.2.3
+scipy==1.17.1
+statsmodels==0.15.0
