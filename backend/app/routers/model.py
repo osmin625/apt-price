@@ -70,6 +70,22 @@ def compare(req: CompareRequest, db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/status")
+def status(
+    db: Session = Depends(get_db),
+    months: int = Query(24, ge=6, le=120),
+    spec: str = Query(hedonic.DEFAULT_SPEC),
+):
+    """적합이 이미 계산돼 있는지. **계산하지 않는다**(12ms).
+
+    화면이 로딩 문구를 고르는 데 쓴다 — 처음 계산하는 것과 이미 있는 것을 불러오는
+    것은 걸리는 시간이 한 자릿수 다르다.
+    """
+    if not hedonic.available():
+        return {"cached": False, "source": None, "available": False}
+    return {**mv.fit_status(db, months=months, spec=spec), "available": True}
+
+
 @router.get("/factors")
 def factors(
     db: Session = Depends(get_db),

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
-import Loading, { FIT_HINT } from '../components/Loading'
+import FitLoading from '../components/FitLoading'
 import ScatterFit from '../components/ScatterFit'
 
 export default function ModelView({ months, onSelect }) {
@@ -30,7 +30,7 @@ export default function ModelView({ months, onSelect }) {
   if (!fit)
     return (
       <div className="card">
-        <Loading label="모델을 적합하는 중" hint={FIT_HINT} />
+        <FitLoading months={months} what="거리 모델을" />
       </div>
     )
 

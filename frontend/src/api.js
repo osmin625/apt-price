@@ -40,6 +40,7 @@ export const api = {
   residuals: (params) => request(`/model/residuals${qs(params)}`),
   groups: (params) => request(`/model/groups${qs(params)}`),
   factors: (params) => request(`/model/factors${qs(params)}`),
+  modelStatus: (params) => request(`/model/status${qs(params)}`),
   compare: (body) =>
     request('/model/compare', { method: 'POST', body: JSON.stringify(body) }),
   quoteRanking: (params) => request(`/quotes/ranking${qs(params)}`),

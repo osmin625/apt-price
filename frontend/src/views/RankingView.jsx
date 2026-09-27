@@ -125,8 +125,8 @@ export default function RankingView({ months, setMonths }) {
       {err && <p className="empty">{err}</p>}
       {busy && !data && (
         <Loading
-          label="쌓인 매물을 평가하는 중"
-          hint="매물마다 같은 단지·평형의 실거래를 찾아 비교합니다. 매물이 많을수록 오래 걸립니다."
+          label="매물별 적정가를 계산하는 중"
+          hint="매물마다 같은 단지·같은 평형의 실거래를 모아 시점과 층을 보정한 뒤 중앙값을 냅니다. 매물이 많을수록 오래 걸립니다."
         />
       )}
 

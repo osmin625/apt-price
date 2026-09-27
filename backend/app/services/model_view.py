@@ -233,6 +233,27 @@ def peek_fit(
     return next(reversed(_cache.values()), None)
 
 
+def fit_status(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
+    """적합이 **이미 있는지**만 본다. 계산하지 않는다.
+
+    화면이 "모델을 적합하는 중" 이라고 말할지 "불러오는 중" 이라고 말할지는 이 답에
+    달렸다. 둘은 걸리는 시간이 한 자릿수 다르고(수십 초 vs 2초 안팎) 사용자가 할
+    일도 다르다 — 앞은 기다려야 하고 뒤는 곧 끝난다.
+
+    경과 시간으로 짐작할 수도 있지만 그건 이미 기다린 뒤에야 아는 것이다. 12ms 면
+    물어볼 수 있는 것을 짐작할 이유가 없다.
+    """
+    key = _cache_key(db, months, spec)
+    if key in _cache:
+        source = "memory"
+    elif not FIT_CACHE_OFF and _disk_path(key).exists():
+        source = "disk"
+    else:
+        source = None
+    return {"months": months, "spec": spec, "cached": source is not None,
+            "source": source}
+
+
 def fit_payload(fit: dict) -> dict:
     """API 응답 — DataFrame 과 내부 객체를 제외한 순수 JSON.
 
