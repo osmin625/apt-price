@@ -45,7 +45,7 @@ function useNarrow(query = '(max-width: 720px)') {
   return narrow
 }
 
-export default function RankTable({ items, basis, onDelete, deleting }) {
+export default function RankTable({ items, basis, onDelete, deleting, onSelect }) {
   const narrow = useNarrow()
   if (!items?.length) return null
 
@@ -61,7 +61,13 @@ export default function RankTable({ items, basis, onDelete, deleting }) {
   return (
     <>
       {narrow ? (
-        <RankCards items={items} basis={basis} onDelete={onDelete} deleting={deleting} />
+        <RankCards
+          items={items}
+          basis={basis}
+          onDelete={onDelete}
+          deleting={deleting}
+          onSelect={onSelect}
+        />
       ) : (
       <div className="table-wrap">
         <table>
@@ -91,7 +97,15 @@ export default function RankTable({ items, basis, onDelete, deleting }) {
                 }`}
               >
                 <td className="num rank-no">{i.rank ?? '—'}</td>
-                <td>{i.complex_name}</td>
+                <td>
+                  {onSelect ? (
+                    <button className="linklike" onClick={() => onSelect(i.complex_id)}>
+                      {i.complex_name}
+                    </button>
+                  ) : (
+                    i.complex_name
+                  )}
+                </td>
                 <td>
                   {i.dong ? `${i.dong}동` : <span className="muted">—</span>}
                   {i.listing_count > 1 && !i.group_count && (

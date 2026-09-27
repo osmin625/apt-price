@@ -11,7 +11,7 @@ import RankTable from '../components/RankTable'
  * 붙여넣기마다 `Quote` 로 남으므로 순위를 따로 저장할 필요가 없다. 기간을 바꾸면
  * 그 기간의 실거래로 전부 다시 계산된다 — 저장된 것은 매물이지 평가가 아니다.
  */
-export default function RankingView({ months, setMonths }) {
+export default function RankingView({ months, setMonths, onSelect }) {
   const [basis, setBasis] = useState('market')
   const [days, setDays] = useState('')
   const [data, setData] = useState(null)
@@ -148,6 +148,7 @@ export default function RankingView({ months, setMonths }) {
             basis={basis}
             onDelete={remove}
             deleting={deleting}
+            onSelect={onSelect}
           />
           {data.skipped?.length > 0 && (
             <p className="paste-warn" style={{ marginTop: 8 }}>

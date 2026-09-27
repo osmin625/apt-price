@@ -32,7 +32,7 @@ const TONE = {
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
-export default function RankCards({ items, basis, onDelete, deleting }) {
+export default function RankCards({ items, basis, onDelete, deleting, onSelect }) {
   return (
     <ul className="rank-cards">
       {items.map((i, n) => {
@@ -45,7 +45,13 @@ export default function RankCards({ items, basis, onDelete, deleting }) {
           >
             <div className="rc-head">
               <span className="rc-rank">{i.rank ?? '—'}</span>
-              <span className="rc-name">{i.complex_name}</span>
+              {onSelect ? (
+                <button className="rc-name linklike" onClick={() => onSelect(i.complex_id)}>
+                  {i.complex_name}
+                </button>
+              ) : (
+                <span className="rc-name">{i.complex_name}</span>
+              )}
               <span className="verdict" data-tone={TONE[i.verdict]}>
                 {i.verdict}
               </span>
