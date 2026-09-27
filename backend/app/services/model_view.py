@@ -93,6 +93,9 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     else:
         fit["synthetic"] = False
 
+    # 어느 기간으로 적합했는지 결과에 박아 둔다. `peek_fit` 으로 집어 간 쪽이
+    # '이 값은 최근 N개월 적합에서 나왔다' 고 화면에 밝힐 수 있어야 한다.
+    fit["months"] = months
     _cache[key] = fit
     _cache.move_to_end(key)
     while len(_cache) > CACHE_SIZE:
@@ -104,15 +107,35 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
 _NON_JSON = ("alpha", "residuals", "dong_effects")
 
 
-def peek_fit(db) -> dict | None:
+def peek_fit(
+    db, months: int | None = None, spec: str = hedonic.DEFAULT_SPEC
+) -> dict | None:
     """**이미 계산된** 적합만 돌려준다. 없으면 None — 새로 돌리지 않는다.
 
-    동 프리미엄처럼 '있으면 좋은' 정보를 붙이는 쪽에서 쓴다. 가벼운 엔드포인트가
-    14초짜리 적합을 기다리게 만들면 안 된다.
+    가벼운 엔드포인트가 십수 초짜리 적합을 기다리게 만들면 안 되므로, 캐시에 있는
+    것만 쓰고 없으면 그 정보를 빼고 응답한다.
+
+    ## months 를 주면 그것부터 찾는다
+
+    예전에는 인자 없이 **캐시의 가장 최근 것**을 그냥 돌려줬다. 동 프리미엄처럼
+    '있으면 좋은' 보조 정보에만 쓸 때는 기간이 좀 달라도 상관없었다.
+
+    그런데 지금은 여기서 나온 적합이 **요인 기준 적정가 전체**를 만든다. 그래서
+    같은 매물을 같은 조건으로 조회해도 캐시에 마지막으로 들어간 것이 무엇이냐에 따라
+    답이 달라졌다 — 실측으로 요인 적정가가 7.03억 ↔ 7.17억(2%)로 갈렸다. 시장 분석
+    탭에서 기간을 바꾸고 순위표로 돌아오면 숫자가 변하는 셈이다.
+
+    요청한 기간의 적합이 캐시에 있으면 그것을 쓴다. 없으면 종전처럼 가장 최근 것을
+    주되, 호출한 쪽이 **무엇을 썼는지 화면에 밝힐 수 있도록** `fit["months"]` 를
+    함께 읽어 가도록 한다. 기다리지 않는다는 성질은 그대로다.
     """
-    # 가장 최근에 쓴 것을 준다. 보고 있는 화면과 기간이 다를 수는 있는데, 동 프리미엄은
-    # 단지 내부 값이라 기간에 크게 흔들리지 않고 어차피 보조 정보다.
-    return next(reversed(_cache.values()), None) if _cache else None
+    if not _cache:
+        return None
+    if months is not None:
+        for key, fit in _cache.items():
+            if key[0] == months and key[1] == spec:
+                return fit
+    return next(reversed(_cache.values()), None)
 
 
 def fit_payload(fit: dict) -> dict:

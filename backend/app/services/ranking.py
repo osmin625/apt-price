@@ -42,7 +42,7 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
     그 밖의 키(seen_count, first_seen 등)는 결과에 그대로 실어 보낸다.
     """
     ctx: dict = {}
-    fit = mv.peek_fit(db)
+    fit = mv.peek_fit(db, months=months)
     dong_effects = (fit or {}).get("dong_effects")
 
     items, skipped = [], []
@@ -113,6 +113,9 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
 
     return {
         "count": len(items),
+        # 요인 기준 열이 어느 기간 적합에서 나왔는지. 캐시에 요청한 기간이
+        # 없으면 다른 기간 것을 쓰므로, 무엇을 썼는지는 밝혀야 한다.
+        "factor_months": (fit or {}).get("months"),
         "basis": basis,
         "basis_label": "요인 기준" if basis == "factor" else "실거래 기준",
         "items": ranked + rest,

@@ -64,6 +64,12 @@ export default function RankingView({ months, setMonths }) {
             {' '}
             {data.count}건 · 최근 {months}개월 실거래 기준
             {data.grouped_away > 0 && ` · 같은 층대로 접힌 매물 ${data.grouped_away}건`}
+            {data.factor_months != null && data.factor_months !== months && (
+              <>
+                {' · '}
+                <span data-tone="warn">요인 기준은 {data.factor_months}개월 적합</span>
+              </>
+            )}
             {data.revised_units > 0 && ` · 호가 바뀐 매물 ${data.revised_units}건`}
           </span>
         )}
@@ -74,6 +80,7 @@ export default function RankingView({ months, setMonths }) {
             '접힌 매물은 호가 옆 건수 배지에 마우스를 올리면 전부 펼쳐집니다. 합친 게 아니라 접은 것이라 한 건도 사라지지 않습니다 — 다만 그 줄을 지우면 접힌 매물이 함께 지워집니다.',
             '같은 집이 값을 바꿔 다시 올라온 경우는 ▼ 배지로 변동을 표시합니다. 옛 호가와 올라와 있던 기간이 겹치지 않을 때만 같은 집으로 봅니다.',
             '더 저평가된 매물이 위로 갑니다. 분석 기간을 바꾸면 그 기간의 실거래로 전부 다시 계산됩니다.',
+            '요인 기준 열은 헤도닉 적합에서 나오는데, 적합은 무거워서 이미 계산된 것만 씁니다. 요청한 기간의 적합이 아직 없으면 다른 기간 것을 쓰고 제목에 그 사실을 적습니다 — 시장 분석 탭을 같은 기간으로 한 번 열면 맞춰집니다.',
           ]}
         />
       </h2>

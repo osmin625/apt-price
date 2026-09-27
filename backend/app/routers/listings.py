@@ -66,7 +66,7 @@ def _evaluate(db: Session, payload: ListingInput, months: int) -> dict:
     # 가벼운 진단이 14초짜리 적합을 기다리게 만들 이유는 없다.
     from ..services import model_view as mv
 
-    cached = mv.peek_fit(db)
+    cached = mv.peek_fit(db, months=months)
     fair = analysis.estimate_fair_price(
         db,
         complex_id=payload.complex_id,
