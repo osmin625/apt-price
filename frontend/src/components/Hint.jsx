@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * 값에 붙는 주석 — 호버(또는 포커스)했을 때만 펼친다.
@@ -25,9 +25,8 @@ export default function Hint({ notes, children, tone = 'info', label, wide, pill
   const [pos, setPos] = useState(null)
 
   const list = (notes || []).filter(Boolean)
-  if (list.length === 0 && !children) return null
 
-  const open = () => {
+  const openAt = () => {
     const r = dotRef.current?.getBoundingClientRect()
     if (!r) return
     const w = wide ? 360 : 290
@@ -43,15 +42,53 @@ export default function Hint({ notes, children, tone = 'info', label, wide, pill
     )
   }
 
+  const close = () => setPos(null)
+
+  // 손가락에는 호버가 없다.
+  //
+  // 휴대폰에서 순위 카드의 ⓘ 를 눌러도 아무 일이 없었다. 열리는 경로가 `mouseenter`
+  // 와 `focus` 뿐인데, 터치 브라우저는 앞의 것을 흉내만 내고(첫 탭에서 한 번, 그나마
+  // 기기마다 다르다) 뒤의 것은 폼 요소가 아니면 잘 주지 않는다.
+  //
+  // 그래서 **탭으로 여닫게** 한다. 데스크톱에서도 클릭으로 고정할 수 있어 나쁘지 않다.
+  const toggle = (e) => {
+    e.stopPropagation()
+    if (pos) close()
+    else openAt()
+  }
+
+  // 열려 있는 동안 바깥을 누르면 닫는다. 터치에는 `mouseleave` 가 오지 않으므로
+  // 이게 없으면 한 번 연 팝업이 계속 떠 있는다.
+  useEffect(() => {
+    if (!pos) return
+    const onDocDown = () => close()
+    document.addEventListener('pointerdown', onDocDown)
+    return () => document.removeEventListener('pointerdown', onDocDown)
+  }, [pos])
+
+  // 훅을 다 부른 **뒤에** 판단한다. 조기 반환을 위에 두면 훅이 조건부로 호출돼
+  // 리액트가 렌더마다 다른 훅 순서를 보게 된다.
+  if (list.length === 0 && !children) return null
+
   return (
     <span
       className={`hint is-${tone}`}
       tabIndex={0}
-      role="note"
-      onMouseEnter={open}
-      onFocus={open}
-      onMouseLeave={() => setPos(null)}
-      onBlur={() => setPos(null)}
+      role="button"
+      aria-expanded={!!pos}
+      onMouseEnter={openAt}
+      onFocus={openAt}
+      onMouseLeave={close}
+      onBlur={close}
+      onPointerDown={toggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          toggle(e)
+        } else if (e.key === 'Escape') {
+          close()
+        }
+      }}
     >
       <span className={`hint-dot${pill ? ' is-pill' : ''}`} ref={dotRef} aria-hidden="true">
         {label ?? (tone === 'warn' ? '!' : 'i')}

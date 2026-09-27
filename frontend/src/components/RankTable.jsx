@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
+
 import { eok, fmt } from './Charts'
 import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
 import PriceTrail from './PriceTrail'
+import RankCards from './RankCards'
 
 const TONE = {
   저평가: 'good',
@@ -24,7 +27,26 @@ const TONE = {
  * 단지 프리미엄은 그 단지 전체에 똑같이 곱해지므로 순서를 바꾸지 못한다.
  * 순위가 갈리려면 **서로 다른 단지**가 섞여야 한다. 그 사실을 표 아래에 적는다.
  */
+/**
+ * 좁은 화면인가. `matchMedia` 를 쓰는 이유는 CSS 의 중단점과 **같은 값** 하나로
+ * 맞추기 위해서다 — 여기서 720px, CSS 에서 720px 로 따로 적으면 언젠가 어긋난다.
+ */
+function useNarrow(query = '(max-width: 720px)') {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const on = (e) => setNarrow(e.matches)
+    setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [query])
+  return narrow
+}
+
 export default function RankTable({ items, basis, onDelete, deleting }) {
+  const narrow = useNarrow()
   if (!items?.length) return null
 
   const byMarket = [...items].sort((a, b) => (a.gap_pct ?? 9e9) - (b.gap_pct ?? 9e9))
@@ -38,6 +60,9 @@ export default function RankTable({ items, basis, onDelete, deleting }) {
 
   return (
     <>
+      {narrow ? (
+        <RankCards items={items} basis={basis} onDelete={onDelete} deleting={deleting} />
+      ) : (
       <div className="table-wrap">
         <table>
           <thead>
@@ -146,6 +171,7 @@ export default function RankTable({ items, basis, onDelete, deleting }) {
           </tbody>
         </table>
       </div>
+      )}
 
       {sameOrder && (
         <p className="muted small" style={{ marginTop: 8 }}>
