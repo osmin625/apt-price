@@ -16,3 +16,6 @@ backend/data/*.db-wal
 backend/data/*.db-journal
 .claude/
 *.log
+
+# 적합 디스크 캐시 — 데이터+코드 해시로 키를 잡으므로 언제든 다시 만들 수 있다
+backend/data/fitcache/

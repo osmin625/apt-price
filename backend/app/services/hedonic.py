@@ -170,45 +170,57 @@ def load_rows(db, months: int = 24) -> list[dict]:
             )
 
     rows = []
+    # **엔티티가 아니라 컬럼만 읽는다.** `select(Trade, Complex)` 는 행마다 ORM 객체
+    # 두 개를 만들어 식별 맵에 넣는데, 여기서 쓰는 것은 열 열여섯 개뿐이다. 경기
+    # 남부 24개월치 11.7만 행에서 이 비용이 6초였고, 적합 전체(12.9초)의 절반이었다.
+    # `analysis.load_points` 와 같은 이유·같은 방식이다.
     stmt = (
-        select(Trade, Complex)
+        select(
+            Trade.deal_ym, Trade.exclusive_area, Trade.floor, Trade.deal_amount,
+            Trade.build_year, Trade.apt_dong,
+            Complex.id, Complex.name, Complex.sgg_cd, Complex.sgg_name,
+            Complex.umd_nm, Complex.max_floor, Complex.build_year,
+            Complex.walk_seconds, Complex.household_count, Complex.lat, Complex.lng,
+            Complex.best_access_station_id, Complex.nearest_station_id,
+        )
         .join(Complex, Complex.id == Trade.complex_id)
         .where(Trade.deal_date >= cutoff)
     )
-    for trade, cx in db.execute(stmt).all():
-        if cx.walk_seconds is None:
+    for (deal_ym, area, floor, amount, t_year, apt_dong,
+         cx_id, cx_name, sgg_cd, sgg_name, umd_nm, max_floor, cx_year,
+         walk_seconds, households, lat, lng, best_sid, near_sid) in db.execute(stmt):
+        if walk_seconds is None:
             continue
         gangnam = None
-        for sid in (cx.best_access_station_id, cx.nearest_station_id):
+        for sid in (best_sid, near_sid):
             if sid and stations.get(sid) and stations[sid].minutes_to_gangnam is not None:
                 gangnam = stations[sid].minutes_to_gangnam
                 break
-        near = stations.get(cx.nearest_station_id)
+        near = stations.get(near_sid)
+        dong = (apt_dong or "").strip()
         rows.append(
             {
-                "complex_id": cx.id,
-                "complex_name": cx.name,
-                "sgg_cd": cx.sgg_cd,
-                "sgg_name": cx.sgg_name,
-                "umd_nm": cx.umd_nm,
-                "deal_ym": trade.deal_ym,
-                "exclusive_area": trade.exclusive_area,
-                "floor": trade.floor,
-                "max_floor": cx.max_floor,
-                "deal_amount": trade.deal_amount,
-                "build_year": trade.build_year or cx.build_year,
-                "walk_min": pricing.walk_minutes_from_seconds(cx.walk_seconds),
+                "complex_id": cx_id,
+                "complex_name": cx_name,
+                "sgg_cd": sgg_cd,
+                "sgg_name": sgg_name,
+                "umd_nm": umd_nm,
+                "deal_ym": deal_ym,
+                "exclusive_area": area,
+                "floor": floor,
+                "max_floor": max_floor,
+                "deal_amount": amount,
+                "build_year": t_year or cx_year,
+                "walk_min": pricing.walk_minutes_from_seconds(walk_seconds),
                 "gangnam_min": gangnam,
-                "household_count": cx.household_count,
+                "household_count": households,
                 "line": near.line if near else None,
-                "lat": cx.lat,
-                "lng": cx.lng,
-                "apt_dong": (trade.apt_dong or "").strip() or None,
+                "lat": lat,
+                "lng": lng,
+                "apt_dong": dong or None,
                 # 그 거래가 속한 동의 도보시간. 좌표를 못 찾은 동은 None 이고,
                 # 그 거래는 단지 내 비교에 기여하지 않는다(다른 항 추정에는 계속 쓰인다).
-                "dong_walk_min": dong_walk.get(
-                    (cx.id, (trade.apt_dong or "").strip())
-                ),
+                "dong_walk_min": dong_walk.get((cx_id, dong)),
             }
         )
     return rows

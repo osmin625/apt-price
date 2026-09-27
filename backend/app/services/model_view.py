@@ -6,9 +6,15 @@ hedonic.py 는 통계만 하고, 이 모듈이 화면이 필요로 하는 모양
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import math
+import os
+import pickle
 from collections import OrderedDict
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -23,6 +29,8 @@ RING_LEVELS_PCT = (-5.0, -10.0, -15.0, -20.0)
 # 적합 결과 캐시. **여러 칸이 필요하다** — 탭마다 요청하는 기간이 다르기 때문이다
 # (시장 분석 12개월, 매물 분석 24개월). 한 칸만 두면 탭을 오갈 때마다 캐시가 어긋나
 # 13초짜리 재적합이 매번 돈다. 간단한 LRU 로 둔다.
+log = logging.getLogger(__name__)
+
 CACHE_SIZE = 4
 _cache: "OrderedDict[tuple, dict]" = OrderedDict()
 
@@ -57,12 +65,98 @@ def _truth_curve(truth: dict, xs: list[float], x_ref: float) -> list[float]:
     return [round((math.exp(eff(x) - base) - 1) * 100, 3) for x in xs]
 
 
+# 적합 결과를 디스크에도 둔다.
+#
+# 메모리 캐시는 프로세스가 죽으면 같이 죽는다. `--reload` 는 파일을 저장할 때마다
+# 서버를 다시 띄우므로, 개발 중에는 거리 모델 탭을 열 때마다 처음부터 다시 적합했다.
+# 배포에서도 재시작·스케일아웃마다 첫 방문자가 그 값을 치른다.
+#
+# 적합은 **데이터와 코드만의 함수**다. 같은 거래에 같은 코드면 결과가 같으므로,
+# 그 둘을 키에 넣으면 디스크에 두고 재사용해도 안전하다.
+#
+#   - 데이터: 이미 메모리 캐시 키가 쓰는 (최대 거래 id, 거래 수)
+#   - 코드: 모델을 만드는 모듈들의 소스 해시. 버전 상수를 손으로 올리는 방식은
+#     언젠가 올리는 것을 잊는다. 소스가 바뀌면 자동으로 키가 달라지게 한다.
+FIT_CACHE_DIR = BASE_DIR / "data" / "fitcache"
+FIT_CACHE_KEEP = 8
+# 디스크 캐시를 끄는 탈출구. 모델을 고치며 결과를 계속 비교할 때 쓴다.
+FIT_CACHE_OFF = os.environ.get("FIT_CACHE", "1").strip() in {"0", "false", "no"}
+
+
+@lru_cache(maxsize=1)
+def _code_fingerprint() -> str:
+    """적합 결과를 좌우하는 모듈들의 소스 해시."""
+    h = hashlib.sha256()
+    here = Path(__file__).resolve().parent
+    for rel in ("hedonic.py", "model_view.py", "../pricing.py"):
+        try:
+            h.update((here / rel).resolve().read_bytes())
+        except OSError:
+            return "nofingerprint"
+    return h.hexdigest()[:16]
+
+
+def _disk_path(key: tuple) -> Path:
+    name = hashlib.sha256(
+        (repr(key) + "|" + _code_fingerprint()).encode()
+    ).hexdigest()[:32]
+    return FIT_CACHE_DIR / f"{name}.pkl"
+
+
+def _disk_load(key: tuple) -> dict | None:
+    if FIT_CACHE_OFF:
+        return None
+    p = _disk_path(key)
+    try:
+        if not p.exists():
+            return None
+        with p.open("rb") as f:
+            fit = pickle.load(f)
+    except Exception:
+        # 깨진 파일·다른 파이썬으로 만든 파일 등. 캐시 때문에 서비스가 죽으면 안 된다.
+        log.warning("적합 디스크 캐시를 읽지 못했습니다: %s", p.name, exc_info=True)
+        try:
+            p.unlink()
+        except OSError:
+            pass
+        return None
+    return fit if isinstance(fit, dict) and "alpha" in fit else None
+
+
+def _disk_store(key: tuple, fit: dict) -> None:
+    if FIT_CACHE_OFF:
+        return
+    try:
+        FIT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # 파생 조회표(`_index`)는 저장하지 않는다 — 읽은 쪽에서 다시 만들면 된다.
+        payload = {k: v for k, v in fit.items() if k != "_index"}
+        tmp = _disk_path(key).with_suffix(".tmp")
+        with tmp.open("wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(_disk_path(key))
+        # 오래된 것부터 정리. 거래가 늘거나 코드가 바뀌면 키가 달라져 쌓이기만 한다.
+        files = sorted(FIT_CACHE_DIR.glob("*.pkl"), key=lambda p: p.stat().st_mtime)
+        for old in files[:-FIT_CACHE_KEEP]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        log.warning("적합 디스크 캐시를 쓰지 못했습니다", exc_info=True)
+
+
 def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     """적합 결과(캐시). alpha DataFrame 을 포함하므로 API 직렬화 전에 걸러야 한다."""
     key = _cache_key(db, months, spec)
     if key in _cache:
         _cache.move_to_end(key)
         return _cache[key]
+
+    # 프로세스가 다시 떠도 같은 적합을 두 번 계산하지 않는다.
+    cached = _disk_load(key)
+    if cached is not None:
+        _cache[key] = cached
+        _cache.move_to_end(key)
+        while len(_cache) > CACHE_SIZE:
+            _cache.popitem(last=False)
+        return cached
 
     # 적합은 별도 프로세스에서 돈다. 14초 동안 GIL 을 쥐고 있어서, 인프로세스로
     # 돌리면 그 사이 다른 요청이 전부 멈춘다(`fit_worker` 모듈 주석 참조).
@@ -96,6 +190,7 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     # 어느 기간으로 적합했는지 결과에 박아 둔다. `peek_fit` 으로 집어 간 쪽이
     # '이 값은 최근 N개월 적합에서 나왔다' 고 화면에 밝힐 수 있어야 한다.
     fit["months"] = months
+    _disk_store(key, fit)
     _cache[key] = fit
     _cache.move_to_end(key)
     while len(_cache) > CACHE_SIZE:
