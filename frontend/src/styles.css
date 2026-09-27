@@ -465,6 +465,39 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   .live { animation: none; }
 }
 
+/* 로딩 — 진행률이 아니라 경과 시간을 보여 준다(Loading.jsx 주석 참조) */
+.loading { padding: 28px 0 24px; max-width: 360px; margin: 0 auto; }
+.loading.is-compact { padding: 12px 0; }
+.loading-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 8px;
+}
+.loading-label { font-size: 13px; color: var(--text-secondary); }
+.loading-sec {
+  font-size: 12px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.loading-bar {
+  position: relative; height: 3px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+}
+/* 끝이 없는 막대. 진행률이 아니라 '살아 있다' 는 표시다. */
+.loading-bar > span {
+  position: absolute; inset: 0 auto 0 0; width: 38%;
+  border-radius: 999px; background: var(--series-1);
+  animation: loading-slide 1.25s ease-in-out infinite;
+}
+@keyframes loading-slide {
+  0% { left: -38%; }
+  100% { left: 100%; }
+}
+.loading-hint {
+  margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--text-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar > span { animation: none; left: 0; width: 100%; opacity: 0.5; }
+}
+
 /* 적정가 진단 실거래 표에서 '같은 동' 거래를 강조 */
 tr.is-same-dong td { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
 tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }

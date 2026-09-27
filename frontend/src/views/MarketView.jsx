@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
+import Loading, { FIT_HINT } from '../components/Loading'
 import { PremiumBars, fmt } from '../components/Charts'
 import FactorCurve from '../components/FactorCurve'
 
@@ -92,7 +93,7 @@ function FactorPanel({ months }) {
     return (
       <section className="card">
         <h2>요인별 보정계수</h2>
-        <div className="empty">모델을 적합하는 중…</div>
+        <Loading label="모델을 적합하는 중" hint={FIT_HINT} />
       </section>
     )
   }

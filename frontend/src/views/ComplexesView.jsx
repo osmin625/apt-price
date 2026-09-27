@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { FilterBar } from '../App'
 import { api } from '../api'
 import { fmt } from '../components/Charts'
+import Loading from '../components/Loading'
 
 const SORTS = [
   { id: 'ppp_desc', label: '평당가 높은 순' },
@@ -88,7 +89,7 @@ export default function ComplexesView({ filters, setFilters, meta, onSelect }) {
         )}
 
         {loading ? (
-          <p className="empty">불러오는 중…</p>
+          <Loading label="단지를 불러오는 중" />
         ) : rows.length === 0 ? (
           <p className="empty">조건에 맞는 단지가 없습니다.</p>
         ) : (

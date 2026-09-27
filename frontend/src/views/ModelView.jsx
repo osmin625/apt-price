@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
+import Loading, { FIT_HINT } from '../components/Loading'
 import ScatterFit from '../components/ScatterFit'
 
 export default function ModelView({ months, onSelect }) {
@@ -26,7 +27,12 @@ export default function ModelView({ months, onSelect }) {
   }, [months])
 
   if (error) return <div className="card empty">{error}</div>
-  if (!fit) return <div className="card empty">모델을 적합하는 중…</div>
+  if (!fit)
+    return (
+      <div className="card">
+        <Loading label="모델을 적합하는 중" hint={FIT_HINT} />
+      </div>
+    )
 
   const curve = fit.curves.walk_minutes
   const points = (map?.items || []).map((i) => ({

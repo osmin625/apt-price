@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { fmt } from '../components/Charts'
 import KakaoMap from '../components/KakaoMap'
+import Loading, { FIT_HINT } from '../components/Loading'
 import ScatterFit from '../components/ScatterFit'
 
 const METRICS = [
@@ -108,7 +109,12 @@ export default function MapView({ months, onSelect }) {
   }, [showRings, selected, stations])
 
   if (error) return <div className="card empty">{error}</div>
-  if (!data || !fit) return <div className="card empty">불러오는 중…</div>
+  if (!data || !fit)
+    return (
+      <div className="card">
+        <Loading label="지도와 모델을 불러오는 중" hint={FIT_HINT} />
+      </div>
+    )
 
   return (
     <>

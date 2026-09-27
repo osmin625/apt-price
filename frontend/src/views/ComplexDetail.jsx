@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { RangeDotChart, fmt } from '../components/Charts'
+import Loading from '../components/Loading'
 
 export default function ComplexDetail({ complexId, months, onClose }) {
   const [data, setData] = useState(null)
@@ -12,7 +13,7 @@ export default function ComplexDetail({ complexId, months, onClose }) {
     api.complex(complexId, { months }).then(setData).catch(() => setData(null))
   }, [complexId, months])
 
-  if (!data) return <p className="empty">불러오는 중…</p>
+  if (!data) return <Loading label="단지 상세를 불러오는 중" compact />
 
   const cx = data.complex
 

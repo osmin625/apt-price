@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import Hint from '../components/Hint'
+import Loading from '../components/Loading'
 import RankTable from '../components/RankTable'
 
 /**
@@ -122,7 +123,12 @@ export default function RankingView({ months, setMonths }) {
       </div>
 
       {err && <p className="empty">{err}</p>}
-      {busy && !data && <p className="empty live">쌓인 매물을 평가하는 중…</p>}
+      {busy && !data && (
+        <Loading
+          label="쌓인 매물을 평가하는 중"
+          hint="매물마다 같은 단지·평형의 실거래를 찾아 비교합니다. 매물이 많을수록 오래 걸립니다."
+        />
+      )}
 
       {data && data.count === 0 && (
         <p className="empty">
