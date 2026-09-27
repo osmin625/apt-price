@@ -375,7 +375,22 @@ def estimate_fair_price(
     # 아는 게 적다. 단지 전체 표본 수로 '높음' 을 주면 확신을 과장하게 된다.
     own_n = sum(1 for p in sample if dong and (p.apt_dong or "") == dong) if dong else None
     confidence_note = None
-    if dong:
+
+    # 표본이 **이 단지 밖**에서 온 경우가 먼저다. 거래가 없거나 그 평형이 아직
+    # 거래되지 않은 단지는 유사 입지·연식·면적대 단지로 대신하는데(`basis` 참조),
+    # 그때 '다른 동의 시세로 대신했다' 고 말하면 같은 단지인 줄 알게 된다.
+    # 수원성중흥S-클래스(실거래 1건, 84.66㎡)에 75.97㎡ 매물을 넣었을 때 실제로
+    # 표본 28건이 전부 다른 단지였는데 '106동 거래가 없다' 고 안내했다.
+    own_cx_n = sum(1 for p in sample if p.complex_id == complex_id)
+    outside = n - own_cx_n
+    if outside > own_cx_n:
+        confidence = "낮음"
+        confidence_note = (
+            f"이 단지·이 평형의 실거래는 {own_cx_n}건뿐입니다. 나머지 {outside}건은 "
+            "역거리·연식·면적대가 비슷한 다른 단지 거래로 채웠습니다 — 이 단지 고유의 "
+            "프리미엄은 반영되지 않았습니다."
+        )
+    elif dong:
         if own_n == 0:
             confidence = "낮음"
             confidence_note = (
