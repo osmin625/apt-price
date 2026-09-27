@@ -323,6 +323,23 @@ def _head_name(text: str) -> str:
     return pricing.name_key(_HEAD_DONG.sub("", line.strip()))
 
 
+def name_fragments(text: str) -> list[str]:
+    """첫 줄의 단지명을 **조각으로** 나눈다. '신성,신안,쌍용,진흥' → [신성, 신안, 쌍용, 진흥]
+
+    시공사 여러 곳이 함께 지은 단지를 네이버는 한 줄로 묶어 쓰는데, 국토부는 시공사마다
+    따로 기록한다. 수원 영통동 '신성,신안,쌍용,진흥' 은 국토부에 '신나무실신성'·
+    '신나무실신안'·'신나무실쌍용'·'신나무실진흥' 네 단지로 들어 있다(각 60여 건).
+    이름만으로는 1:N 이라 고를 수 없고, 그래서 조각을 따로 내어 준다.
+
+    조각 하나로는 못 고른다 — '쌍용' 은 전국에 흔하다. 어느 단지인지는 **동 번호**가
+    가른다(`routers/model._resolve_by_dong`).
+    """
+    line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    line = _HEAD_DONG.sub("", line.strip())
+    parts = re.split(r"[,/·∙・]+", line)
+    return [p for p in (x.strip() for x in parts) if len(p) >= 2]
+
+
 def _name_candidates(text: str, complexes: list) -> list[dict]:
     """텍스트 안에서 우리 DB 의 단지명을 찾는다.
 

@@ -173,6 +173,8 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
 
     cxs = db.execute(select(Complex)).scalars().all()
     out = listing_parse.parse_listing(req.text, cxs).as_dict()
+    # 시공사 합동 단지는 이름이 1:N 이라 못 고른다. 동 번호로 좁혀 본다.
+    _resolve_by_dong(out, req.text, db, cxs)
 
     if req.complex_id:
         picked = db.get(Complex, req.complex_id)
@@ -268,6 +270,58 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
 # 이 밖이면 공급으로 해석해도 말이 안 되므로 후보에서 뺀다.
 _RATIO_MIN, _RATIO_MAX = 0.60, 0.90
 _RATIO_TYPICAL = 0.75
+
+
+def _resolve_by_dong(out: dict, text: str, db: Session, complexes: list) -> None:
+    """단지명을 못 찾았을 때 **동 번호**로 좁힌다.
+
+    시공사 합동 단지는 네이버가 '신성,신안,쌍용,진흥' 으로 묶어 쓰고 국토부는
+    '신나무실신성'·'신나무실신안'·'신나무실쌍용'·'신나무실진흥' 으로 쪼개 기록한다.
+    이름으로는 1:N 이라 고를 수 없다.
+
+    그런데 **동 번호는 겹치지 않는다.** 실거래에 찍힌 동을 세어 보면 이렇다.
+
+        신나무실신안  531~534    신나무실신성  521~524
+        신나무실쌍용  541~544    신나무실진흥  551~554
+
+    그래서 543동은 쌍용, 534동은 신안으로 유일하게 정해진다. 이름 조각과 동 번호가
+    **둘 다** 맞을 때만 고르므로, '쌍용' 이 흔한 이름이어도 엉뚱한 단지가 걸리지 않는다.
+    둘 이상 남으면 고르지 않고 후보로만 둔다 — 찍는 것보다 낫다.
+    """
+    from sqlalchemy import select
+
+    from ..models import Trade
+    from ..services import listing_parse
+
+    dong = (out.get("dong") or "").strip()
+    if out.get("complex_id") or not dong:
+        return
+    frags = listing_parse.name_fragments(text)
+    if len(frags) < 2:
+        return  # 조각이 하나뿐이면 이름이 쪼개진 경우가 아니다
+
+    pool = [c for c in complexes if any(f in c.name for f in frags)]
+    if not pool:
+        return
+
+    ids = [c.id for c in pool]
+    rows = db.execute(
+        select(Trade.complex_id)
+        .where(Trade.complex_id.in_(ids))
+        .where(Trade.apt_dong.in_([dong, dong + "동"]))
+        .distinct()
+    ).scalars().all()
+    if len(rows) != 1:
+        return
+
+    cx = next(c for c in pool if c.id == rows[0])
+    out["complex_id"] = cx.id
+    out["complex_name"] = cx.name
+    out["warnings"] = [w for w in out.get("warnings", [])
+                       if w.get("field") != "complex"]
+    out["warnings"].append({"field": "complex", "text":
+        f"'{', '.join(frags)}' 는 시공사가 함께 지은 단지라 실거래에는 나뉘어 있습니다. "
+        f"{dong}동 거래가 있는 '{cx.name}' 으로 맞췄습니다."})
 
 
 def _resolve_area(
@@ -431,6 +485,7 @@ def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
     for block in blocks:
         raw = block["text"]
         p = listing_parse.parse_listing(raw, cxs).as_dict()
+        _resolve_by_dong(p, raw, db, cxs)
         cid = p.get("complex_id")
         if not cid:
             skipped.append({"text": raw.splitlines()[0][:40], "reason": "단지를 찾지 못했습니다"})
