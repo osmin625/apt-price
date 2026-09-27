@@ -113,6 +113,24 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--gri
 th { font-size: 11.5px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+/* ── 계수표 · 계수 쓰임새 ─────────────────────────── */
+.coef td:first-child { font-weight: 500; }
+.coef .coef-basis td { color: var(--text-muted); font-size: 12px; padding-left: 22px; }
+.coef .coef-basis td:first-child { font-weight: 400; }
+.coef-sep td {
+  padding-top: 16px; font-size: 11.5px; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.coef-more { margin-left: 8px; font-size: 11.5px; color: var(--text-muted); }
+
+.usage { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.usage li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.usage-mark { flex: none; font-size: 10px; color: var(--series-1); }
+.usage li.is-off .usage-mark { color: var(--text-muted); }
+.usage-where { font-weight: 500; }
+.usage li.is-off .usage-where { color: var(--text-secondary); font-weight: 400; }
+.usage-what { flex: 1 1 260px; }
+
 /* 표·카드 안에서 단지 상세로 가는 이름. 버튼이지만 본문처럼 보여야 해서
    버튼 기본 모양을 지운다 — 줄마다 파란 링크가 깔리면 표가 시끄럽다. */
 .linklike {
@@ -206,7 +224,7 @@ tbody tr.clickable { cursor: pointer; }
   padding: 1px 5px; border-radius: 4px; font-size: 12px;
 }
 
-/* ── 지도 · 거리 모델 ─────────────────────────────────── */
+/* ── 지도 · 분해 모델 ─────────────────────────────────── */
 
 .muted { color: var(--text-secondary); }
 .small { font-size: 12px; }

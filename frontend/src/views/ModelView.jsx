@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
+import CoefTable from '../components/CoefTable'
+import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
 import ScatterFit from '../components/ScatterFit'
 
@@ -30,7 +32,7 @@ export default function ModelView({ months, onSelect }) {
   if (!fit)
     return (
       <div className="card">
-        <FitLoading months={months} what="거리 모델을" />
+        <FitLoading months={months} what="분해 모델을" />
       </div>
     )
 
@@ -56,6 +58,8 @@ export default function ModelView({ months, onSelect }) {
           실거래가를 적재하면 점선은 사라집니다.
         </div>
       )}
+
+      <CoefUsage />
 
       <div className="card">
         <h2>역까지 도보시간과 평당가</h2>
@@ -179,35 +183,7 @@ export default function ModelView({ months, onSelect }) {
         <div className="card">
           <h2>계수</h2>
           <p className="muted small">{fit.dep_var} · 기준 {fit.stage1.reference}</p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>변수</th>
-                  <th className="num">계수</th>
-                  <th className="num">SE</th>
-                  <th className="num">p</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fit.terms
-                  .filter((t) => t.name !== 'const')
-                  .map((t) => (
-                    <tr key={t.name}>
-                      <td>
-                        {t.label}
-                        {t.interpretation && (
-                          <div className="muted small">{t.interpretation}</div>
-                        )}
-                      </td>
-                      <td className="num">{fmt(t.coef, 5)}</td>
-                      <td className="num">{fmt(t.se, 5)}</td>
-                      <td className="num">{t.p < 0.001 ? '<0.001' : fmt(t.p, 3)}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <CoefTable fit={fit} />
         </div>
 
         <div className="card">

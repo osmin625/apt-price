@@ -26,7 +26,7 @@ backend/
     ingest_trades.py        실거래 적재
     geocode.py              좌표·역거리 채우기
 frontend/
-  src/views/                시장 분석 / 단지 상세 / 매물 분석 / 매물 순위 / 지도 / 거리 모델
+  src/views/                시장 분석 / 단지 상세 / 매물 분석 / 매물 순위 / 지도 / 분해 모델
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)

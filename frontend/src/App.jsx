@@ -11,7 +11,7 @@ import RankingView from './views/RankingView'
 const TABS = [
   { id: 'market', label: '시장 분석' },
   { id: 'map', label: '지도' },
-  { id: 'model', label: '거리 모델' },
+  { id: 'model', label: '분해 모델' },
   { id: 'compare', label: '매물 분석' },
   { id: 'ranking', label: '매물 순위' },
 ]

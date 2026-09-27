@@ -159,7 +159,7 @@ function FactorPanel({ months }) {
       <p className="muted small">
         스펙 {data.spec} · 거래 {fmt(data.n_obs)}건 · 단지 {data.n_complexes}곳.
         스펙은 M0(도보만) → M3(법정동 고정효과)까지 사다리로 확인할 수 있습니다
-        (거리 모델 탭).
+        (분해 모델 탭).
       </p>
     </section>
   )

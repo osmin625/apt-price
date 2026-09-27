@@ -1016,7 +1016,11 @@ def _label(name: str) -> str:
     if name.startswith("line_"):
         return name[5:]
     if name.startswith("sgg_"):
-        return f"구 FE {name[4:]}"
+        # 코드를 그대로 두면 '구 FE 41113' 이라 읽을 수 없다. 이름으로 바꾼다.
+        from ..clients.molit import DISTRICTS
+
+        code = name[4:]
+        return DISTRICTS.get(code, f"구 {code}")
     if name.startswith("umd_"):
         return f"법정동 FE {name[4:]}"
     return name
