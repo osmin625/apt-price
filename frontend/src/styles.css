@@ -213,6 +213,7 @@ tr.clickable:hover { background: color-mix(in srgb, var(--series-1) 7%, transpar
 tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
 
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.map-metric { font-size: 12.5px; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .seg button {
   border: 0; background: transparent; color: var(--text-secondary);

@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
-import KakaoMap from '../components/KakaoMap'
 import FitLoading from '../components/FitLoading'
-import ScatterFit from '../components/ScatterFit'
+import KakaoMap from '../components/KakaoMap'
 
-const METRICS = [
-  { key: 'normalized_ppp', label: '보정 평당가' },
-  { key: 'ppp', label: '중앙 평당가' },
-  { key: 'residual_shrunk_pct', label: '모델 잔차' },
-]
+/* 지도는 **모델 잔차**만 칠한다.
+ *
+ * 평당가 자체(보정·중앙)를 칠하면 비싼 동네가 비싸게 나올 뿐이라 지도로 볼 이유가
+ * 적다. 그건 단지 비교 탭의 표가 더 잘 답한다. 지도에서만 보이는 것은 '요인으로
+ * 설명되지 않는 값이 어디에 뭉쳐 있나' 이고, 그게 잔차다. */
+const METRIC = 'residual_shrunk_pct'
 
 /** 값 → 0..1. 발산 지표는 0을 중앙으로 두고 좌우 대칭 범위를 쓴다. */
 function normalize(v, meta) {
@@ -29,7 +29,7 @@ export default function MapView({ months, onSelect }) {
   const [stations, setStations] = useState([])
   const [fit, setFit] = useState(null)
   const [rings, setRings] = useState([])
-  const [metric, setMetric] = useState('normalized_ppp')
+
   const [hoveredId, setHoveredId] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [path, setPath] = useState(null)
@@ -73,11 +73,11 @@ export default function MapView({ months, onSelect }) {
     }
   }, [selectedId])
 
-  const meta = data?.metrics?.[metric]
+  const meta = data?.metrics?.[METRIC]
 
   const colorOf = useCallback(
     (item) => {
-      const t = normalize(item[metric], meta)
+      const t = normalize(item[METRIC], meta)
       if (meta?.scale === 'diverging') {
         // 기존 .pbar-fill.pos/.neg 관례와 동일: 파랑 = 저평가, 빨강 = 고평가
         return t < 0.5
@@ -86,19 +86,7 @@ export default function MapView({ months, onSelect }) {
       }
       return `color-mix(in srgb, var(--series-1) ${t * 85 + 15}%, var(--surface-1))`
     },
-    [metric, meta],
-  )
-
-  const points = useMemo(
-    () =>
-      (data?.items || []).map((i) => ({
-        id: i.id,
-        name: i.name,
-        walk_min: i.walk_min,
-        value: i.partial_pct,
-        sub: `${i.station_name ?? '—'} · 거래 ${i.trade_count}건`,
-      })),
-    [data],
+    [meta],
   )
 
   const selected = data?.items?.find((i) => i.id === selectedId)
@@ -120,18 +108,7 @@ export default function MapView({ months, onSelect }) {
     <>
       <div className="card">
         <div className="map-toolbar">
-          <div className="seg" role="tablist" aria-label="색상 지표">
-            {METRICS.map((m) => (
-              <button
-                key={m.key}
-                role="tab"
-                aria-selected={metric === m.key}
-                onClick={() => setMetric(m.key)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <strong className="map-metric">모델 잔차</strong>
           <label className="check">
             <input
               type="checkbox"
@@ -170,22 +147,6 @@ export default function MapView({ months, onSelect }) {
                 : null
             }
           />
-
-          <div className="map-dock">
-            <div className="dock-head">
-              <strong>역까지 도보시간 ↔ 평당가</strong>
-              <span className="muted small">{fit.curves.walk_minutes.note}</span>
-            </div>
-            <ScatterFit
-              curve={fit.curves.walk_minutes}
-              points={points}
-              hoveredId={hoveredId}
-              onHover={setHoveredId}
-              onSelect={(id) => setSelectedId((cur) => (cur === id ? null : id))}
-              height={190}
-              compact
-            />
-          </div>
         </div>
 
         {selected ? (
