@@ -74,13 +74,65 @@ powershell -NoProfile -Command "Get-NetIPAddress -AddressFamily IPv4 | Where-Obj
 
 ### 집 밖에서도 보려면
 
-| 방법 | 노출 | 비고 |
-|---|---|---|
-| Tailscale | 내 기기끼리만 | 설치 필요. 공개되지 않아 이 앱에 가장 맞다 |
-| Cloudflare Tunnel · ngrok | **공개 URL** | 한 줄로 되지만 누구나 접근한다 |
+셋 다 무료 플랜이 있지만 성격이 다르다(2026-09 확인).
 
-이 앱에는 **로그인이 없다.** 공개 URL을 쓰면 붙여넣은 매물과 호가 기록이 링크를 아는
-누구에게나 보인다. 실거래가 자체는 공공 데이터라 문제가 없지만, 그 점을 알고 쓸 것.
+| | 무료 범위 | 노출 | 걸리는 점 |
+|---|---|---|---|
+| **Tailscale** | Personal 무료(영구) · 6명 · 기기 무제한 | 내 기기끼리만 | 비상업용 한정. 회사 도메인 계정은 유료 체험으로 들어간다 |
+| Cloudflare Quick Tunnel | 무료 · 계정·도메인 불필요 | **공개 URL** | 동시 요청 200개 초과 시 429 · 문서에 *테스트/개발용* 명시 |
+| ngrok | 무료 · 월 1GB / 요청 2만 건 | **공개 URL** | 브라우저에 경고 중간 페이지 · 주소가 매번 바뀐다 |
+
+**이 앱에는 로그인이 없다.** 공개 URL을 쓰면 붙여넣은 매물과 호가 기록이 링크를 아는
+누구에게나 보인다. 실거래가 자체는 공공 데이터지만 그 점을 알고 쓸 것.
+
+그래서 **Tailscale** 을 권한다. 공개되지 않고, 주소가 고정이라 카카오 origin 을 한 번만
+등록하면 된다(터널 방식은 재시작할 때마다 주소가 바뀌어 매번 다시 등록해야 한다).
+
+#### Tailscale 로 붙이기
+
+1. **PC와 휴대폰에 각각 설치하고 같은 계정으로 로그인**한다.
+   개인 이메일(Gmail 등)로 가입해야 무료 Personal 플랜이 붙는다.
+   <https://tailscale.com/download>
+
+2. **PC의 주소를 확인**한다. MagicDNS 이름을 쓰면 IP가 바뀌어도 그대로 쓸 수 있다.
+
+   ```powershell
+   tailscale status          # 맨 윗줄이 이 PC. 이름과 100.x.y.z 주소가 보인다
+   tailscale ip -4           # 100.x.y.z 만
+   ```
+
+3. **개발 서버를 LAN 모드로 띄운다.** 같은 Wi-Fi 방식과 같은 명령이다 —
+   `--host` 가 있어야 Tailscale 인터페이스에서도 듣는다.
+
+   ```bash
+   cd frontend && npm run dev:lan
+   ```
+
+4. **휴대폰에서** `http://<PC 이름>.<tailnet>.ts.net:5173` 으로 연다
+   (또는 `http://100.x.y.z:5173`).
+
+5. **카카오 개발자센터 > 플랫폼 > Web** 에 그 주소를 그대로 등록한다.
+   안 하면 지도 탭만 설정 안내로 바뀐다.
+
+안 붙으면 **방화벽 프로필**부터 본다. 위에서 만든 규칙은 `-Profile Private` 라,
+Tailscale 어댑터가 Public 으로 분류돼 있으면 막힌다.
+
+```powershell
+Get-NetConnectionProfile    # Tailscale 어댑터의 NetworkCategory 확인
+```
+
+Private 이 아니면 그 어댑터만 Private 으로 바꾸거나
+(`Set-NetConnectionProfile -InterfaceAlias "Tailscale" -NetworkCategory Private`),
+규칙을 그 인터페이스에 한정해 다시 만든다.
+
+#### Cloudflare Quick Tunnel (지금 한 번만 쓸 때)
+
+```bash
+cloudflared tunnel --url http://localhost:5173
+```
+
+가입도 도메인도 필요 없고 `*.trycloudflare.com` 주소가 즉시 나온다. 대신 **공개**이고,
+껐다 켜면 주소가 바뀌어 카카오 origin 을 다시 등록해야 한다.
 
 ## 알려진 한계
 
