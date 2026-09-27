@@ -1,7 +1,7 @@
 """헤도닉 적합 결과를 API 페이로드로 조립한다.
 
 hedonic.py 는 통계만 하고, 이 모듈이 화면이 필요로 하는 모양으로 바꾼다:
-지도 마커, 등가격 링 반경, 합성 데이터의 참값 곡선 오버레이.
+지도 마커와 합성 데이터의 참값 곡선 오버레이.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from ..models import Complex, ComplexDong, ComplexStation, Station, Trade
 from . import fit_worker, hedonic
 
 TRUTH_PATH = BASE_DIR / "data" / "seed_truth.json"
-RING_LEVELS_PCT = (-5.0, -10.0, -15.0, -20.0)
 
 # 적합 결과 캐시. **여러 칸이 필요하다** — 탭마다 요청하는 기간이 다르기 때문이다
 # (시장 분석 12개월, 매물 분석 24개월). 한 칸만 두면 탭을 오갈 때마다 캐시가 어긋나
@@ -275,58 +274,6 @@ def fit_payload(fit: dict) -> dict:
         k: v for k, v in fit.items()
         if k not in _NON_JSON and not k.startswith("_")
     }
-
-
-def detour_stats(db) -> dict:
-    """관측된 우회율과 보행 속도. 도보 '분' 을 지도상 '반경' 으로 바꿀 때 쓴다."""
-    ratios, paces = [], []
-    for cs in db.execute(select(ComplexStation)).scalars().all():
-        if not cs.walk_distance_m or not cs.walk_seconds or not cs.straight_distance_m:
-            continue
-        if cs.straight_distance_m > 0:
-            ratios.append(cs.walk_distance_m / cs.straight_distance_m)
-        if cs.walk_seconds > 0:
-            paces.append(cs.walk_distance_m / (cs.walk_seconds / 60.0))
-    ratios.sort()
-    paces.sort()
-    return {
-        "detour_ratio": ratios[len(ratios) // 2] if ratios else pricing.WALK_DETOUR_FACTOR,
-        "meters_per_min": paces[len(paces) // 2] if paces else pricing.WALK_METERS_PER_MIN,
-        "n": len(ratios),
-    }
-
-
-def rings(fit: dict, stats: dict) -> list[dict]:
-    """등가격 링 — 적합 곡선이 -5/-10/-15/-20% 를 지나는 지점의 지도 반경(m).
-
-    station_band 의 임의적인 400/800/1200m 링을 모델이 유도한 등고선으로 대체한다.
-    곡선은 도보 '분' 단위이므로 관측된 보행 속도와 우회율로 직선 반경으로 되돌린다.
-    """
-    curve = fit["curves"]["walk_minutes"]
-    xs, ys = curve["x"], curve["fit_pct"]
-    pace = stats["meters_per_min"]
-    detour = max(stats["detour_ratio"], 1e-6)
-
-    out = []
-    for level in RING_LEVELS_PCT:
-        hit = None
-        for i in range(1, len(xs)):
-            y0, y1 = ys[i - 1], ys[i]
-            if (y0 - level) * (y1 - level) <= 0 and y0 != y1:
-                t = (level - y0) / (y1 - y0)
-                hit = xs[i - 1] + t * (xs[i] - xs[i - 1])
-                break
-        if hit is None:
-            continue
-        out.append(
-            {
-                "pct": level,
-                "walk_min": round(hit, 1),
-                "radius_m": round(hit * pace / detour, 0),
-                "label": f"{level:+.0f}% · 도보 {hit:.0f}분",
-            }
-        )
-    return out
 
 
 def _curve_at(curve: dict, w: float) -> float:

@@ -20,8 +20,6 @@ export default function KakaoMap({
   selectedId = null,
   onHover,
   onSelect,
-  rings = [],
-  ringCenter = null,
   path = null,
   center = null,
   height = 560,
@@ -127,7 +125,7 @@ export default function KakaoMap({
       })
   }, [ready, stations])
 
-  // 등가격 링 + 도보 경로
+  // 도보 경로
   useEffect(() => {
     const maps = window.kakao?.maps
     const map = mapRef.current
@@ -135,38 +133,6 @@ export default function KakaoMap({
 
     shapesRef.current.forEach((s) => s.setMap(null))
     shapesRef.current = []
-
-    if (ringCenter?.lat != null) {
-      for (const r of rings) {
-        const circle = new maps.Circle({
-          center: new maps.LatLng(ringCenter.lat, ringCenter.lng),
-          radius: r.radius_m,
-          strokeWeight: 1,
-          strokeColor: '#6b7cff',
-          strokeOpacity: 0.85,
-          strokeStyle: 'shortdash',
-          fillColor: '#6b7cff',
-          fillOpacity: 0.04,
-        })
-        circle.setMap(map)
-        shapesRef.current.push(circle)
-
-        const label = document.createElement('div')
-        label.className = 'ring-label'
-        label.textContent = r.label
-        const ov = new maps.CustomOverlay({
-          position: new maps.LatLng(
-            ringCenter.lat + r.radius_m / 111000,
-            ringCenter.lng,
-          ),
-          content: label,
-          yAnchor: 0.5,
-          xAnchor: 0.5,
-        })
-        ov.setMap(map)
-        shapesRef.current.push(ov)
-      }
-    }
 
     if (path) {
       const coords = path.path?.coordinates
@@ -191,7 +157,7 @@ export default function KakaoMap({
         shapesRef.current.push(poly)
       }
     }
-  }, [ready, rings, ringCenter, path])
+  }, [ready, path])
 
   // 선택된 단지로 팬
   useEffect(() => {

@@ -29,28 +29,6 @@ def stations(db: Session = Depends(get_db)):
     return mv.station_payload(db)
 
 
-@router.get("/rings")
-def rings(
-    db: Session = Depends(get_db),
-    months: int = Query(24, ge=6, le=120),
-    spec: str = Query(hedonic.DEFAULT_SPEC),
-):
-    """모델 등가격 링 — 적합 곡선이 -5/-10/-15/-20%를 지나는 지도 반경(m).
-
-    station_band 의 400/800/1200m 고정 링을 모델이 유도한 등고선으로 대체한다.
-    역마다 같은 반경을 쓰되, 도보분→반경 변환은 실제 관측된 우회율과 보행속도를 쓴다.
-    """
-    f = _fit(db, months, spec)
-    stats = mv.detour_stats(db)
-    return {
-        "rings": mv.rings(f, stats),
-        "detour_ratio": round(stats["detour_ratio"], 3),
-        "meters_per_min": round(stats["meters_per_min"], 1),
-        "sample": stats["n"],
-        "note": "곡선이 해당 수준을 지나는 도보시간을 관측 보행속도·우회율로 직선반경으로 환산",
-    }
-
-
 @router.get("/walk-path/{complex_id}")
 def walk_path(
     complex_id: int,

@@ -57,6 +57,5 @@ export const api = {
     }),
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),
   stations: () => request('/map/stations'),
-  rings: (params) => request(`/map/rings${qs(params)}`),
   walkPath: (id, params) => request(`/map/walk-path/${id}${qs(params)}`),
 }

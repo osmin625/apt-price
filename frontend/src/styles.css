@@ -222,6 +222,8 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-selected='true'] { background: var(--series-1); color: #fff; font-weight: 600; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.check.is-disabled { color: var(--text-muted); cursor: default; }
+.check.is-disabled input { cursor: default; }
 
 .map-scale { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .map-scale i { width: 96px; height: 9px; border-radius: 5px; border: 1px solid var(--border); }
@@ -287,12 +289,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   background: var(--surface-1); color: var(--text-secondary);
   border: 1px solid var(--axis); border-radius: 4px; padding: 1px 5px; opacity: 0.94;
 }
-.ring-label {
-  font-size: 10.5px; font-weight: 600; white-space: nowrap; color: #4a5bd0;
-  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
-  border-radius: 4px; padding: 1px 5px;
-}
-
 .scatter { position: relative; }
 .scatter-axis { font-size: 10.5px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
 .scatter-band { fill: var(--series-1); opacity: 0.13; stroke: none; }

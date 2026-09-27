@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
@@ -28,12 +28,10 @@ export default function MapView({ months, onSelect }) {
   const [data, setData] = useState(null)
   const [stations, setStations] = useState([])
   const [fit, setFit] = useState(null)
-  const [rings, setRings] = useState([])
 
   const [hoveredId, setHoveredId] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [path, setPath] = useState(null)
-  const [showRings, setShowRings] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -43,14 +41,12 @@ export default function MapView({ months, onSelect }) {
       api.mapComplexes({ months }),
       api.stations(),
       api.modelFit({ months }),
-      api.rings({ months }),
     ])
-      .then(([m, s, f, r]) => {
+      .then(([m, s, f]) => {
         if (!alive) return
         setData(m)
         setStations(s.items || [])
         setFit(f)
-        setRings(r.rings || [])
       })
       .catch((e) => alive && setError(e.message))
     return () => {
@@ -90,11 +86,6 @@ export default function MapView({ months, onSelect }) {
   )
 
   const selected = data?.items?.find((i) => i.id === selectedId)
-  const ringCenter = useMemo(() => {
-    if (!showRings || !selected) return null
-    const st = stations.find((s) => s.id === selected.station_id)
-    return st?.lat != null ? { lat: st.lat, lng: st.lng, name: st.name } : null
-  }, [showRings, selected, stations])
 
   if (error) return <div className="card empty">{error}</div>
   if (!data || !fit)
@@ -109,14 +100,6 @@ export default function MapView({ months, onSelect }) {
       <div className="card">
         <div className="map-toolbar">
           <strong className="map-metric">모델 잔차</strong>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={showRings}
-              onChange={(e) => setShowRings(e.target.checked)}
-            />
-            등가격 링
-          </label>
           <div className="map-scale" aria-hidden="true">
             <span>{fmt(meta?.min, 1)}</span>
             <i className={meta?.scale === 'diverging' ? 'grad-div' : 'grad-seq'} />
@@ -135,8 +118,6 @@ export default function MapView({ months, onSelect }) {
             selectedId={selectedId}
             onHover={setHoveredId}
             onSelect={(id) => setSelectedId((cur) => (cur === id ? null : id))}
-            rings={rings}
-            ringCenter={ringCenter}
             path={path}
             center={
               data.bounds
@@ -195,7 +176,7 @@ export default function MapView({ months, onSelect }) {
           </div>
         ) : (
           <p className="muted small">
-            마커나 산점도의 점을 클릭하면 도보 경로와 등가격 링이 표시됩니다.
+마커를 클릭하면 그 단지에서 최근접역까지의 도보 경로가 표시됩니다.
           </p>
         )}
       </div>
