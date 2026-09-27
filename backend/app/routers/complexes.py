@@ -191,13 +191,13 @@ def quotes_summary(
 
 @router.get("/meta/filters")
 def filters(db: Session = Depends(get_db)):
-    from ..clients.molit import SUWON_DISTRICTS
+    from ..clients.molit import DISTRICTS
     from ..models import Station
 
     present = db.execute(select(Complex.sgg_cd).distinct()).scalars().all()
 
     # 노선·역은 고정 목록이 아니라 **실제로 단지가 붙어 있는 역**만 내보낸다.
-    # 수원 단지가 하나도 없는 역을 필터에 띄우면 고르는 순간 빈 화면이 된다.
+    # 단지가 하나도 안 붙은 역을 필터에 띄우면 고르는 순간 빈 화면이 된다.
     used = db.execute(
         select(Station.line, Station.name, Station.minutes_to_gangnam)
         .join(Complex, Complex.nearest_station_id == Station.id)
@@ -211,7 +211,7 @@ def filters(db: Session = Depends(get_db)):
 
     return {
         "districts": [
-            {"code": c, "name": SUWON_DISTRICTS.get(c, c)} for c in sorted(present)
+            {"code": c, "name": DISTRICTS.get(c, c)} for c in sorted(present)
         ],
         "area_bands": pricing.AREA_BANDS,
         "station_bands": pricing.STATION_BANDS[:-1],

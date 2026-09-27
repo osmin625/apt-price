@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api'
-import { fmt } from '../components/Charts'
+import { eok, fmt } from '../components/Charts'
+import Hint from '../components/Hint'
+import BulkPaste from './BulkPaste'
 import FairCard from '../components/FairVerdict'
 
 const BLANK = { complex_id: '', exclusive_area: '', floor: '', asking_price: '', dong: '', areaOpts: [] }
@@ -33,6 +35,8 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
   const [evalA, setEvalA] = useState(null)
   const [evalB, setEvalB] = useState(null)
   const [saved, setSaved] = useState([])
+  // 순위 기준. 두 기준이 다른 순서를 내는데, 어긋나는 것 자체가 정보다.
+  const [basis, setBasis] = useState('market')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState({ a: false, b: false, cmp: false })
   // 오류가 났을 때만 쓰는 재시도 스위치. 값이 바뀌면 자동 계산 훅이 다시 돈다.
@@ -46,10 +50,14 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
   }, [])
 
   const reloadSaved = () =>
-    api.listings({ months }).then((d) => setSaved(d.items || [])).catch(() => {})
+    api
+      .listings({ months, basis })
+      .then((d) => setSaved(d.items || []))
+      .catch(() => {})
   useEffect(() => {
     reloadSaved()
-  }, [months])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [months, basis])
 
   const loadAreas = (which, id) => {
     const setter = which === 'a' ? setA : setB
@@ -92,6 +100,12 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
       centerWalk: p.complex_walk_min ?? null,
       areaOpts: p.area_options ?? [],
       dongOpts: [],
+      // 경고를 필드별로 묶어 둔다. 각 값 옆 ⓘ 에 그대로 꽂는다.
+      notes: (p.warnings ?? []).reduce((acc, w) => {
+        const k = w.field ?? 'general'
+        ;(acc[k] ||= []).push(w.text)
+        return acc
+      }, {}),
     })
     if (p.complex_id) loadAreas(which, p.complex_id)
     if (p.complex_id) {
@@ -188,25 +202,37 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
     a.complex_id, a.exclusive_area, b.complex_id, b.exclusive_area, months, retry,
   ])
 
+  // 저장 결과를 버튼에 되돌린다. 눌렀는데 아무 반응이 없으면 됐는지 안 됐는지
+  // 알 수가 없다 — 실제로 `dong` 컬럼이 없어 500 이 나던 동안에도 화면은 조용했다.
+  const [savedFlash, setSavedFlash] = useState({})
   const saveSide = async (s, tag) => {
     if (!canEval(s)) return
+    setSavedFlash((f) => ({ ...f, [tag]: 'saving' }))
     try {
       await api.saveListing({ ...pack(s), label: tag }, { months })
-      reloadSaved()
+      await reloadSaved()
+      setSavedFlash((f) => ({ ...f, [tag]: 'done' }))
+      setTimeout(() => setSavedFlash((f) => ({ ...f, [tag]: null })), 2500)
     } catch (e) {
-      setError(e.message)
+      setSavedFlash((f) => ({ ...f, [tag]: null }))
+      setError(`저장 실패: ${e.message}`)
     }
   }
 
   return (
     <>
       <div className="card">
-        <h2>매물 분석</h2>
-        <p className="sub">
-          매물 텍스트를 붙여넣으면 각각 <b>적정가를 진단</b>하고, 둘 다 채우면 평당가 차이를
-          면적·층·역거리·연식·세대수·노선·자치구 기여로 쪼개 <b>어느 쪽이 싼지</b>까지 봅니다.
-          한쪽만 채워도 됩니다.
-        </p>
+        {/* 설명은 제목 옆 ⓘ 로. 세 줄짜리 산문이 매번 자리를 차지하면 정작
+            결과가 첫 화면 밖으로 밀린다. */}
+        <h2>
+          매물 분석
+          <Hint
+            notes={[
+              '매물 텍스트를 붙여넣으면 각각 적정가를 진단합니다. 한쪽만 채워도 됩니다.',
+              '둘 다 채우면 평당가 차이를 면적·층·역거리·연식·세대수·노선·자치구 기여로 쪼개 어느 쪽이 싼지까지 봅니다.',
+            ]}
+          />
+        </h2>
         <div className="cmp-inputs">
           <ComplexPicker
             tag="A" side={a} set={setA} filter={fa} setFilter={setFa}
@@ -238,9 +264,9 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
             ) : busy.cmp ? (
               <span className="live">A·B 요인 비교 계산 중…</span>
             ) : evalA || evalB || result ? (
-              '입력을 고치면 아래 결과가 자동으로 다시 계산됩니다.'
+              '고치면 자동으로 다시 계산됩니다.'
             ) : (
-              '매물 텍스트를 붙여넣으면 바로 분석합니다. 호가까지 있으면 적정가 진단, 양쪽 다 채우면 A·B 비교까지.'
+              '텍스트를 붙여넣으면 바로 분석합니다.'
             )}
           </span>
           {error && (
@@ -256,11 +282,15 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
           아래 비교 결과까지 위아래로 튄다. */}
       {(evalA || evalB || busy.a || busy.b) && (
         <div className="card">
-          <h2>적정가 진단</h2>
-          <p className="sub">
-            같은 단지·같은 평형의 최근 실거래를 시점·층 보정한 적정가와 호가의 괴리율입니다.
-            단지 고유 프리미엄은 이미 값에 들어가 있습니다.
-          </p>
+          <h2>
+            적정가 진단
+            <Hint
+              notes={[
+                '같은 단지·같은 평형의 최근 실거래를 시점·층·동 보정한 적정가와 호가의 괴리율입니다.',
+                '실거래 기준에는 단지 고유 프리미엄(학군·브랜드·재건축 기대)이 이미 들어가 있고, 요인 기준에는 빠져 있습니다. 둘의 차이가 그 프리미엄입니다.',
+              ]}
+            />
+          </h2>
           <div className="fair-grid">
             <FairCard
               tag="A"
@@ -279,18 +309,30 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
           </div>
           <div className="cmp-actions" style={{ marginTop: 12 }}>
             <span className="muted small cmp-hint">
-              저장해 두면 기간 필터를 바꿀 때마다 적정가가 다시 계산됩니다.
+              목록에 담아 두면 <b>기간을 바꿀 때마다 적정가가 다시 계산</b>되고, 새로
+              붙여넣어도 남아 있습니다.
+              <Hint
+                notes={[
+                  '저장한 매물은 아래 표에 쌓입니다. 분석 기간을 바꾸면 그 기간의 실거래로 적정가가 다시 계산되므로, 같은 매물이 기간에 따라 어떻게 달라지는지 볼 수 있습니다.',
+                  '동 정보도 함께 저장되어 재계산할 때 동 보정이 유지됩니다.',
+                ]}
+              />
             </span>
-            {canEval(a) && (
-              <button className="ghost" onClick={() => saveSide(a, 'A')}>
-                A 저장
-              </button>
-            )}
-            {canEval(b) && (
-              <button className="ghost" onClick={() => saveSide(b, 'B')}>
-                B 저장
-              </button>
-            )}
+            {['A', 'B'].map((tag) => {
+              const side = tag === 'A' ? a : b
+              if (!canEval(side)) return null
+              const st = savedFlash[tag]
+              return (
+                <button
+                  key={tag}
+                  className="ghost"
+                  disabled={st === 'saving'}
+                  onClick={() => saveSide(side, tag)}
+                >
+                  {st === 'saving' ? '저장 중…' : st === 'done' ? `✓ ${tag} 저장됨` : `${tag} 저장`}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -305,7 +347,15 @@ export default function CompareView({ months: initialMonths, meta, onSelect }) {
       )}
       {result && <CompareResult r={result} />}
 
-      {saved.length > 0 && <SavedListings saved={saved} onDelete={(id) => api.deleteListing(id).then(reloadSaved)} />}
+      <BulkPaste months={months} />
+
+      {saved.length > 0 && <SavedListings
+          saved={saved}
+          months={months}
+          basis={basis}
+          setBasis={setBasis}
+          onDelete={(id) => api.deleteListing(id).then(reloadSaved)}
+        />}
     </>
   )
 }
@@ -319,80 +369,119 @@ const TONE = {
 }
 
 /** 저장해 둔 매물 — 기간을 바꾸면 적정가가 다시 계산된다. */
-function SavedListings({ saved, onDelete }) {
+/**
+ * 비교한 매물의 순위표.
+ *
+ * **더 저평가된 매물이 이긴다** — 괴리율이 작을수록(음수일수록) 위로 간다.
+ * 순위 기준은 두 가지이고, 서로 다른 순서를 낸다.
+ *
+ * - **실거래 기준**: 그 단지 같은 평형 시세 대비 싼가. 단지 프리미엄이 값에 포함돼
+ *   있으므로, 같은 단지 안에서 고를 때 맞다.
+ * - **요인 기준**: 거리·연식·세대수·노선만으로 봤을 때 싼가. 단지를 넘나들며
+ *   고를 때 맞다.
+ *
+ * 실제로 광교 84㎡ 가 실거래 기준 1위인데 요인 기준 4위로 내려간 적이 있다 —
+ * 자기 단지 최근 거래보다는 많이 싸지만 펀더멘털 대비로는 아니라는 뜻이다.
+ * 그래서 **두 기준을 한 표에 나란히** 두고, 줄 세우는 기준만 고르게 한다.
+ */
+function SavedListings({ saved, onDelete, months, basis, setBasis }) {
+  const label = basis === 'factor' ? '요인 기준' : '실거래 기준'
   return (
     <section className="card">
-      <h2>저장한 매물</h2>
-      <p className="sub">기간 필터를 바꾸면 적정가가 다시 계산됩니다 · 단위 만원</p>
+      <h2>
+        매물 순위 <span className="muted small">{saved.length}건 · 최근 {months}개월 기준</span>
+        <Hint
+          notes={[
+            '더 저평가된 매물이 위로 갑니다. 괴리율이 작을수록(음수일수록) 순위가 높습니다.',
+            '분석 기간을 바꾸면 그 기간의 실거래로 표 전체가 다시 계산됩니다.',
+            '실거래 기준은 그 단지 시세 대비, 요인 기준은 펀더멘털 대비입니다. 두 기준의 순위가 어긋나면 그 자체가 정보입니다.',
+          ]}
+        />
+      </h2>
+
+      <div className="rank-basis">
+        <span className="muted small">순위 기준</span>
+        {[
+          ['market', '실거래 기준'],
+          ['factor', '요인 기준'],
+        ].map(([k, t]) => (
+          <button
+            key={k}
+            className={`chip${basis === k ? ' on' : ''}`}
+            onClick={() => setBasis(k)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              <th className="num">#</th>
               <th>단지</th>
+              <th>동</th>
               <th>메모</th>
               <th className="num">전용</th>
               <th className="num">층</th>
               <th className="num">호가</th>
-              <th className="num">호가 평당가</th>
-              <th className="num">적정 평당가</th>
-              <th className="num">적정가</th>
-              <th className="num">괴리율</th>
+              <th className={`num${basis === 'market' ? ' is-sort' : ''}`}>실거래 대비</th>
+              <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>요인 대비</th>
               <th>판정</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {saved.map((s) => (
-              <tr key={s.id}>
-                <td style={{ fontWeight: 600 }}>{s.fair.complex.name}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{s.input.label || '—'}</td>
-                <td className="num">{s.input.exclusive_area}㎡</td>
-                <td className="num">{s.input.floor ?? '—'}</td>
-                <td className="num">{fmt(s.input.asking_price)}</td>
-                <td className="num">{fmt(s.input.asking_ppp)}</td>
-                <td className="num">{fmt(s.fair.fair_ppp)}</td>
-                <td className="num">{fmt(s.fair.fair_price)}</td>
-                <td className="num" style={{ fontWeight: 600 }}>
-                  {s.gap ? `${s.gap.pct > 0 ? '+' : ''}${s.gap.pct}%` : '—'}
-                </td>
-                <td>
-                  {s.gap && (
-                    <span className="verdict" data-tone={TONE[s.gap.verdict]} style={{ fontSize: 13 }}>
-                      {s.gap.verdict}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <button className="ghost" onClick={() => onDelete(s.id)}>
-                    삭제
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {saved.map((s) => {
+              const gf = s.gap_factor
+              return (
+                <tr key={s.id} className={s.rank === 1 ? 'is-top' : ''}>
+                  <td className="num rank-no">{s.rank ?? '—'}</td>
+                  <td style={{ fontWeight: 600 }}>{s.fair.complex.name}</td>
+                  <td>{s.fair.dong ? `${s.fair.dong}동` : <span className="muted">—</span>}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{s.input.label || '—'}</td>
+                  <td className="num">{s.input.exclusive_area}㎡</td>
+                  <td className="num">{s.input.floor ?? '—'}</td>
+                  <td className="num">{eok(s.input.asking_price)}</td>
+                  <td
+                    className={`num${basis === 'market' ? ' is-sort' : ''}`}
+                    data-tone={s.gap ? (s.gap.pct < -3 ? 'good' : s.gap.pct > 3 ? 'bad' : 'mid') : null}
+                  >
+                    {s.gap ? `${s.gap.pct > 0 ? '+' : ''}${s.gap.pct}%` : '—'}
+                  </td>
+                  <td
+                    className={`num${basis === 'factor' ? ' is-sort' : ''}`}
+                    data-tone={gf ? (gf.pct < -3 ? 'good' : gf.pct > 3 ? 'bad' : 'mid') : null}
+                  >
+                    {gf ? `${gf.pct > 0 ? '+' : ''}${gf.pct}%` : '—'}
+                  </td>
+                  <td>
+                    {s.gap && (
+                      <span className="verdict" data-tone={TONE[s.gap.verdict]} style={{ fontSize: 13 }}>
+                        {s.gap.verdict}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <button className="ghost" onClick={() => onDelete(s.id)}>
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+      <p className="muted small" style={{ marginTop: 8 }}>
+        <b>{label}</b>으로 줄 세웠습니다. 두 기준의 순위가 어긋나는 매물은 단지 고유
+        프리미엄이 크게 붙어 있다는 뜻입니다.
+      </p>
     </section>
   )
 }
 
-
-/**
- * 매물 텍스트 붙여넣기 → 단지·면적·층·호가 자동 입력.
- *
- * **링크가 아니라 텍스트를 받는다.** 네이버 부동산 단축 링크(`naver.me/...`)를 펼쳐
- * 보면 `fin.land.naver.com/map?center=...&dealPrice=0-510000000` 처럼 지도 좌표와
- * 검색 조건만 들어 있다. 단지명도 면적도 층도 호가도 없어서 채울 것이 없다. 링크에
- * 매물 번호가 있는 경우라 해도 페이지를 자동으로 긁는 것은 이용약관 문제가 있어
- * 이 프로젝트가 처음부터 제외한 방식이다.
- *
- * 반면 화면에 보이는 텍스트를 사용자가 복사해 붙여넣는 것은 자동 수집이 아니고,
- * 출처(네이버·직방·호갱노노·중개사 문자)를 가리지 않으며, 사이트 구조가 바뀌어도
- * 사람이 읽을 수 있는 형태면 계속 동작한다.
- *
- * 컴포넌트를 **모듈 스코프**에 둔 이유: 부모 안에 정의하면 렌더마다 새 타입이 되어
- * textarea 가 매 글자마다 언마운트/리마운트되고 입력한 내용과 포커스가 날아간다.
- */
 function PasteBox({ tag, onParsed }) {
   const key = tag === 'A' ? 'a' : 'b'
   const [text, setText] = useState('')
@@ -417,11 +506,13 @@ function PasteBox({ tag, onParsed }) {
     <div className="paste-box">
       <label htmlFor={`paste-${tag}`}>
         매물 텍스트 붙여넣기
-        <span className="muted small">붙이는 즉시 읽습니다</span>
+        {!res?.complex_id && <span className="muted small">붙이는 즉시 읽습니다</span>}
       </label>
       <textarea
         id={`paste-${tag}`}
-        rows={3}
+        // 읽고 나면 한 줄로 접는다. 원문을 다시 볼 일은 드문데 3줄을 계속
+        // 차지하면 정작 결과가 스크롤 밖으로 밀린다.
+        rows={res?.complex_id ? 1 : 3}
         value={text}
         placeholder={'자연앤힐스테이트 101동\n매매 13억 5,000\n112.9/84.97㎡, 중층, 남향'}
         onChange={(e) => setText(e.target.value)}
@@ -466,11 +557,12 @@ function PasteBox({ tag, onParsed }) {
         </div>
       )}
 
-      {res?.warnings?.map((w, i) => (
-        <p key={i} className="paste-warn">
-          {w}
-        </p>
-      ))}
+      {/* 경고 문구는 여기 늘어놓지 않는다. 아래 요약의 해당 값에 붙여
+          호버했을 때만 뜨게 한다(`applyParsed` → `side.notes`). 단지 자체를
+          못 찾은 경우만 예외 — 붙일 값이 없으니 여기서 말해야 한다. */}
+      {res && !res.complex_id && res.warnings?.length > 0 && (
+        <p className="paste-warn">{res.warnings[0].text ?? res.warnings[0]}</p>
+      )}
     </div>
   )
 }
@@ -530,8 +622,17 @@ function ComplexPicker({ tag, side, set, filter, setFilter, complexes, meta, onC
               {chosen.build_year ?? '?'} · 거래 {chosen.trade_count}건
             </span>
             <div className="cmp-specs">
-              <Spec label="전용" value={side.exclusive_area ? `${side.exclusive_area}㎡` : null} sub={pyeong && `${pyeong}평`} />
-              <Spec label="층" value={side.floor ? `${side.floor}층` : null} />
+              <Spec
+                label="전용"
+                value={side.exclusive_area ? `${side.exclusive_area}㎡` : null}
+                sub={pyeong && `${pyeong}평`}
+                notes={side.notes?.area}
+              />
+              <Spec
+                label="층"
+                value={side.floor ? `${side.floor}층` : null}
+                notes={side.notes?.floor}
+              />
               <Spec
                 label="역까지"
                 value={
@@ -542,10 +643,12 @@ function ComplexPicker({ tag, side, set, filter, setFilter, complexes, meta, onC
                       : null
                 }
                 sub={side.dongWalk != null ? `${side.dong}동 기준` : '단지 중심점'}
+                notes={side.notes?.dong}
               />
               <Spec
                 label="호가"
                 value={side.asking_price ? `${Number(side.asking_price).toLocaleString()}만원` : null}
+                notes={side.notes?.price}
               />
             </div>
           </>
@@ -722,10 +825,13 @@ function ComplexPicker({ tag, side, set, filter, setFilter, complexes, meta, onC
 }
 
 /** 요약 줄의 항목 하나. 비면 '—' 로 두어 **무엇이 비었는지** 보이게 한다. */
-function Spec({ label, value, sub }) {
+function Spec({ label, value, sub, notes }) {
   return (
     <div className={`spec${value ? '' : ' is-empty'}`}>
-      <span className="spec-label">{label}</span>
+      <span className="spec-label">
+        {label}
+        <Hint notes={notes} />
+      </span>
       <span className="spec-value">{value ?? '—'}</span>
       {value && sub && <span className="spec-sub">{sub}</span>}
     </div>
@@ -763,8 +869,10 @@ function CompareResult({ r }) {
       )}
 
       <div className="card">
-        <h2>요인별 기여</h2>
-        <p className="sub">{r.note}</p>
+        <h2>
+          요인별 기여
+          <Hint notes={[r.note]} />
+        </h2>
         <div className="table-wrap">
           <table>
             <thead>
@@ -834,44 +942,7 @@ function CompareResult({ r }) {
         )}
       </div>
 
-      <div className="grid-2">
-        <SideCard s={r.a} tag="A" />
-        <SideCard s={r.b} tag="B" />
-      </div>
     </>
-  )
-}
-
-function SideCard({ s, tag }) {
-  return (
-    <section className="card">
-      <h2>
-        {tag} · {s.name}
-      </h2>
-      <p className="sub">
-        {s.sgg_name} {s.umd_nm} · 거래 {fmt(s.trade_count)}건
-      </p>
-      <div className="tiles compact">
-        <Tile
-          label="호가 평당가"
-          value={s.asking_ppp ? `${fmt(s.asking_ppp)} 만원/평` : '—'}
-          sub={s.asking_price ? `${fmt(s.asking_price)} 만원 · ${s.pyeong}평` : ''}
-        />
-        <Tile label="전용면적" value={`${fmt(s.exclusive_area, 1)}㎡`} sub={`${s.pyeong}평`} />
-        <Tile label="층" value={s.floor ? `${s.floor}층` : '—'} sub={s.floor_band} />
-        <Tile
-          label="역까지"
-          value={`도보 ${fmt(s.dong_walk_min ?? s.walk_min, 1)}분`}
-          sub={s.dong_walk_min != null ? `${s.dong}동 기준 · ${s.line}` : `단지 중심점 · ${s.line}`}
-        />
-        <Tile label="연식" value={`${fmt(s.age, 0)}년`} sub={`강남 ${fmt(s.gangnam_min, 0)}분`} />
-        <Tile
-          label="세대수"
-          value={s.households ? `${fmt(s.households)}세대` : '정보없음'}
-          sub={s.residual_pct != null ? `단지 잔차 ${fmt(s.residual_pct, 1)}%` : ''}
-        />
-      </div>
-    </section>
   )
 }
 

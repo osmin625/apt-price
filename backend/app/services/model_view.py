@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections import OrderedDict
 
 from sqlalchemy import func, select
 
@@ -19,7 +20,11 @@ from . import fit_worker, hedonic
 TRUTH_PATH = BASE_DIR / "data" / "seed_truth.json"
 RING_LEVELS_PCT = (-5.0, -10.0, -15.0, -20.0)
 
-_cache: dict[tuple, dict] = {}
+# 적합 결과 캐시. **여러 칸이 필요하다** — 탭마다 요청하는 기간이 다르기 때문이다
+# (시장 분석 12개월, 매물 분석 24개월). 한 칸만 두면 탭을 오갈 때마다 캐시가 어긋나
+# 13초짜리 재적합이 매번 돈다. 간단한 LRU 로 둔다.
+CACHE_SIZE = 4
+_cache: "OrderedDict[tuple, dict]" = OrderedDict()
 
 
 def _cache_key(db, months: int, spec: str) -> tuple:
@@ -56,6 +61,7 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     """적합 결과(캐시). alpha DataFrame 을 포함하므로 API 직렬화 전에 걸러야 한다."""
     key = _cache_key(db, months, spec)
     if key in _cache:
+        _cache.move_to_end(key)
         return _cache[key]
 
     # 적합은 별도 프로세스에서 돈다. 14초 동안 GIL 을 쥐고 있어서, 인프로세스로
@@ -87,8 +93,10 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     else:
         fit["synthetic"] = False
 
-    _cache.clear()  # 스펙/기간별로 쌓이지 않게 최신 하나만 유지
     _cache[key] = fit
+    _cache.move_to_end(key)
+    while len(_cache) > CACHE_SIZE:
+        _cache.popitem(last=False)  # 가장 오래 안 쓴 것부터 버린다
     return fit
 
 
@@ -102,10 +110,9 @@ def peek_fit(db) -> dict | None:
     동 프리미엄처럼 '있으면 좋은' 정보를 붙이는 쪽에서 쓴다. 가벼운 엔드포인트가
     14초짜리 적합을 기다리게 만들면 안 된다.
     """
-    # 캐시는 최신 하나만 유지하므로(get_fit 의 _cache.clear) 기간을 따로 맞출 필요가
-    # 없다. 보고 있는 화면과 기간이 다를 수는 있는데, 동 프리미엄은 단지 내부 값이라
-    # 기간에 크게 흔들리지 않고 어차피 보조 정보다.
-    return next(iter(_cache.values()), None)
+    # 가장 최근에 쓴 것을 준다. 보고 있는 화면과 기간이 다를 수는 있는데, 동 프리미엄은
+    # 단지 내부 값이라 기간에 크게 흔들리지 않고 어차피 보조 정보다.
+    return next(reversed(_cache.values()), None) if _cache else None
 
 
 def fit_payload(fit: dict) -> dict:
@@ -327,6 +334,11 @@ _HH_POINTS = [(150, "150세대"), (300, "300세대"), (600, "600세대"),
 
 # 연속 요인은 대표 지점(막대)뿐 아니라 **조밀한 곡선**으로도 보낸다.
 # 막대만 보면 log·2차항·스플라인의 굽은 모양이 보이지 않는다.
+#
+# 아래는 **데이터가 없을 때의 대비책**이다. 실제 범위는 적합이 돌려준 관측 분포
+# (`fit["var_range"]`, p1~p99)에서 가져온다. 범위를 코드에 박아 두면 대상 지역을
+# 넓혔을 때 곡선이 어긋난다 — 수원만 볼 때 강남 소요시간은 30~65분이었지만 경기
+# 남부로 넓히면 23~78분이라, 박아 둔 (28, 68)은 양쪽 끝을 잘라 먹는다.
 _CURVE_RANGE = {
     "area": (30.0, 140.0),
     "walk": (1.0, 30.0),
@@ -334,11 +346,48 @@ _CURVE_RANGE = {
     "age": (0.0, 45.0),
     "households": (100.0, 3500.0),
 }
-_CURVE_N = 60
+# 요인 키 → 적합이 쓰는 분포 이름
+_RANGE_VAR = {
+    "area": "area_m2", "walk": "walk_min", "gangnam": "gangnam_min",
+    "age": "age", "households": "households",
+}
+_CURVE_N = 120
+
+
+def _ranges_from(fit: dict) -> dict[str, tuple[float, float]]:
+    """관측 분포로 곡선 범위를 정한다. 없으면 기존 상수를 쓴다."""
+    vr = fit.get("var_range") or {}
+    out = dict(_CURVE_RANGE)
+    for key, var in _RANGE_VAR.items():
+        d = vr.get(var)
+        if not d:
+            continue
+        lo, hi = float(d["lo"]), float(d["hi"])
+        if hi > lo:
+            out[key] = (lo, hi)
+    return out
+
+
+def _points_in(points, lo: float, hi: float, unit: str, vr: dict | None):
+    """막대로 찍을 대표 지점. 관측 범위 밖은 빼고, 모자라면 분위수로 채운다.
+
+    대표 지점을 코드에 박아 두면 두 방향으로 틀린다. 관측이 없는 지점(도보 2분짜리
+    단지가 없는 지역)에 막대가 서고, 관측이 있는 구간(도보 40분)은 통째로 빠진다.
+    """
+    kept = [(x, lbl) for x, lbl in points if lo <= x <= hi]
+    if vr:
+        # 사분위와 양 끝을 더해 실제 분포를 덮는다.
+        for q in ("lo", "q1", "median", "q3", "hi"):
+            x = float(vr[q])
+            if any(abs(x - px) < max(1.0, abs(x) * 0.04) for px, _ in kept):
+                continue
+            lbl = f"{x:,.0f}{unit}" if abs(x) >= 10 else f"{x:,.1f}{unit}"
+            kept.append((round(x, 1), lbl))
+    return sorted(kept, key=lambda p: p[0])
 
 
 def _curve(key: str, fn) -> dict:
-    """[lo, hi] 를 60점으로 훑어 기준 대비 %를 만든다."""
+    """[lo, hi] 를 촘촘히 훑어 기준 대비 %를 만든다."""
     lo, hi = _CURVE_RANGE[key]
     step = (hi - lo) / (_CURVE_N - 1)
     xs = [lo + step * i for i in range(_CURVE_N)]
@@ -376,7 +425,7 @@ def _eval_spline(coefs: list[float], knots, x: float) -> float:
 def _factor(
     key: str, label: str, unit: str, x_label: str, ref_x: float,
     to_model_x, coefs, knots, lin: dict | None, points, note: str,
-    per_unit: dict | None = None,
+    per_unit: dict | None = None, span: tuple[float, float] | None = None,
 ) -> dict:
     """연속 요인 하나를 곡선·점·선형비교선·판정으로 조립한다.
 
@@ -389,7 +438,8 @@ def _factor(
     def at(x: float) -> float:
         return _eval_spline(coefs, knots, to_model_x(x)) - base
 
-    lo, hi = _CURVE_RANGE[key]
+    # 범위는 호출자가 적합의 관측 분포에서 뽑아 넘긴다. 상수는 대비책일 뿐이다.
+    lo, hi = span or _CURVE_RANGE[key]
     step = (hi - lo) / (_CURVE_N - 1)
     xs = [lo + step * i for i in range(_CURVE_N)]
 
@@ -498,6 +548,8 @@ def factor_payload(fit: dict) -> dict:
     절반쯤 틀렸다 — 도보거리는 직선이었고 강남 접근성은 직선이 아니었다.
     """
     terms = {t["name"]: t for t in fit["terms"]}
+    spans = _ranges_from(fit)
+    vranges = fit.get("var_range") or {}
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
     lin = fit.get("linearity") or {}
@@ -526,11 +578,14 @@ def factor_payload(fit: dict) -> dict:
     al = fit["stage1"].get("area_linearity")
     if al and al.get("coefs"):
         ref = FACTOR_REF["area_m2"]
+        lo, hi = spans["area"]
         out.append(_factor(
             "area", "전용면적", "㎡", "전용면적(㎡)", ref,
-            lambda a: math.log(a / ref), al["coefs"], al.get("knots"), al, _AREA_POINTS,
+            lambda a: math.log(a / ref), al["coefs"], al.get("knots"), al,
+            _points_in(_AREA_POINTS, lo, hi, "㎡", vranges.get("area_m2")),
             "평당가 기준이므로 '면적이 클수록 비싸다'가 아니라 "
             "'작을수록 평당 단가가 높다'로 읽어야 한다.",
+            span=(lo, hi),
         ))
 
     # 3~6) Stage 2 연속 요인
@@ -563,8 +618,11 @@ def factor_payload(fit: dict) -> dict:
                 t["linear_coef"] * mult,
                 (t.get("linear_se") or 0) * mult or None,
             )
+        lo, hi = spans[key]
         out.append(_factor(
-            key, label, unit, xlab, ref, fx, cs, knots.get(var), t, points, note, pu
+            key, label, unit, xlab, ref, fx, cs, knots.get(var), t,
+            _points_in(points, lo, hi, unit, vranges.get(_RANGE_VAR[key])),
+            note, pu, span=(lo, hi),
         ))
 
     # 7) 동 위치 — 범주형. 동은 3,001개라 하나씩 낼 수 없으므로 **단지 안에서의

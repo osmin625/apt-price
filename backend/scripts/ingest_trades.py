@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
 from app import pricing  # noqa: E402
-from app.clients.molit import SUWON_DISTRICTS, MolitError, RawTrade, fetch_month  # noqa: E402
+from app.clients.molit import DISTRICTS, MolitError, RawTrade, fetch_month  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.models import Base, Complex, Trade  # noqa: E402
 
@@ -114,7 +114,7 @@ def get_or_create_complex(
             name=raw.apt_nm,
             name_key=nkey,
             sgg_cd=raw.sgg_cd,
-            sgg_name=SUWON_DISTRICTS.get(raw.sgg_cd, ""),
+            sgg_name=DISTRICTS.get(raw.sgg_cd, ""),
             umd_nm=raw.umd_nm,
             jibun=raw.jibun,
             build_year=raw.build_year,
@@ -171,7 +171,7 @@ def ingest(
                 try:
                     rows = fetch_month(lawd, ym)
                 except MolitError as exc:
-                    print(f"  [{SUWON_DISTRICTS.get(lawd, lawd)} {ym}] 실패: {exc}")
+                    print(f"  [{DISTRICTS.get(lawd, lawd)} {ym}] 실패: {exc}")
                     continue
 
                 for raw in rows:
@@ -218,12 +218,12 @@ def ingest(
                 # 한 달치가 실패해도 24개월 × 4개 구 작업 전체를 버리지 않는다.
                 try:
                     db.commit()
-                    print(f"  [{SUWON_DISTRICTS.get(lawd, lawd)} {ym}] {len(rows)}건 처리")
+                    print(f"  [{DISTRICTS.get(lawd, lawd)} {ym}] {len(rows)}건 처리")
                 except IntegrityError as exc:
                     db.rollback()
                     cache.clear()  # 롤백으로 떨어져 나간 Complex 객체를 버린다
                     failed_months += 1
-                    print(f"  [{SUWON_DISTRICTS.get(lawd, lawd)} {ym}] 커밋 실패, 건너뜀: "
+                    print(f"  [{DISTRICTS.get(lawd, lawd)} {ym}] 커밋 실패, 건너뜀: "
                           f"{str(exc.orig)[:90]}")
                 time.sleep(sleep)
 
@@ -295,7 +295,7 @@ if __name__ == "__main__":
 
     ingest(
         args.months,
-        args.district or list(SUWON_DISTRICTS),
+        args.district or list(DISTRICTS),
         args.sleep,
         args.keep_seed,
         args.refetch_recent,

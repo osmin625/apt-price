@@ -280,6 +280,7 @@ def estimate_fair_price(
     months: int = 12,
     dong: str | None = None,
     dong_effects: dict | None = None,
+    ctx: dict | None = None,
 ) -> dict | None:
     """실거래 기반 적정 시세 추정.
 
@@ -292,9 +293,17 @@ def estimate_fair_price(
         return None
 
     ref_year = date.today().year
-    district_points = load_points(db, months=months, sgg_cd=cx.sgg_cd)
-    index = pricing.market_index(district_points)
-    factors = pricing.estimate_floor_factors(district_points, index)
+    # 구 단위 표본·시점지수·층계수는 (구, 기간)마다 같다. 목록을 한 번에 평가할 때
+    # 매물 수만큼 다시 만들면 46건에 12초가 든다 — 호출자가 `ctx` 를 넘기면 공유한다.
+    ck = ("district", cx.sgg_cd, months)
+    if ctx is not None and ck in ctx:
+        district_points, index, factors = ctx[ck]
+    else:
+        district_points = load_points(db, months=months, sgg_cd=cx.sgg_cd)
+        index = pricing.market_index(district_points)
+        factors = pricing.estimate_floor_factors(district_points, index)
+        if ctx is not None:
+            ctx[ck] = (district_points, index, factors)
 
     own = [p for p in district_points if p.complex_id == complex_id]
     target_band = pricing.area_band(exclusive_area)

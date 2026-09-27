@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Date,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -205,6 +206,9 @@ class Listing(Base):
     exclusive_area: Mapped[float] = mapped_column(Float)
     supply_area: Mapped[float | None] = mapped_column(Float)  # 참고용 — 전용률 표시에만 사용
     floor: Mapped[int | None] = mapped_column(Integer)
+    # 동은 적정가를 바꾼다(역거리 + 동 프리미엄). 저장해 두지 않으면 나중에 다시
+    # 계산할 때 단지 중심점 기준으로 떨어져 저장 시점과 다른 값이 나온다.
+    dong: Mapped[str | None] = mapped_column(String(20))
     asking_price: Mapped[int] = mapped_column(Integer)  # 만원
     memo: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -251,6 +255,10 @@ class Quote(Base):
     floor: Mapped[int] = mapped_column(Integer, default=0)  # 0 = 모름
     floor_band: Mapped[str] = mapped_column(String(20), default="정보없음")
     asking_price: Mapped[int] = mapped_column(Integer)  # 만원
+
+    # 매물에 적힌 확인일자. 우리가 언제 봤는지(`first_seen_at`)와 다르다 — 한 번에
+    # 붙여넣은 매물은 목격 시각이 전부 같지만 확인일자는 제각각이다.
+    confirmed_on: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
 
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

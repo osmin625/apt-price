@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from .config import settings
 from .db import SessionLocal, engine
 from .models import Base, Complex, ComplexStation, Station, Trade
-from .routers import analysis, complexes, listings, map as map_router, model
+from .routers import analysis, complexes, listings, map as map_router, model, quotes
 from .services import fit_worker, hedonic, model_view
 
 # 주의: create_all 은 없는 '테이블'만 만들고 기존 테이블에 '컬럼'은 추가하지 않는다.
@@ -18,7 +18,7 @@ Base.metadata.create_all(engine)
 
 app = FastAPI(
     title="수도권 아파트 적정 시세 API",
-    description="국토교통부 실거래가 기반 전용면적 평당가 분석 (PoC: 수원시)",
+    description="국토교통부 실거래가 기반 전용면적 평당가 분석 (수원 생활권 — 수원·용인·화성·안양·오산·의왕·군포·과천)",
     version="0.1.0",
 )
 
@@ -35,6 +35,7 @@ app.include_router(analysis.router)
 app.include_router(listings.router)
 app.include_router(model.router)
 app.include_router(map_router.router)
+app.include_router(quotes.router)
 
 
 @app.on_event("startup")

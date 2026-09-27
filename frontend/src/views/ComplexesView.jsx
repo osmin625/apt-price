@@ -13,6 +13,11 @@ const SORTS = [
 
 export default function ComplexesView({ filters, setFilters, meta, onSelect }) {
   const [rows, setRows] = useState([])
+  // 서버는 상위 `limit` 개만 돌려주고 전체 개수는 따로 알려 준다.
+  // 대상 지역을 경기 남부로 넓히며 단지가 2,469곳이 됐는데, 그중 200곳만
+  // 말없이 보여 주면 목록이 전부인 줄 알게 된다.
+  const [total, setTotal] = useState(0)
+  const [limit, setLimit] = useState(200)
   const [q, setQ] = useState('')
   const [sort, setSort] = useState('ppp_desc')
   const [loading, setLoading] = useState(true)
@@ -21,13 +26,19 @@ export default function ComplexesView({ filters, setFilters, meta, onSelect }) {
     setLoading(true)
     const timer = setTimeout(() => {
       api
-        .complexes({ ...filters, q, sort })
-        .then((d) => setRows(d.items))
-        .catch(() => setRows([]))
+        .complexes({ ...filters, q, sort, limit })
+        .then((d) => {
+          setRows(d.items)
+          setTotal(d.count ?? d.items.length)
+        })
+        .catch(() => {
+          setRows([])
+          setTotal(0)
+        })
         .finally(() => setLoading(false))
     }, 250)
     return () => clearTimeout(timer)
-  }, [filters, q, sort])
+  }, [filters, q, sort, limit])
 
   return (
     <>
@@ -67,6 +78,14 @@ export default function ComplexesView({ filters, setFilters, meta, onSelect }) {
         <p className="sub">
           행을 클릭하면 평형별·층별 상세를 볼 수 있습니다 · 단위 만원/평 (전용면적 기준)
         </p>
+        {total > rows.length && (
+          <p className="muted small" style={{ margin: '0 0 8px' }}>
+            조건에 맞는 단지 {fmt(total)}곳 중 <b>{fmt(rows.length)}곳</b>만 보고 있습니다.{' '}
+            <button className="ghost" onClick={() => setLimit((n) => Math.min(n + 300, 1000))}>
+              더 보기
+            </button>
+          </p>
+        )}
 
         {loading ? (
           <p className="empty">불러오는 중…</p>

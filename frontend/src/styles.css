@@ -497,3 +497,117 @@ tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
 }
 .tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
+
+/* 진단 카드 간소화 — 접힌 상태는 호가 + 두 기준값만 */
+.fair-spec { margin-right: auto; }
+.fair-basis { width: 100%; font-size: 13px; }
+.fair-basis td { padding: 4px 6px; border: none; }
+.fair-basis td:first-child { color: var(--text-secondary); }
+.fair-basis td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.fair-basis td[data-tone='good'] { color: var(--good); }
+.fair-basis td[data-tone='bad'] { color: var(--critical); }
+.fp-lead { margin: 0 0 8px; font-size: 12.5px; }
+
+/* 값에 붙는 주석 — 호버/포커스에서만 펼친다 */
+.hint { position: relative; display: inline-block; margin-left: 4px; outline: none; }
+.hint-dot {
+  display: inline-grid; place-items: center; width: 13px; height: 13px;
+  border-radius: 50%; font-size: 9px; font-weight: 700; cursor: help;
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+  color: var(--text-secondary); line-height: 1;
+}
+.hint.is-warn .hint-dot { background: color-mix(in srgb, var(--warning) 32%, transparent); color: #6b4a00; }
+.hint:hover .hint-dot, .hint:focus-visible .hint-dot { background: var(--series-1); color: #fff; }
+/* 호가 변동 배지 — 원이 아니라 알약이라 값이 들어간다(▼ 6.6%) */
+.hint-dot.is-pill {
+  width: auto; height: auto; border-radius: 999px;
+  padding: 1px 5px; font-size: 10px; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.hint.is-good .hint-dot { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.hint.is-bad .hint-dot { background: color-mix(in srgb, var(--critical) 18%, transparent); color: var(--critical); }
+.hint-pop {
+  position: fixed; z-index: 60;
+  display: flex; flex-direction: column; gap: 5px;
+  max-width: 290px; padding: 8px 10px;
+  border-radius: 7px; border: 1px solid var(--border); background: var(--surface-1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+  font-size: 11.5px; font-weight: 400; line-height: 1.5; color: var(--text-primary);
+  white-space: normal; text-align: left;
+}
+.hint-line { display: block; }
+
+/* 답을 가장 크게 — 괴리율 + 판정 */
+.fair-answer { display: flex; align-items: baseline; gap: 9px; margin: 2px 0 8px; }
+.fair-gap { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fair-verdict { font-size: 14px; font-weight: 600; }
+.fair-answer[data-tone='good'] .fair-gap, .fair-answer[data-tone='good'] .fair-verdict { color: var(--good); }
+.fair-answer[data-tone='bad'] .fair-gap, .fair-answer[data-tone='bad'] .fair-verdict { color: var(--critical); }
+.fair-answer[data-tone='mid'] .fair-verdict { color: var(--text-secondary); }
+.fair-basis td:nth-child(2) { font-size: 14px; }
+.fair-basis td.muted { font-weight: 400; font-size: 11.5px; color: var(--text-muted); }
+
+/* 제목 옆 ⓘ 는 제목 크기에 눌리지 않게 살짝 키운다 */
+h2 .hint-dot { width: 15px; height: 15px; font-size: 10px; vertical-align: middle; }
+/* 여백 압축 — 결과가 첫 화면 안에 들어오도록 */
+.cmp-inputs { gap: 12px; margin-top: 12px; }
+.cmp-side { padding: 26px 13px 12px; }
+.paste-box { margin-bottom: 8px; }
+.cmp-summary:not(.is-empty) { padding: 8px 10px; }
+.cmp-actions { margin-top: 12px; padding-top: 11px; }
+.fair-grid { gap: 12px; margin-top: 12px; }
+.fair-card { padding: 11px 13px; }
+
+/* 외부 링크 — 매물을 찾아오는 곳 */
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.top-main { min-width: 0; }
+.ext-link {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: 999px; text-decoration: none;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+}
+.ext-link:hover { border-color: var(--series-1); color: var(--series-1); }
+
+/* 순위표 */
+.rank-basis { display: flex; align-items: center; gap: 6px; margin: 10px 0 8px; }
+.rank-no { font-weight: 700; color: var(--text-muted); }
+tr.is-top .rank-no { color: var(--series-1); }
+tr.is-top td { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+th.is-sort, td.is-sort { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
+td[data-tone='good'] { color: var(--good); font-weight: 600; }
+td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
+
+/* 여러 매물 한 번에 */
+.bulk-input {
+  width: 100%; box-sizing: border-box; resize: vertical; font: inherit;
+  font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px;
+  color: inherit; margin-top: 10px;
+  border: 1px dashed color-mix(in srgb, var(--series-1) 40%, var(--border));
+  background: color-mix(in srgb, var(--series-1) 4%, transparent);
+}
+.bulk-input:focus { outline: none; border-style: solid; border-color: var(--series-1); background: var(--surface-1); }
+
+/* 여러 매물 한 번에 */
+.bulk-input {
+  width: 100%; box-sizing: border-box; resize: vertical; font: inherit;
+  font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px;
+  color: inherit; margin-top: 10px;
+  border: 1px dashed color-mix(in srgb, var(--series-1) 40%, var(--border));
+  background: color-mix(in srgb, var(--series-1) 4%, transparent);
+}
+.bulk-input:focus { outline: none; border-style: solid; border-color: var(--series-1); background: var(--surface-1); }
+
+/* 요인 분해 호버 */
+.hint-pop.is-wide { max-width: 360px; }
+.fh { display: flex; flex-direction: column; gap: 8px; }
+.fh-group { display: flex; flex-direction: column; gap: 2px; }
+.fh-title { font-size: 10.5px; font-weight: 600; color: var(--text-muted); }
+.fh-row { display: flex; align-items: baseline; gap: 6px; }
+.fh-label { flex: 1 1 auto; min-width: 0; }
+.fh-value { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.fh-pct { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fh-foot { padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-secondary); }
+.tone-pos { color: var(--good); }
+.tone-neg { color: var(--neg); }
+tr.is-deleting td { opacity: 0.4; }

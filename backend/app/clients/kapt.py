@@ -18,6 +18,7 @@ data.go.kr 오류 코드로 판별한다.
   30 SERVICE_KEY_IS_NOT_REGISTERED_ERROR  → 활용신청이 안 된 서비스 (엔드포인트는 맞음)
   12 NO_OPENAPI_SERVICE_ERROR             → 경로가 틀렸거나 폐기된 서비스
   22 LIMITED_NUMBER_OF_SERVICE_REQUESTS   → 일일 한도 초과
+  04 HTTP_ERROR                          → 게이트웨이 일시 오류. 재시도하면 풀린다
 
 두 오류를 구분해서 알려 줘야 사용자가 '신청을 더 해야 하는지' '코드가 틀렸는지'
 판단할 수 있다.
@@ -26,6 +27,7 @@ data.go.kr 오류 코드로 판별한다.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -74,25 +76,52 @@ def _check(payload: str) -> None:
         )
     if code == "22":
         raise KaptError("일일 트래픽 한도를 초과했습니다(코드 22).")
+    if code in _RETRY_CODES:
+        raise KaptTransient(f"K-apt 일시 오류 코드 {code}")
     if code and code != "00":
         raise KaptError(f"K-apt 오류 코드 {code}")
+
+
+# 코드 04(HTTP_ERROR)는 게이트웨이의 **일시적** 오류다. 같은 요청을 몇 초 뒤에
+# 다시 보내면 대부분 통과한다.
+#
+# 재시도가 없을 때 무슨 일이 있었나: 17개 시군구를 훑는데 6곳이 04 로 떨어졌고,
+# 스크립트가 첫 실패에서 그 구를 통째로 건너뛰어 세대수가 2,469곳 중 307곳에만
+# 붙었다. 그런데 같은 6곳을 재시도해 보니 4곳이 2~4회 만에 성공했다. 데이터가
+# 없는 게 아니라 **말을 걸다 만 것**이었다.
+_RETRY_CODES = {"04"}
+_RETRIES = 4
+_RETRY_WAIT_S = 1.5
+
+
+class KaptTransient(KaptError):
+    """게이트웨이 일시 오류. 재시도로 풀린다."""
 
 
 def _get(url: str, params: dict) -> dict:
     if not settings.molit_service_key:
         raise KaptError("MOLIT_SERVICE_KEY 가 설정되지 않았습니다.")
-    resp = httpx.get(
-        url,
-        params={
-            "serviceKey": settings.molit_service_key,
-            "_type": "json",
-            **params,
-        },
-        timeout=20.0,
-    )
-    _check(resp.text)
-    resp.raise_for_status()
-    return resp.json()
+
+    last: Exception | None = None
+    for attempt in range(_RETRIES):
+        try:
+            resp = httpx.get(
+                url,
+                params={
+                    "serviceKey": settings.molit_service_key,
+                    "_type": "json",
+                    **params,
+                },
+                timeout=20.0,
+            )
+            _check(resp.text)
+            resp.raise_for_status()
+            return resp.json()
+        except (KaptTransient, httpx.TransportError) as exc:
+            last = exc
+            if attempt < _RETRIES - 1:
+                time.sleep(_RETRY_WAIT_S * (attempt + 1))
+    raise last if last else KaptError("K-apt 호출 실패")
 
 
 def _items(data: dict) -> list[dict]:

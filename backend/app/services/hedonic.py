@@ -63,6 +63,7 @@ CURVE_POINTS = 48
 # '가장 저평가된 단지' 목록을 망가뜨렸다.
 MIN_MAX_AREA_M2 = 40.0
 
+
 # 스플라인·다항 동반항은 설계상 서로 상관이 높다(walk_min↔walk_rcs2, age↔age_sq).
 # 이건 구조적이라 경고할 일이 아니다. 진짜 문제는 서로 다른 개념 간의 공선성이다.
 # 스플라인 동반항은 설계상 서로 상관이 높다. 구조적이라 경고할 일이 아니고,
@@ -436,8 +437,8 @@ def _fit_stage1(df, use_controls: bool):
         }
         return alpha, stage1
 
-    cx = pd.get_dummies(df["complex_id"].astype(str), prefix="cx", dtype=float)
-    parts = [cx]
+    # 단지 더미는 만들지 않는다 — 아래에서 흡수한다.
+    parts: list = []
     floor_terms: list[str] = []
     month_terms: list[str] = []
     within = None
@@ -445,8 +446,13 @@ def _fit_stage1(df, use_controls: bool):
     area_terms: list[str] = []
     if use_controls:
         # 면적도 형태를 가정하지 않는다. log 로 충분한지 데이터에 묻는다.
+        #
+        # 매듭은 Stage 2 보다 넉넉히 둔다. 여기 관측치는 **거래 건수**(경기 남부
+        # 24개월 기준 11만 건)라 단지 수(2천)로 제약되는 Stage 2 와 자릿수가 다르다.
+        # 다만 실제 전용면적은 59·84·114 처럼 몇 개 값에 몰려 있어서, `_knots` 가
+        # 고유값 수를 보고 알아서 줄인다.
         acols: dict[str, list[float]] = {}
-        aknots = _knots(df["log_area"].astype(float).to_numpy())
+        aknots = _knots(df["log_area"].astype(float).to_numpy(), knots_for(len(df) // 20))
         area_terms = _spline_cols(acols, "log_area", df["log_area"], aknots)
         parts.append(pd.DataFrame(acols, index=df.index))
 
@@ -479,44 +485,82 @@ def _fit_stage1(df, use_controls: bool):
         month_terms = list(mo.columns)
         parts.append(mo)
 
-    X = pd.concat(parts, axis=1)
+    Z = pd.concat(parts, axis=1)
     y = df["log_ppp"].astype(float)
 
-    res = sm.OLS(y, X).fit(cov_type="HC1")
+    # 단지 고정효과를 **흡수(within transformation)** 한다. 더미 497개를 설계행렬에
+    # 직접 넣으면 28,451×528 이 되고 statsmodels 가 pinv(SVD) 로 푸느라 2.7초가 든다.
+    # 그룹 평균을 빼면 28,451×31 로 줄어 0.07초다(29배).
+    #
+    # Frisch-Waugh-Lovell 정리가 기울기 계수의 동일성을 보장한다 — 실측으로도
+    # 1e-13 까지 같다(`scripts/verify_absorb.py`).
+    gid = df["complex_id"].to_numpy()
+    res = sm.OLS(y - y.groupby(gid).transform("mean"),
+                 Z - Z.groupby(gid).transform("mean")).fit(cov_type="HC1")
 
-    alpha_rows = []
-    for col in cx.columns:
-        cid = int(col[3:])
-        sub = df[df["complex_id"] == cid]
-        alpha_rows.append(
-            {
-                "complex_id": cid,
-                "complex_name": sub["complex_name"].iloc[0],
-                "sgg_cd": sub["sgg_cd"].iloc[0],
-                "sgg_name": sub["sgg_name"].iloc[0],
-                "umd_nm": sub["umd_nm"].iloc[0],
-                "line": sub["line"].iloc[0],
-                "alpha": float(res.params[col]),
-                "se_alpha": float(res.bse[col]),
-                "trade_count": int(len(sub)),
-                "walk_min": float(sub["walk_min"].iloc[0]),
-                # `dong_walk_dev` 의 기준선. 동을 아는 매물의 도보시간을 이 값과의
-                # 편차로 바꿔야 within 계수를 그대로 쓸 수 있다. 단지 중심점 도보와는
-                # 다른 값이다 — 이쪽은 거래가 일어난 동들의 (거래 가중) 평균이다.
-                "dong_walk_mean": (
-                    float(sub["dong_walk_min"].mean())
-                    if sub["dong_walk_min"].notna().any()
-                    else None
-                ),
-                "gangnam_min": float(sub["gangnam_min"].iloc[0]),
-                "age": float(sub["age"].iloc[0]),
-                "log_households": float(sub["log_households"].iloc[0]),
-                "lat": sub["lat"].iloc[0],
-                "lng": sub["lng"].iloc[0],
-                "ppp_median": float(np.exp(np.median(sub["log_ppp"]))),
-            }
+    # α̂_c 복원: α̂_c = mean_c(y - Zβ̂). 더미 계수와 1e-13 까지 일치한다.
+    _beta = res.params.to_numpy()
+    _lvl = y - Z.to_numpy() @ _beta
+    _alpha = _lvl.groupby(gid).mean().sort_index()
+    _e = (_lvl - _alpha.reindex(gid).to_numpy()).to_numpy()
+
+    # se(α̂_c) 는 더미 표준오차를 꺼낼 수 없으니 직접 만든다. 두 항이 모두 필요하다.
+    #
+    #   Var(α̂_c) = (Σ_{i∈c} e_i²)·dfc / n_c²   +   z̄_c' V(β̂) z̄_c
+    #              └ 그룹 평균의 강건 분산        └ β̂ 불확실성이 옮겨온 몫
+    #
+    # 뒤 항은 버릴 수 없다 — 전체 se 의 절반(중앙 52%)을 차지한다. 앞 항에 그룹별
+    # 잔차가 아니라 공통 σ² 를 쓰면 상관이 1.00 에서 0.72 로 떨어진다. 둘 다
+    # 후보를 재서 고른 결과다(`scripts/verify_absorb.py` 참조).
+    _codes, _uniq = pd.factorize(gid)
+    _remap = pd.Series(np.arange(len(_uniq)), index=_uniq).reindex(_alpha.index).to_numpy()
+    _n_c = np.bincount(_codes).astype(float)[_remap]
+    _sum_e2 = np.bincount(_codes, weights=_e**2)[_remap]
+    _n, _k, _g = len(df), Z.shape[1], len(_uniq)
+    _dfc = _n / max(_n - _k - _g, 1)
+    _zbar = Z.groupby(gid).mean().sort_index().to_numpy()
+    _V = res.cov_params().to_numpy()
+    _quad = np.maximum(np.einsum("ij,jk,ik->i", _zbar, _V, _zbar), 0.0)
+    _se_alpha = np.sqrt(_sum_e2 * _dfc / _n_c**2 + _quad)
+
+    # 결정계수는 **수준(level) 잔차**로 계산한다. 차감된 적합의 rsquared 를 그대로
+    # 쓰면 단지 더미가 설명한 몫이 빠져 예전 값(0.9603)과 달라진다.
+    _sst = float(((y - y.mean()) ** 2).sum())
+    _within_r2 = 1.0 - float((_e**2).sum()) / _sst if _sst > 0 else 0.0
+
+    # 단지별 집계는 **groupby 한 번**으로 끝낸다. 단지마다 `df[df.complex_id == cid]`
+    # 를 돌면 28,451행을 497번 훑어(1,400만 비교) 0.25초가 날아간다.
+    #
+    # `first` 를 쓰는 열들은 단지 안에서 값이 하나뿐이다(역거리·연식·세대수·좌표).
+    # `dong_walk_mean` 만 평균인데, 이것이 `dong_walk_dev` 의 기준선이다 — 단지
+    # 중심점 도보와는 다른 값으로, 거래가 일어난 동들의 (거래 가중) 평균이다.
+    agg = (
+        df.groupby("complex_id")
+        .agg(
+            complex_name=("complex_name", "first"),
+            sgg_cd=("sgg_cd", "first"),
+            sgg_name=("sgg_name", "first"),
+            umd_nm=("umd_nm", "first"),
+            line=("line", "first"),
+            trade_count=("log_ppp", "size"),
+            walk_min=("walk_min", "first"),
+            dong_walk_mean=("dong_walk_min", "mean"),
+            gangnam_min=("gangnam_min", "first"),
+            age=("age", "first"),
+            log_households=("log_households", "first"),
+            lat=("lat", "first"),
+            lng=("lng", "first"),
+            ppp_median=("log_ppp", "median"),
         )
-    alpha = pd.DataFrame.from_records(alpha_rows)
+        .reset_index()
+    )
+    agg["ppp_median"] = np.exp(agg["ppp_median"])
+
+    # 위에서 복원한 α̂ 과 se 를 붙인다. 둘 다 complex_id 오름차순이라 순서가 맞는다.
+    agg = agg.sort_values("complex_id").reset_index(drop=True)
+    agg["alpha"] = _alpha.to_numpy()
+    agg["se_alpha"] = _se_alpha
+    alpha = agg
 
     # 월 더미에서 평균 월 상승률을 뽑는다(pricing.market_index 를 대체).
     month_trend = None
@@ -566,10 +610,12 @@ def _fit_stage1(df, use_controls: bool):
             round(float(res.params[n]), 6) for n in area_terms if n in res.params.index
         ]
         # 비선형항을 뺀 제약 적합 — 화면에서 곡선 옆 점선으로 굽은 정도를 보여 준다.
-        nl = [n for n in area_terms[1:] if n in X.columns]
+        nl = [n for n in area_terms[1:] if n in Z.columns]
         if nl:
             try:
-                r2 = sm.OLS(y, X.drop(columns=nl)).fit(cov_type="HC1")
+                Zr = Z.drop(columns=nl)
+                r2 = sm.OLS(y - y.groupby(gid).transform("mean"),
+                            Zr - Zr.groupby(gid).transform("mean")).fit(cov_type="HC1")
                 area_linearity["linear_coef"] = round(float(r2.params["log_area"]), 6)
                 area_linearity["linear_se"] = round(float(r2.bse["log_area"]), 6)
             except Exception:
@@ -594,14 +640,15 @@ def _fit_stage1(df, use_controls: bool):
             ),
         }
 
-    dong_effects, dong_summary = _dong_effects(df, res.resid)
+    # 차감된 적합의 잔차는 수준 잔차와 같다(α̂_c 정의상 서로 상쇄된다).
+    dong_effects, dong_summary = _dong_effects(df, _e)
 
     stage1 = {
         "n_obs": int(len(df)),
         "n_complexes": int(len(alpha)),
         "within_walk": within_walk,
         "dong_premium": dong_summary,
-        "within_r2": round(float(res.rsquared), 4),
+        "within_r2": round(_within_r2, 4),
         "month_trend_pct": round(month_trend, 4) if month_trend is not None else None,
         "floor_terms": floors,
         "log_area": (
@@ -621,8 +668,31 @@ def _fit_stage1(df, use_controls: bool):
 # Stage 2 — 단지 단위, 가중최소제곱
 # --------------------------------------------------------------------------
 # Harrell 권장 매듭 위치. 매듭 k개 -> 열 k-1개(선형 1 + 비선형 k-2).
-_KNOT_PCTS = {3: (10, 50, 90), 4: (5, 35, 65, 95), 5: (5, 27.5, 50, 72.5, 95)}
+_KNOT_PCTS = {
+    3: (10, 50, 90),
+    4: (5, 35, 65, 95),
+    5: (5, 27.5, 50, 72.5, 95),
+    6: (5, 23, 41, 59, 77, 95),
+    7: (2.5, 18.33, 34.17, 50, 65.83, 81.67, 97.5),
+}
 DEFAULT_KNOTS = 4
+
+# 매듭을 몇 개까지 허용할지는 **표본이 정한다**. 매듭 k개는 열 k-1개를 쓰는데,
+# Stage 2 의 관측치는 단지 수뿐이다. 수원만 볼 때는 단지 497곳이라 4개가 상한이었고,
+# 경기 남부로 넓히며 2,000곳을 넘어서면서 더 촘촘하게 볼 여유가 생겼다.
+#
+# Harrell 의 권고(표본이 작으면 3~4개, 100을 넘으면 5개, 매우 크면 7개)를 따른다.
+# 매듭 k개는 요인당 열 k-1개를 쓰므로, 연속 요인 4개면 k=7 에서 24열이다. Stage 2 의
+# 관측치는 단지 수이고 여기에 노선·구 FE 20여 열이 더 붙으니, 1,500단지에서 45열이면
+# 관측당 30배로 넉넉하다.
+def knots_for(n_complexes: int) -> int:
+    if n_complexes >= 1500:
+        return 7
+    if n_complexes >= 700:
+        return 6
+    if n_complexes >= 250:
+        return 5
+    return 4
 
 
 def _knots(values, n: int = DEFAULT_KNOTS):
@@ -630,17 +700,37 @@ def _knots(values, n: int = DEFAULT_KNOTS):
 
     고유값이 적으면(예: 강남 소요시간은 역 수만큼만 존재) 매듭을 줄인다.
     매듭이 겹치면 기저가 0으로 나뉘고, 고유값보다 매듭이 많으면 과적합이다.
+
+    ## 분위수가 겹칠 때는 매듭을 **줄인다**
+
+    예전에는 겹친 매듭을 1e-6 씩 밀어 떨어뜨렸다. 그러면 매듭 개수는 지켜지지만
+    폭이 0 에 가까운 구간이 생겨, 그 구간의 기저열은 사실상 0 이거나 이웃 열과
+    거의 같아진다. 유연성을 쓰지도 못하면서 공선성만 얻는 셈이다.
+
+    경기 남부로 넓히며 실제로 그렇게 됐다. 도보시간은 `WALK_CAP_MIN`(30분)에서
+    잘리는데 단지의 30%가 그 상한에 몰려서, p83 과 p97.5 가 **둘 다 30.0** 이 됐다.
+    매듭 7개 중 2개가 같은 자리에 선 것이다.
+
+    그래서 밀어내지 않고 **중복을 없앤 뒤 그만큼 매듭을 줄인다.** 분포가 한 점에
+    몰려 있다는 것은 그 구간에 볼 것이 없다는 뜻이고, 개수는 목표가 아니다.
     """
     np, _, _ = _deps()
     uniq = len(set(float(v) for v in values))
-    n = min(n, max(3, min(uniq - 1, 5)))
+    n = min(n, max(3, min(uniq - 1, max(_KNOT_PCTS))))
     if uniq < 4:
         return None  # 스플라인을 줄 만큼의 변동이 없다 — 선형으로 간다
-    qs = [float(np.percentile(values, p)) for p in _KNOT_PCTS[n]]
-    for i in range(1, len(qs)):
-        if qs[i] <= qs[i - 1]:
-            qs[i] = qs[i - 1] + 1e-6
-    return qs
+
+    while n >= 3:
+        qs = [float(np.percentile(values, p)) for p in _KNOT_PCTS[n]]
+        # 같은 값으로 붙은 매듭을 걷어낸다. 부동소수 오차도 겹친 것으로 본다.
+        uniq_qs: list[float] = []
+        for q in qs:
+            if not uniq_qs or q - uniq_qs[-1] > 1e-9:
+                uniq_qs.append(q)
+        if len(uniq_qs) == n:
+            return qs
+        n -= 1
+    return None
 
 
 def _spline_cols(cols: dict, name: str, values, knots) -> list[str]:
@@ -649,14 +739,34 @@ def _spline_cols(cols: dict, name: str, values, knots) -> list[str]:
     첫 열은 변수 자신(선형항), 나머지가 비선형항이다. 비선형항을 함께 0으로
     두는 Wald 검정이 곧 '이 요인이 선형인가' 검정이 된다.
     """
-    vals = [float(v) for v in values]
+    np, _, _ = _deps()
+
+    vals = np.asarray(values, dtype=float)
     if not knots:
         cols[name] = vals
         return [name]
-    basis = [pricing.rcs_basis(v, knots) for v in vals]
-    names = [name] + [f"{name}__nl{j}" for j in range(1, len(basis[0]))]
-    for j, nm in enumerate(names):
-        cols[nm] = [b[j] for b in basis]
+
+    # `pricing.rcs_basis` 를 행마다 부르면 11.7만 행 × 매듭 수만큼 파이썬 루프가 돈다
+    # (프로파일에서 2.2초, 적합 전체의 5분의 1). 같은 식을 numpy 로 한 번에 계산한다.
+    # 값이 정말 같은지는 `scripts/verify_spline.py` 가 검사한다 — 이 기저는 시드와
+    # 모델이 공유하는 함수라 조용히 달라지면 참값 복원 검증이 무너진다.
+    t = [float(k) for k in knots]
+    denom = (t[-1] - t[0]) ** 2
+    span = t[-1] - t[-2]
+
+    def cube_plus(u):
+        return np.where(u > 0, u ** 3, 0.0)
+
+    names = [name] + [f"{name}__nl{j}" for j in range(1, len(t) - 1)]
+    cols[name] = vals
+    last2, last1 = cube_plus(vals - t[-2]), cube_plus(vals - t[-1])
+    for j in range(len(t) - 2):
+        term = (
+            cube_plus(vals - t[j])
+            - last2 * (t[-1] - t[j]) / span
+            + last1 * (t[-2] - t[j]) / span
+        )
+        cols[names[j + 1]] = term / denom
     return names
 
 
@@ -1020,6 +1130,37 @@ def _fit_stage2(alpha, spec: Spec, knots, truth=None):
 # --------------------------------------------------------------------------
 # 공개 API
 # --------------------------------------------------------------------------
+def _var_ranges(df, alpha) -> dict:
+    """요인별 관측 범위(p1~p99)와 사분위. 화면 곡선을 데이터에 맞추기 위한 것이다.
+
+    양 끝 1%를 잘라내는 이유는 스플라인의 **선형 꼬리** 때문이다. 극단값 하나까지
+    곡선을 늘리면 데이터가 거의 없는 구간이 화면의 절반을 차지한다.
+    """
+    np, _, _ = _deps()
+    out: dict[str, dict] = {}
+    src = {
+        "walk_min": alpha.get("walk_min"),
+        "gangnam_min": alpha.get("gangnam_min"),
+        "age": alpha.get("age"),
+        "households": (
+            np.exp(alpha["log_households"]) if "log_households" in alpha else None
+        ),
+        "area_m2": df["exclusive_area"] if "exclusive_area" in df else None,
+    }
+    for name, series in src.items():
+        if series is None:
+            continue
+        v = np.asarray(series.dropna(), dtype=float)
+        if v.size < 10:
+            continue
+        lo, q1, med, q3, hi = (float(np.percentile(v, p)) for p in (1, 25, 50, 75, 99))
+        out[name] = {
+            "lo": round(lo, 2), "q1": round(q1, 2), "median": round(med, 2),
+            "q3": round(q3, 2), "hi": round(hi, 2), "n": int(v.size),
+        }
+    return out
+
+
 def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None) -> dict:
     """전체 적합. rows 스키마는 모듈 상단 주석 참조."""
     np, pd, sm = _deps()
@@ -1039,9 +1180,10 @@ def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None)
     alpha, stage1 = _fit_stage1(df, chosen.use_controls)
     # 연속 요인마다 매듭을 따로 놓는다. 분포가 제각각이라 공통 매듭은 맞지 않는다.
     knots = {}
+    nk = knots_for(len(alpha))
     for var in ("walk_min", "gangnam_min", "age", "log_households"):
         if var in alpha.columns and alpha[var].notna().any():
-            knots[var] = _knots(alpha[var].dropna().astype(float).to_numpy())
+            knots[var] = _knots(alpha[var].dropna().astype(float).to_numpy(), nk)
 
     main = _fit_stage2(alpha, chosen, knots, truth=truth)
 
@@ -1102,6 +1244,11 @@ def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None)
         "knots": {
             var: ([round(k, 2) for k in ks] if ks else None) for var, ks in knots.items()
         },
+        "n_knots": nk,
+        # 요인별 실제 분포. 화면의 곡선 범위를 코드에 박지 않고 여기서 가져간다 —
+        # 지역을 넓히면 분포가 통째로 달라지는데(강남 30~65분 → 23~78분) 박아 두면
+        # 곡선이 데이터 없는 구간까지 그려지거나 있는 구간을 잘라 먹는다.
+        "var_range": _var_ranges(df, alpha),
         # 도보 곡선을 그리는 쪽이 기대하는 이름. 다른 요인은 factors 엔드포인트가 쓴다.
         "walk_knots": (
             [round(k, 2) for k in knots["walk_min"]] if knots.get("walk_min") else None

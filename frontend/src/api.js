@@ -42,6 +42,13 @@ export const api = {
   factors: (params) => request(`/model/factors${qs(params)}`),
   compare: (body) =>
     request('/model/compare', { method: 'POST', body: JSON.stringify(body) }),
+  quoteRanking: (params) => request(`/quotes/ranking${qs(params)}`),
+  deleteQuote: (id) => request(`/quotes/${id}`, { method: 'DELETE' }),
+  parseBulk: (text, params) =>
+    request('/model/parse-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ text, ...params }),
+    }),
   parseListing: (text, complexId) =>
     request('/model/parse-listing', {
       method: 'POST',
