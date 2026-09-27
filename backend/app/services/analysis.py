@@ -38,8 +38,17 @@ def load_points(
     필터 값과 맞지 않는다. 화면에 보이는 값과 필터가 어긋나면 안 되므로
     양쪽 모두 Station 을 쓴다.
     """
+    # **엔티티가 아니라 컬럼만 읽는다.** `select(Trade, Complex)` 는 행마다 ORM
+    # 객체 두 개를 만들어 식별 맵에 넣는데, 여기서 쓰는 것은 열 몇 개뿐이다.
+    # 경기 남부로 넓힌 뒤 한 구의 24개월치가 3만 행을 넘으면서 이 비용이 순위
+    # 계산의 절반을 차지했다(프로파일에서 `_instance` 호출 31,602회).
     stmt = (
-        select(Trade, Complex)
+        select(
+            Trade.deal_ym, Trade.deal_date, Trade.exclusive_area, Trade.floor,
+            Trade.deal_amount, Trade.build_year, Trade.apt_dong,
+            Complex.id, Complex.name, Complex.build_year, Complex.max_floor,
+            Complex.station_distance_m, Complex.household_count,
+        )
         .join(Complex, Trade.complex_id == Complex.id)
         .where(Trade.deal_date >= _cutoff(months))
     )
@@ -59,28 +68,29 @@ def load_points(
 
     ref_year = date.today().year
     points: list[TradePoint] = []
-    for trade, cx in db.execute(stmt).all():
-        if area_band and pricing.area_band(trade.exclusive_area) != area_band:
+    for (deal_ym, deal_date, area, floor, amount, t_year, apt_dong,
+         cx_id, cx_name, cx_year, max_floor, st_dist, households) in db.execute(stmt):
+        if area_band and pricing.area_band(area) != area_band:
             continue
-        if station_band and pricing.station_band(cx.station_distance_m) != station_band:
+        if station_band and pricing.station_band(st_dist) != station_band:
             continue
-        if age_band and pricing.age_band(cx.build_year or trade.build_year, ref_year) != age_band:
+        if age_band and pricing.age_band(cx_year or t_year, ref_year) != age_band:
             continue
-        if household_band and pricing.household_band(cx.household_count) != household_band:
+        if household_band and pricing.household_band(households) != household_band:
             continue
         points.append(
             TradePoint(
-                complex_id=cx.id,
-                complex_name=cx.name,
-                deal_ym=trade.deal_ym,
-                deal_date=trade.deal_date.isoformat(),
-                exclusive_area=trade.exclusive_area,
-                floor=trade.floor,
-                deal_amount=trade.deal_amount,
-                build_year=cx.build_year or trade.build_year,
-                max_floor=cx.max_floor,
-                station_distance_m=cx.station_distance_m,
-                apt_dong=(trade.apt_dong or "").strip() or None,
+                complex_id=cx_id,
+                complex_name=cx_name,
+                deal_ym=deal_ym,
+                deal_date=deal_date.isoformat(),
+                exclusive_area=area,
+                floor=floor,
+                deal_amount=amount,
+                build_year=cx_year or t_year,
+                max_floor=max_floor,
+                station_distance_m=st_dist,
+                apt_dong=(apt_dong or "").strip() or None,
             )
         )
     return points

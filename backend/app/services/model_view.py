@@ -703,6 +703,43 @@ def factor_payload(fit: dict) -> dict:
     }
 
 
+def fit_index(fit: dict) -> dict:
+    """적합에서 **매번 다시 만들던 조회표**를 한 번만 만들어 들고 있는다.
+
+    ## 왜
+
+    `model_price` 는 매물 하나를 평가할 때마다 단지 전체를 훑어 조회표를 만들었다.
+
+        rows = {int(r["complex_id"]): r for _, r in fit["alpha"].iterrows()}
+
+    단지 하나를 꺼내려고 2,018곳을 도는 셈인데, `iterrows()` 는 행마다 Series 를
+    새로 만들기까지 한다. 매물 56건을 평가하면 113,008번이 돌고, 프로파일에서
+    순위 계산 16.7초 중 **12.8초**가 여기였다. 수원만 볼 때(497곳)는 4분의 1
+    규모라 눈에 띄지 않았는데, 대상을 넓히자 드러났다.
+
+    조회표는 적합이 바뀌지 않는 한 그대로다. 그래서 적합 dict 에 매달아 둔다 —
+    적합 캐시(`_cache`)가 살아 있는 동안 같이 산다.
+
+    `to_dict("records")` 로 만든 평범한 dict 를 돌려준다. 읽는 쪽은 `row["alpha"]`,
+    `"dong_walk_mean" in row`, NaN 자기비교를 쓰는데 전부 dict 에서도 같게 동작한다.
+    """
+    idx = fit.get("_index")
+    if idx is None:
+        alpha = fit["alpha"]
+        idx = {
+            "alpha_rows": {
+                int(r["complex_id"]): r for r in alpha.to_dict("records")
+            },
+            "resid": {r["complex_id"]: r for r in fit["residuals"]},
+            "terms": {t["name"]: t for t in fit["terms"]},
+            "floors": {
+                f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]
+            },
+        }
+        fit["_index"] = idx
+    return idx
+
+
 def model_price(db, fit: dict, side: dict) -> dict | None:
     """매물 하나의 **모델 기준 적정가**. 실거래 비교와는 다른 질문에 답한다.
 
@@ -723,17 +760,17 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
     두 값의 차이가 곧 **단지 프리미엄**이다. 갈리는 것 자체가 정보다 — 요인 대비
     비싸지만 시세 대비 적정이면, 그 단지에 값이 붙어 있다는 뜻이다.
     """
-    rows = {int(r["complex_id"]): r for _, r in fit["alpha"].iterrows()}
+    idx = fit_index(fit)
     cid = int(side["complex_id"])
-    row = rows.get(cid)
+    row = idx["alpha_rows"].get(cid)
     if row is None:
         return None
 
-    resid = {r["complex_id"]: r for r in fit["residuals"]}
-    terms = {t["name"]: t for t in fit["terms"]}
+    resid = idx["resid"]
+    terms = idx["terms"]
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
-    floors = {f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]}
+    floors = idx["floors"]
     area_lin = fit["stage1"].get("area_linearity") or {}
 
     cx = db.get(Complex, cid)
@@ -876,15 +913,15 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
     둘은 다른 질문의 답이다. 요인 기준은 "펀더멘털 대비 싼가", 시장 기준은
     "그 단지 시세 대비 싼가"다. 재건축 기대가 붙은 단지는 두 값이 크게 갈린다.
     """
-    terms = {t["name"]: t for t in fit["terms"]}
+    idx = fit_index(fit)
+    terms = idx["terms"]
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
-    alpha = fit["alpha"]
-    resid = {r["complex_id"]: r for r in fit["residuals"]}
+    resid = idx["resid"]
     area_lin = fit["stage1"].get("area_linearity") or {}
-    floors = {f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]}
+    floors = idx["floors"]
 
-    rows = {int(r["complex_id"]): r for _, r in alpha.iterrows()}
+    rows = idx["alpha_rows"]
 
     def spline_val(var: str, x: float) -> float:
         names = sterms.get(var)
