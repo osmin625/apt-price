@@ -309,8 +309,28 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .scatter-legend .sw-truth { background: repeating-linear-gradient(90deg, var(--series-2) 0 5px, transparent 5px 9px); }
 .scatter-legend .sw-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); opacity: 0.55; }
 
+/* ── 좁은 화면 ───────────────────────────────────────
+ *
+ * 탭이 가장 크게 망가졌다. `.tabs` 가 `display: flex` 인데 줄바꿈을 막지 않아,
+ * 375px 에서 '시장 분석' 이 시/장/분/석 으로 **글자마다 세로로 쪼개졌다.**
+ * 좁으면 줄을 바꾸는 대신 가로로 민다 — 탭은 원래 한 줄이어야 읽힌다. */
 @media (max-width: 720px) {
-  .map-dock { position: static; width: 100%; max-width: none; margin-top: 10px; backdrop-filter: none; box-shadow: none; }
+  .tabs {
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 0 0 auto; white-space: nowrap; padding: 9px 11px; }
+
+  .card { padding: 14px; }
+  h1 { font-size: 20px; }
+  /* 필터는 한 줄에 억지로 넣지 않고 접어 내린다. */
+  .filters { gap: 8px; }
+  .field { flex: 1 1 140px; }
+  .field select, .field input { width: 100%; }
+  /* 표는 가로로 민다. 열을 줄이면 비교가 안 된다. */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .map-canvas { height: 380px; }
+  .loading { max-width: none; }
 }
 
 /* ── 요인별 보정계수 ─────────────────────────────────── */

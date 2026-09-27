@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // 기본은 localhost 만 듣는다. 같은 Wi-Fi 의 휴대폰에서 보려면
+    // `npm run dev:lan` (= vite --host) 으로 **그때만** 연다.
+    // 이 앱에는 로그인이 없고 백엔드 키가 .env 에 있으므로, 늘 열어 두지 않는다.
     port: 5173,
     proxy: {
       '/api': {

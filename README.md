@@ -34,6 +34,54 @@ cd ../frontend && npm install && npm run dev
 [docs/data.md](docs/data.md) 에 있다. 키가 없어도 막히지는 않는다 — TMap 키가 없으면
 도보거리는 직선×1.25 추정치로, 카카오 키가 없으면 단지에 저장된 역거리로 폴백한다.
 
+## 휴대폰에서 보기
+
+화면은 좁은 폭에 맞춰 뒀다. 탭은 줄바꿈 대신 가로로 밀리고, 표는 열을 줄이지 않고
+가로 스크롤한다 — 열을 빼면 비교가 안 되기 때문이다.
+
+### 같은 Wi-Fi (권장)
+
+```bash
+cd frontend && npm run dev:lan      # vite --host
+```
+
+휴대폰에서 `http://<PC의 LAN IP>:5173` 으로 연다. IP 확인:
+
+```bash
+powershell -NoProfile -Command "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' } | Select-Object IPAddress, InterfaceAlias"
+```
+
+기본 `npm run dev` 는 localhost 만 듣는다. 이 앱에는 로그인이 없고 백엔드 키가
+`.env` 에 있으므로 **필요할 때만** 연다.
+
+처음 한 번은 두 가지를 더 해야 한다.
+
+1. **윈도우 방화벽**에서 5173 인바운드를 허용한다. 관리자 PowerShell:
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "apt-price dev 5173" -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
+   ```
+
+   `-Profile Private` 를 붙여 집 네트워크에서만 열리게 한다. 다 쓰면
+   `Remove-NetFirewallRule -DisplayName "apt-price dev 5173"` 로 지운다.
+
+2. **카카오 개발자센터 > 내 애플리케이션 > 플랫폼 > Web** 에
+   `http://<LAN IP>:5173` 을 등록한다. 카카오는 origin 을 완전일치로 검사하므로
+   등록하지 않으면 **지도 탭만** 설정 안내로 바뀐다(나머지 탭은 정상).
+
+백엔드는 건드릴 것이 없다. 휴대폰은 Vite 에만 붙고, `/api` 는 Vite 가 서버 쪽에서
+백엔드로 넘기므로 CORS 도 타지 않는다.
+
+### 집 밖에서도 보려면
+
+| 방법 | 노출 | 비고 |
+|---|---|---|
+| Tailscale | 내 기기끼리만 | 설치 필요. 공개되지 않아 이 앱에 가장 맞다 |
+| Cloudflare Tunnel · ngrok | **공개 URL** | 한 줄로 되지만 누구나 접근한다 |
+
+이 앱에는 **로그인이 없다.** 공개 URL을 쓰면 붙여넣은 매물과 호가 기록이 링크를 아는
+누구에게나 보인다. 실거래가 자체는 공공 데이터라 문제가 없지만, 그 점을 알고 쓸 것.
+
 ## 알려진 한계
 
 - **매물 호가는 수동 입력**이다. 네이버부동산 등 호가 데이터는 공식 API가 없고 스크래핑은
