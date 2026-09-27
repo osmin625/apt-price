@@ -234,8 +234,26 @@ def peek_fit(
 
 
 def fit_payload(fit: dict) -> dict:
-    """API 응답 — DataFrame 과 내부 객체를 제외한 순수 JSON."""
-    return {k: v for k, v in fit.items() if k not in _NON_JSON}
+    """API 응답 — DataFrame 과 내부 객체를 제외한 순수 JSON.
+
+    ## 이름 목록만으로는 못 막는다
+
+    적합 dict 는 캐시에 오래 살아 있고, 계산하는 쪽이 파생값을 여기에 붙인다.
+    `fit_index` 가 붙이는 `_index` 가 그랬다. 이름 목록(`_NON_JSON`)에 없으니
+    그대로 응답에 실렸고, 그 안의 `log_households`·`dong_walk_mean` 은 세대수나 동
+    좌표가 없는 단지에서 NaN 이라 JSON 인코딩이 터졌다(500).
+
+    고약한 점은 **두 번째 요청부터** 터진다는 것이다. 거리 모델을 처음 열 때는
+    `_index` 가 아직 없어서 멀쩡하고, 매물 분석이나 순위가 같은 적합을 한 번 집어
+    가면 그때 붙는다. 그래서 '두 번째로 불러올 때 500' 이라는 모양이 된다.
+
+    이름을 하나 더 적는 것으로 끝낼 수도 있지만 다음에 또 붙으면 같은 일이 난다.
+    그래서 **규칙**으로 바꾼다 — `_` 로 시작하는 키는 내부용이라 내보내지 않는다.
+    """
+    return {
+        k: v for k, v in fit.items()
+        if k not in _NON_JSON and not k.startswith("_")
+    }
 
 
 def detour_stats(db) -> dict:
