@@ -310,6 +310,19 @@ def parse_stated_ppp(text: str) -> int | None:
     return int(m.group(1).replace(",", "")) if m else None
 
 
+_HEAD_DONG = re.compile(r"\s*(?:\d{1,4}|[가-힣])\s*동\s*$")
+
+
+def _head_name(text: str) -> str:
+    """첫 줄에서 동 표기를 뗀 **단지명 부분**의 정규화 키.
+
+    '임광 8동' → '임광', '주공그린빌5 505동' → '주공그린빌5'.
+    동이 없으면 첫 줄 전체를 쓴다.
+    """
+    line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    return pricing.name_key(_HEAD_DONG.sub("", line.strip()))
+
+
 def _name_candidates(text: str, complexes: list) -> list[dict]:
     """텍스트 안에서 우리 DB 의 단지명을 찾는다.
 
@@ -323,6 +336,26 @@ def _name_candidates(text: str, complexes: list) -> list[dict]:
         nk = cx.name_key or pricing.name_key(cx.name)
         if len(nk) >= 3 and nk in key:
             hits.append((len(nk), cx, True))
+
+    if not hits:
+        # **두 글자 단지**는 위 규칙으로 영원히 못 찾는다. `임광`(수원 매탄동, 1,320세대)
+        # 처럼 실재하는 단지가 2,469곳 중 346곳(14%)이나 된다.
+        #
+        # 길이 제한이 있던 이유는 오탐이다. `현대`·`대우` 같은 두 글자를 본문 전체에서
+        # 찾으면 '현대건설 시공' 같은 홍보문구에 걸린다. 그래서 **찾는 자리를 좁힌다** —
+        # 단지명은 목록의 첫 줄에 있고, 그 줄은 '임광 8동' 처럼 이름과 동뿐이다.
+        # 거기서 동을 떼고 남은 것과 **정확히 같을 때만** 인정한다.
+        head = _head_name(text)
+        if head:
+            same = [
+                cx for cx in complexes
+                if (cx.name_key or pricing.name_key(cx.name)) == head
+            ]
+            # 같은 이름이 여러 곳이면(`현대` 는 장안구에만 네 곳) 찍지 않는다.
+            # 후보로만 올려 사용자가 고르게 한다.
+            exact = len(same) == 1
+            for cx in same:
+                hits.append((len(head), cx, exact))
 
     if not hits:
         # 완전 포함이 없으면 **앞부분이 겹치는** 단지를 후보로 올린다.
