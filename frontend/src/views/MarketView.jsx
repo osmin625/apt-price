@@ -4,6 +4,7 @@ import { api } from '../api'
 import FitLoading from '../components/FitLoading'
 import { PremiumBars, fmt } from '../components/Charts'
 import FactorCurve from '../components/FactorCurve'
+import Modal from '../components/Modal'
 import WalkDetail from '../components/WalkDetail'
 
 /**
@@ -114,12 +115,12 @@ function FactorPanel({ months }) {
               {f.key === 'walk' ? (
                 <button
                   className="linklike factor-open"
-                  aria-expanded={openWalk}
+                  aria-haspopup="dialog"
                   onClick={() => setOpenWalk((v) => !v)}
                 >
                   <strong>{f.label}</strong>
                   <span className="factor-caret" aria-hidden="true">
-                    {openWalk ? '▴' : '▾'}
+                    ⤢
                   </span>
                 </button>
               ) : (
@@ -169,17 +170,21 @@ function FactorPanel({ months }) {
               </div>
             )}
             <div className="muted small">{f.note}</div>
-            {f.key === 'walk' &&
-              (openWalk ? (
-                <WalkDetail months={months} />
-              ) : (
-                <button className="linklike factor-open-hint" onClick={() => setOpenWalk(true)}>
-                  산점도와 같은 단지 안 비교 보기
-                </button>
-              ))}
+            {f.key === 'walk' && (
+              <button className="linklike factor-open-hint" onClick={() => setOpenWalk(true)}>
+                산점도와 같은 단지 안 비교 보기 →
+              </button>
+            )}
           </div>
         ))}
       </div>
+
+      {openWalk && (
+        <Modal title="역까지 도보거리" onClose={() => setOpenWalk(false)} wide>
+          <WalkDetail months={months} />
+        </Modal>
+      )}
+
       <p className="muted small">
         스펙 {data.spec} · 거래 {fmt(data.n_obs)}건 · 단지 {data.n_complexes}곳.
         스펙은 M0(도보만) → M3(법정동 고정효과)까지 사다리로 확인할 수 있습니다

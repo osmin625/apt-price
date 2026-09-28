@@ -113,14 +113,43 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--gri
 th { font-size: 11.5px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
-/* ── 도보거리 상세 (시장 분석에서 펼친다) ───────────── */
-.factor-open { display: inline-flex; align-items: center; gap: 4px; }
-.factor-caret { font-size: 9px; color: var(--text-muted); }
+/* ── 창 (Modal) ──────────────────────────────────────
+ * 내용이 칸보다 크면 칸을 늘리는 게 아니라 칸 밖으로 꺼낸다. Modal.jsx 주석 참조. */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0, 0, 0, 0.42);
+  animation: modal-in 0.12s ease-out;
+}
+@keyframes modal-in { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 560px; max-height: calc(100vh - 48px);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.26);
+  outline: none;
+}
+.modal.is-wide { max-width: 860px; }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.modal-head strong { font-size: 14px; }
+.modal-body { overflow: auto; padding: 16px; -webkit-overflow-scrolling: touch; }
+@media (prefers-reduced-motion: reduce) { .modal-backdrop { animation: none; } }
+@media (max-width: 720px) {
+  .modal-backdrop { padding: 0; align-items: stretch; }
+  .modal { max-width: none; max-height: 100vh; border-radius: 0; border: 0; }
+}
+
+/* 도보거리 카드에서 창을 여는 자리 */
+.factor-open { display: inline-flex; align-items: center; gap: 5px; }
+.factor-caret { font-size: 11px; color: var(--text-muted); }
 .factor-open-hint { margin-top: 8px; font-size: 11.5px; color: var(--series-1); }
-.walk-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.walk-detail h3 { font-size: 13px; margin: 0 0 4px; }
+.walk-detail h3 { font-size: 13px; margin: 18px 0 4px; }
+.walk-detail h3:first-child { margin-top: 0; }
 .walk-detail h3 + p { margin-top: 0; }
-.walk-detail .tiles { margin: 10px 0 14px; }
+.walk-detail .tiles { margin: 10px 0 0; }
 .walk-detail > *:last-child { margin-bottom: 0; }
 
 /* ── 계수표 · 계수 쓰임새 ─────────────────────────── */
