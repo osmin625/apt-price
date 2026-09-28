@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
-import { fmt } from '../components/Charts'
+import { Tile, fmt } from '../components/Charts'
 import CoefTable from '../components/CoefTable'
 import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
@@ -62,71 +62,6 @@ export default function ModelView({ months, onSelect }) {
       <CoefUsage />
 
       <div className="card">
-        <h2>역까지 도보시간과 평당가</h2>
-        <p className="muted">
-          거리를 <b>구간으로 자르지 않고</b> 연속 변수로 추정한 곡선입니다. y축은{' '}
-          {curve.note}. 회색 밴드는 95% 신뢰구간이며, 기준점에서 폭이 0이 되는 것이 정상입니다
-          — 기준점 대비 차이를 보는 그래프이기 때문입니다.
-        </p>
-        <ScatterFit curve={curve} points={points} onSelect={onSelect} height={300} />
-        <div className="tiles compact">
-          <Tile
-            label="도보 1분당"
-            value={`${fmt(fit.linear_walk.pct, 2)}%`}
-            sub={`SE ${fmt(fit.linear_walk.se * 100, 2)}%p · p=${fit.linear_walk.p}`}
-          />
-          <Tile label="단지 수" value={fmt(fit.n_complexes)} sub={`거래 ${fmt(fit.n_obs)}건`} />
-          <Tile label="Stage2 R²" value={fmt(fit.r2, 3)} sub={`adj ${fmt(fit.adj_r2, 3)}`} />
-          <Tile
-            label="설명 안 되는 단지 간 편차"
-            value={`±${fmt(fit.tau_pct, 1)}%`}
-            sub="τ — 잔차 지표의 한계"
-          />
-          {fit.walk_vs_ride_ratio && (
-            <Tile
-              label="도보 vs 전철"
-              value={fit.walk_vs_ride_ratio.label}
-              sub="걷는 1분과 앉아 가는 1분의 가치 비"
-            />
-          )}
-        </div>
-      </div>
-
-      {fit.within_walk && (
-        <div className="card">
-          <h2>같은 단지 안에서 본 거리 효과</h2>
-          <p className="muted">
-            국토부가 공개하는 <b>동 정보</b>로 동별 좌표를 찾아, 같은 단지 안에서 역에 가까운
-            동과 먼 동을 비교한 값입니다. 학군·브랜드·관리상태·연식·구 입지가 모두 같은
-            단지이므로 <b>교란이 원천적으로 없습니다</b> — 이 데이터로 얻을 수 있는 가장 깨끗한
-            비교입니다. 대신 단지 내 거리 편차가 좁아 넓은 범위로 외삽하면 안 됩니다.
-          </p>
-          <div className="tiles compact">
-            <Tile
-              label="같은 단지 안 · 도보 1분당"
-              value={`${fmt(fit.within_walk.pct, 2)}%`}
-              sub={`SE ${fmt(fit.within_walk.se * 100, 2)}%p · p=${fit.within_walk.p}`}
-            />
-            <Tile
-              label="단지 간 비교 · 도보 1분당"
-              value={`${fmt(fit.linear_walk.pct, 2)}%`}
-              sub={`SE ${fmt(fit.linear_walk.se * 100, 2)}%p · p=${fit.linear_walk.p}`}
-            />
-            <Tile
-              label="동 정보가 있는 거래"
-              value={fmt(fit.within_walk.n_trades)}
-              sub={`전체 ${fmt(fit.n_obs)}건 중`}
-            />
-          </div>
-          <p className="muted small">
-            두 값이 비슷하면 단지 간 비교에 큰 교란이 없다는 뜻이고, 크게 다르면 단지 간
-            추정치에 거리 외의 요인이 섞여 있다는 신호입니다. 어느 하나가 정답이 아니라
-            서로 다른 질문의 답입니다.
-          </p>
-        </div>
-      )}
-
-      <div className="card">
         <h2>통제를 늘려가면 계수가 어떻게 변하는가</h2>
         <p className="muted">
           통제 변수를 하나씩 더하며 같은 모델을 다시 적합한 결과입니다. 계수가 스펙에 따라
@@ -184,96 +119,16 @@ export default function ModelView({ months, onSelect }) {
           <h2>계수</h2>
           <p className="muted small">{fit.dep_var} · 기준 {fit.stage1.reference}</p>
           <CoefTable fit={fit} />
-        </div>
-
-        <div className="card">
-          <h2>층 프리미엄</h2>
-          <p className="muted small">
-            단지·평형·시점 효과를 제거한 순수 층 효과. 기존 시장분석 탭과 같은 구간이지만
-            이번에는 표준오차가 함께 나옵니다.
-          </p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>층 구간</th>
-                  <th className="num">프리미엄</th>
-                  <th className="num">95% 신뢰구간</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fit.stage1.floor_terms.map((f) => (
-                  <tr key={f.band}>
-                    <td>
-                      {f.band}
-                      {f.reference ? <span className="muted"> (기준)</span> : null}
-                    </td>
-                    <td className="num">
-                      {f.premium_pct > 0 ? '+' : ''}
-                      {fmt(f.premium_pct, 2)}%
-                    </td>
-                    <td className="num muted">
-                      {f.reference
-                        ? '—'
-                        : `${fmt(f.ci_pct[0], 1)} ~ ${fmt(f.ci_pct[1], 1)}%`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
           <p className="muted small">
             월 상승률 {fmt(fit.stage1.month_trend_pct, 3)}%/월 · Stage1 within-R²{' '}
             {fmt(fit.stage1.within_r2, 3)}
           </p>
         </div>
+
       </div>
 
       <GroupCompare months={months} />
 
-      <div className="card">
-        <h2>모델 잔차 — 설명되지 않는 단지별 편차</h2>
-        <p className="muted">
-          {map?.metrics?.residual_shrunk_pct?.note} 거래가 적은 단지는 값을 0쪽으로
-          축소(shrinkage)했습니다. 축소하지 않으면 상위권이 전부 거래 3~4건짜리 단지로
-          채워져 노이즈로 순위를 매기게 됩니다.
-        </p>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>단지</th>
-                <th>법정동</th>
-                <th className="num">보정 평당가</th>
-                <th className="num">모델 예측</th>
-                <th className="num">잔차</th>
-                <th className="num">거래</th>
-                <th>신뢰도</th>
-              </tr>
-            </thead>
-            <tbody>
-              {residuals.map((r) => (
-                <tr key={r.id} onClick={() => onSelect?.(r.id)} className="clickable">
-                  <td>{r.name}</td>
-                  <td className="muted">{r.umd_nm}</td>
-                  <td className="num">{fmt(r.normalized_ppp)}</td>
-                  <td className="num muted">{fmt(r.predicted_ppp)}</td>
-                  <td className={`num ${r.residual_shrunk_pct > 0 ? 'tone-neg' : 'tone-pos'}`}>
-                    {r.residual_shrunk_pct > 0 ? '+' : ''}
-                    {fmt(r.residual_shrunk_pct, 1)}%
-                  </td>
-                  <td className="num">{r.trade_count}</td>
-                  <td>
-                    <span className="badge">{r.confidence}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {fit.diagnostics?.warnings?.length > 0 && (
         <div className="card">
           <h2>진단</h2>
           <ul className="muted">
@@ -382,16 +237,6 @@ function GroupCompare({ months }) {
           </table>
         </div>
       )}
-    </div>
-  )
-}
-
-function Tile({ label, value, sub }) {
-  return (
-    <div className="tile">
-      <div className="label">{label}</div>
-      <div className="value sm">{value}</div>
-      {sub ? <div className="note">{sub}</div> : null}
     </div>
   )
 }

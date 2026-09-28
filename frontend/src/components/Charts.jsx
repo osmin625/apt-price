@@ -158,10 +158,18 @@ export function PremiumBars({
                 e,
                 <>
                   <div className="t-title">{r.band}</div>
+                  {/* `factor` 는 구간 통계 경로에만 있다. 회귀에서 온 행(요인별
+                      보정계수의 층·노선)에는 없어서 예전에는 호버하는 순간 터졌다. */}
                   <div className="t-row">
-                    보정계수 {r.factor.toFixed(3)} ({positive ? '+' : ''}
-                    {r.premium_pct}%)
+                    {positive ? '+' : ''}
+                    {r.premium_pct}%
+                    {r.factor != null ? ` (보정계수 ${r.factor.toFixed(3)})` : ''}
                   </div>
+                  {r.ci_pct && r.ci_pct[0] !== r.ci_pct[1] && (
+                    <div className="t-row">
+                      95% 신뢰구간 {r.ci_pct[0]} ~ {r.ci_pct[1]}%
+                    </div>
+                  )}
                   <div className="t-row">같은 단지·같은 평형 중앙값 대비</div>
                 </>,
               )
@@ -296,3 +304,14 @@ export { fmt }
 /** 만원 단위 정수를 '억' 표기로. 3.9억 / 12.35억. */
 export const eok = (manwon) =>
   manwon == null ? '—' : `${(manwon / 10000).toFixed(2).replace(/\.?0+$/, '')}억`
+
+/** 작은 지표 한 칸. 여러 화면이 같은 모양으로 쓴다. */
+export function Tile({ label, value, sub }) {
+  return (
+    <div className="tile">
+      <div className="label">{label}</div>
+      <div className="value sm">{value}</div>
+      {sub ? <div className="note">{sub}</div> : null}
+    </div>
+  )
+}

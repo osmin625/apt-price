@@ -113,6 +113,16 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--gri
 th { font-size: 11.5px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+/* ── 도보거리 상세 (시장 분석에서 펼친다) ───────────── */
+.factor-open { display: inline-flex; align-items: center; gap: 4px; }
+.factor-caret { font-size: 9px; color: var(--text-muted); }
+.factor-open-hint { margin-top: 8px; font-size: 11.5px; color: var(--series-1); }
+.walk-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.walk-detail h3 { font-size: 13px; margin: 0 0 4px; }
+.walk-detail h3 + p { margin-top: 0; }
+.walk-detail .tiles { margin: 10px 0 14px; }
+.walk-detail > *:last-child { margin-bottom: 0; }
+
 /* ── 계수표 · 계수 쓰임새 ─────────────────────────── */
 .coef td:first-child { font-weight: 500; }
 .coef .coef-basis td { color: var(--text-muted); font-size: 12px; padding-left: 22px; }

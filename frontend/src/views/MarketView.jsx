@@ -4,6 +4,7 @@ import { api } from '../api'
 import FitLoading from '../components/FitLoading'
 import { PremiumBars, fmt } from '../components/Charts'
 import FactorCurve from '../components/FactorCurve'
+import WalkDetail from '../components/WalkDetail'
 
 /**
  * 시장 분석 — **요인별 보정계수만** 보여 준다.
@@ -63,6 +64,8 @@ export default function MarketView({ filters, setFilters }) {
  */
 function FactorPanel({ months }) {
   const [data, setData] = useState(null)
+  // 도보거리 카드만 더 깊이 볼 것이 있다. 펼칠 때 따로 받아 온다.
+  const [openWalk, setOpenWalk] = useState(false)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -108,7 +111,20 @@ function FactorPanel({ months }) {
         {data.factors.map((f) => (
           <div className="factor" key={f.key}>
             <div className="factor-head">
-              <strong>{f.label}</strong>
+              {f.key === 'walk' ? (
+                <button
+                  className="linklike factor-open"
+                  aria-expanded={openWalk}
+                  onClick={() => setOpenWalk((v) => !v)}
+                >
+                  <strong>{f.label}</strong>
+                  <span className="factor-caret" aria-hidden="true">
+                    {openWalk ? '▴' : '▾'}
+                  </span>
+                </button>
+              ) : (
+                <strong>{f.label}</strong>
+              )}
               {f.linearity?.testable && (
                 <span
                   className={`lin-badge ${f.linearity.nonlinear ? 'is-nonlinear' : 'is-linear'}`}
@@ -153,6 +169,14 @@ function FactorPanel({ months }) {
               </div>
             )}
             <div className="muted small">{f.note}</div>
+            {f.key === 'walk' &&
+              (openWalk ? (
+                <WalkDetail months={months} />
+              ) : (
+                <button className="linklike factor-open-hint" onClick={() => setOpenWalk(true)}>
+                  산점도와 같은 단지 안 비교 보기
+                </button>
+              ))}
           </div>
         ))}
       </div>
