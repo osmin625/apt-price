@@ -7,14 +7,40 @@ const qs = (params = {}) => {
   return s ? `?${s}` : ''
 }
 
+/**
+ * 실패한 요청. `status` 를 붙여 두는 이유가 있다.
+ *
+ * 예전에는 `new Error(message)` 만 던졌다. 그래서 화면 쪽에서는 "왜 실패했는지"를
+ * 알 수 없어, 시장 분석은 **모든** 실패를 의존성 누락으로 단정하고 "pip install
+ * -r requirements.txt 후 다시 열어 보세요" 를 띄웠다. 실제로 사용자가 본 상황은
+ * 의존성이 멀쩡한데(numpy·pandas·statsmodels 다 설치돼 있었다) start.bat 이
+ * 백엔드보다 먼저 브라우저를 열어 첫 요청이 프록시에서 끊긴 것이었다.
+ *
+ * 틀린 원인을 단정하는 안내는 없는 안내보다 나쁘다. 의존성 누락은 백엔드가
+ * 503 으로만 알려 주므로, 그 구분이 가능하도록 상태 코드를 같이 넘긴다.
+ */
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+  let res
+  try {
+    res = await fetch(`/api${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    })
+  } catch (e) {
+    // 네트워크 단계에서 끊긴 것 — 백엔드가 아직 안 떴거나 죽었다. status 없음.
+    throw new ApiError('백엔드에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.', 0)
+  }
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.detail || `요청 실패 (${res.status})`)
+    throw new ApiError(detail.detail || `요청 실패 (${res.status})`, res.status)
   }
   return res.json()
 }

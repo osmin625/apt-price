@@ -1,27 +1,30 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
-import { Tile, fmt } from '../components/Charts'
+import { fmt } from '../components/Charts'
 import CoefTable from '../components/CoefTable'
 import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
-import ScatterFit from '../components/ScatterFit'
 
-export default function ModelView({ months, onSelect }) {
+/**
+ * 분해 모델 — 계수 자체를 읽는 탭.
+ *
+ * 산점도·모델 잔차·층 프리미엄은 여기서 뺐다(각각 시장 분석의 도보거리 창, 지도 탭,
+ * 시장 분석의 층 카드). 그 섹션들이 쓰던 `/map/complexes` 는 응답이 1.2MB 인데,
+ * 섹션을 지운 뒤에도 한동안 계속 받고 있었다 — 쓰지 않는 값을 만들어 두면
+ * 요청까지 조용히 남는다. `/model/fit` 하나만 받는다.
+ */
+export default function ModelView({ months }) {
   const [fit, setFit] = useState(null)
-  const [map, setMap] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     let alive = true
     setError(null)
     setFit(null)
-    Promise.all([api.modelFit({ months }), api.mapComplexes({ months })])
-      .then(([f, m]) => {
-        if (!alive) return
-        setFit(f)
-        setMap(m)
-      })
+    api
+      .modelFit({ months })
+      .then((f) => alive && setFit(f))
       .catch((e) => alive && setError(e.message))
     return () => {
       alive = false
@@ -35,19 +38,6 @@ export default function ModelView({ months, onSelect }) {
         <FitLoading months={months} what="분해 모델을" />
       </div>
     )
-
-  const curve = fit.curves.walk_minutes
-  const points = (map?.items || []).map((i) => ({
-    id: i.id,
-    name: i.name,
-    walk_min: i.walk_min,
-    value: i.partial_pct,
-    sub: `${i.station_name ?? '—'} · 거래 ${i.trade_count}건`,
-  }))
-
-  const residuals = [...(map?.items || [])]
-    .filter((i) => i.residual_shrunk_pct != null)
-    .sort((a, b) => a.residual_shrunk_pct - b.residual_shrunk_pct)
 
   return (
     <>
@@ -114,21 +104,19 @@ export default function ModelView({ months, onSelect }) {
         </div>
       </div>
 
-      <div className="grid-2">
-        <div className="card">
-          <h2>계수</h2>
-          <p className="muted small">{fit.dep_var} · 기준 {fit.stage1.reference}</p>
-          <CoefTable fit={fit} />
-          <p className="muted small">
-            월 상승률 {fmt(fit.stage1.month_trend_pct, 3)}%/월 · Stage1 within-R²{' '}
-            {fmt(fit.stage1.within_r2, 3)}
-          </p>
-        </div>
-
+      <div className="card">
+        <h2>계수</h2>
+        <p className="muted small">{fit.dep_var} · 기준 {fit.stage1.reference}</p>
+        <CoefTable fit={fit} />
+        <p className="muted small">
+          월 상승률 {fmt(fit.stage1.month_trend_pct, 3)}%/월 · Stage1 within-R²{' '}
+          {fmt(fit.stage1.within_r2, 3)}
+        </p>
       </div>
 
       <GroupCompare months={months} />
 
+      {fit.diagnostics.warnings.length > 0 && (
         <div className="card">
           <h2>진단</h2>
           <ul className="muted">

@@ -104,15 +104,51 @@ if ($startFrontend) {
 }
 
 # ---------------------------------------------------------------- 브라우저
+<#
+    백엔드까지 기다린다.
+
+    예전에는 5173 만 기다리고 브라우저를 열었다. Vite 는 1~2초에 뜨지만 백엔드는
+    uvicorn + numpy/pandas/statsmodels import 까지 있어 훨씬 느리다. 그래서 첫
+    화면(시장 분석)의 `/api/model/factors` 가 아직 안 뜬 8000 으로 가서 프록시에서
+    끊겼고, 화면에는 "모델 의존성이 설치되지 않았습니다 — pip install 하세요" 가
+    떴다. 의존성은 멀쩡했다. 사용자가 없는 문제를 쫓게 만든 셈이다.
+
+    포트가 아니라 /api/health 로 확인한다. 리스닝만으로는 부족하다 — uvicorn 은
+    소켓을 먼저 열고 앱 import 를 나중에 끝내므로, 포트가 열린 직후의 요청은
+    여전히 실패할 수 있다.
+#>
+function Test-Api {
+    try {
+        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/health' -UseBasicParsing -TimeoutSec 3
+        return ($r.StatusCode -eq 200)
+    } catch { return $false }
+}
+
 if ($startFrontend -and -not $NoBrowser) {
     Write-Host ''
-    Write-Info '프론트엔드가 뜰 때까지 기다리는 중...'
-    $ready = $false
+    Write-Info '서버가 뜰 때까지 기다리는 중...'
+
+    $frontReady = $false
     foreach ($i in 1..40) {
-        if (Test-Port 5173) { $ready = $true; break }
+        if (Test-Port 5173) { $frontReady = $true; break }
         Start-Sleep -Milliseconds 500
     }
-    if ($ready) {
+
+    # 백엔드는 더 오래 준다(최대 60초). 모델 import 가 느린 환경이 있다.
+    $apiReady = $false
+    if ($startBackend) {
+        foreach ($i in 1..120) {
+            if (Test-Api) { $apiReady = $true; break }
+            Start-Sleep -Milliseconds 500
+        }
+        if ($apiReady) {
+            Write-Info '백엔드 준비됨.'
+        } else {
+            Write-Host '  [!] 백엔드가 60초 안에 응답하지 않았습니다. 백엔드 창의 로그를 확인하세요.' -ForegroundColor Yellow
+        }
+    }
+
+    if ($frontReady) {
         Start-Process 'http://localhost:5173'
     } else {
         Write-Host '  [!] 5173 포트 응답이 없습니다. 열린 창의 로그를 확인하세요.' -ForegroundColor Yellow

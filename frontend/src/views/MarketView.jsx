@@ -61,34 +61,62 @@ export default function MarketView({ filters, setFilters }) {
  * 그래야 "역 5분 더 가까운 것"과 "세대수 2배"와 "연식 10년"이 각각 얼마짜리인지
  * 비교가 된다.
  *
- * 모델 의존성이 없는 환경에서는 기존 층 프리미엄만 보여주고 물러난다.
+ * ## 실패했을 때 원인을 단정하지 않는다
+ *
+ * 예전에는 요청이 실패하면 무조건 "보정계수는 모델이 필요합니다. backend 에서
+ * pip install -r requirements.txt 후 다시 열어 보세요" 를 띄웠다. 그런데 실제로
+ * 이 문구를 본 상황은 의존성이 멀쩡한 경우였다 — numpy·pandas·statsmodels 가 다
+ * 설치돼 있었고 `/api/model/factors` 도 직접 부르면 200 이었다. start.bat 이
+ * 프론트(5173)만 기다리고 브라우저를 열어, 아직 안 뜬 백엔드로 첫 요청이 가서
+ * 프록시에서 끊긴 것이었다.
+ *
+ * 그래서 사용자는 멀쩡한 환경에서 pip install 을 다시 돌렸다. **틀린 원인을
+ * 단정하는 안내는 없는 안내보다 나쁘다.** 의존성 누락은 백엔드가 503 으로만
+ * 알려 주므로 그때만 그 문구를 쓰고, 나머지는 받은 메시지를 그대로 보여 주고
+ * 다시 시도할 길을 준다(연결 실패는 서버가 조금 뒤에 뜨면 풀린다).
  */
 function FactorPanel({ months }) {
   const [data, setData] = useState(null)
   // 도보거리 카드만 더 깊이 볼 것이 있다. 펼칠 때 따로 받아 온다.
   const [openWalk, setOpenWalk] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [error, setError] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let alive = true
-    setFailed(false)
+    setError(null)
     api
       .factors({ months: Math.max(months, 12) })
       .then((d) => alive && setData(d))
-      .catch(() => alive && setFailed(true))
+      .catch((e) => alive && setError(e))
     return () => {
       alive = false
     }
-  }, [months])
+  }, [months, tick])
 
-  if (failed) {
+  if (error) {
+    const deps = error.status === 503
     return (
       <section className="card">
         <h2>요인별 보정계수</h2>
         <p className="empty">
-          보정계수는 모델이 필요합니다. backend 에서{' '}
-          <code>pip install -r requirements.txt</code> 후 다시 열어 보세요.
+          {deps ? (
+            <>
+              보정계수는 모델이 필요합니다. backend 에서{' '}
+              <code>pip install -r requirements.txt</code> 후 다시 열어 보세요.
+            </>
+          ) : (
+            <>
+              {error.message}
+              {error.status === 0 && ' 백엔드 창이 아직 뜨는 중일 수 있습니다.'}
+            </>
+          )}
         </p>
+        {!deps && (
+          <button className="ghost" onClick={() => setTick((t) => t + 1)}>
+            다시 시도
+          </button>
+        )}
       </section>
     )
   }
