@@ -44,6 +44,32 @@ function Die ($t) {
     exit 1
 }
 
+<#
+    외부 명령 실행 — 성공을 실패로 보고하지 않기 위해 필요하다.
+
+    PowerShell 5.1 은 native 명령의 stderr 한 줄마다 ErrorRecord(NativeCommandError)
+    를 만든다. 이 스크립트는 $ErrorActionPreference = 'Stop' 이므로, git 이 진행
+    상황을 stderr 에 적는 순간 거기서 던진다.
+
+    실제로 그랬다. gh-pages 푸시는 성공했는데 git 이 "remote:" 를 stderr 에 쓰는
+    바람에 스크립트가 실패로 끝났다. 스케줄러가 매일 거짓 실패를 남기게 되고, 그러면
+    **진짜 실패도 같은 모양이라 구분할 수 없다.** 종료 코드로만 판정한다.
+#>
+function Run ($exe, [string[]]$argList) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $exe @argList 2>&1 | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    foreach ($l in ($out -split "`r?`n")) {
+        if ($l.Trim()) { Say "  $l" }
+    }
+    return $code
+}
+
 Say '=== 동기화 시작 ==='
 
 if (-not (Test-Path $VPy)) { Die "가상환경이 없습니다: $Backend\.venv — setup.bat 을 먼저 실행하세요." }
@@ -61,8 +87,8 @@ if ($NoQuotes) { $exportArgs += '--no-quotes' }
 
 Push-Location $Backend
 try {
-    & $VPy @exportArgs 2>&1 | ForEach-Object { Say "  $_" }
-    if ($LASTEXITCODE -ne 0) { Die "내보내기 실패 (exit $LASTEXITCODE)" }
+    $code = Run $VPy $exportArgs
+    if ($code -ne 0) { Die "내보내기 실패 (exit $code)" }
 } finally {
     Pop-Location
 }
@@ -78,8 +104,9 @@ Say ("스냅샷 {0}개 파일 · {1:N1}MB · 실거래 {2:N0}건 · 최신 거�
 Say '빌드...'
 Push-Location $Frontend
 try {
-    & npm run build:static 2>&1 | ForEach-Object { Say "  $_" }
-    if ($LASTEXITCODE -ne 0) { Die "빌드 실패 (exit $LASTEXITCODE)" }
+    # npm 은 .cmd 래퍼라 & 로 직접 부르면 인수 처리가 셸마다 다르다. cmd 로 감싼다.
+    $code = Run 'cmd.exe' @('/c', 'npm', 'run', 'build:static')
+    if ($code -ne 0) { Die "빌드 실패 (exit $code)" }
 } finally {
     Pop-Location
 }
@@ -124,15 +151,21 @@ try {
     if (Test-Path '.git') { Remove-Item -Recurse -Force '.git' }
     New-Item -ItemType File -Path '.nojekyll' -Force | Out-Null
 
-    & git init -q 2>&1 | ForEach-Object { Say "  $_" }
-    & git checkout -q -b $Branch
-    & git add -A
-    # 커밋 저자는 이 저장소 설정을 그대로 쓴다. 없으면 커밋이 실패하므로 확인한다.
-    & git commit -q -m $msg 2>&1 | ForEach-Object { Say "  $_" }
-    if ($LASTEXITCODE -ne 0) { Die "커밋 실패 (exit $LASTEXITCODE) — git user.name/user.email 을 확인하세요." }
+    $code = Run 'git' @('init', '-q')
+    if ($code -ne 0) { Die "git init 실패 (exit $code)" }
 
-    & git push -q --force $remote "$($Branch):$($Branch)" 2>&1 | ForEach-Object { Say "  $_" }
-    if ($LASTEXITCODE -ne 0) { Die "푸시 실패 (exit $LASTEXITCODE)" }
+    $code = Run 'git' @('checkout', '-q', '-b', $Branch)
+    if ($code -ne 0) { Die "브랜치 생성 실패 (exit $code)" }
+
+    $code = Run 'git' @('add', '-A')
+    if ($code -ne 0) { Die "git add 실패 (exit $code)" }
+
+    # 커밋 저자는 이 저장소 설정을 그대로 쓴다. 없으면 커밋이 실패하므로 확인한다.
+    $code = Run 'git' @('commit', '-q', '-m', $msg)
+    if ($code -ne 0) { Die "커밋 실패 (exit $code) — git user.name/user.email 을 확인하세요." }
+
+    $code = Run 'git' @('push', '--force', $remote, "$($Branch):$($Branch)")
+    if ($code -ne 0) { Die "푸시 실패 (exit $code)" }
 } finally {
     Pop-Location
 }
