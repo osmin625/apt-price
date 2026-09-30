@@ -17,6 +17,7 @@
 | [docs/data.md](docs/data.md) | 공공 API 적재, 파싱 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
 | [docs/architecture.md](docs/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
 | [docs/performance.md](docs/performance.md) | 느린 곳을 찾아 고친 기록 | 다시 느려졌을 때 |
+| [docs/deploy.md](docs/deploy.md) | 결과를 정적 사이트로 내보내 올리는 방법 | 로컬 밖에서 보게 할 때 |
 
 ## 실행
 
@@ -33,6 +34,19 @@ cd ../frontend && npm install && npm run dev
 데이터를 채우는 순서(실거래 → 좌표 → 역 → 도보 → 세대수)와 키 발급은
 [docs/data.md](docs/data.md) 에 있다. 키가 없어도 막히지는 않는다 — TMap 키가 없으면
 도보거리는 직선×1.25 추정치로, 카카오 키가 없으면 단지에 저장된 역거리로 폴백한다.
+
+## 정적 사이트로 내보내기
+
+모델은 로컬에서 돌리고, **결과만** 백엔드 없는 정적 사이트로 올릴 수 있다.
+
+```powershell
+.\sync_static.ps1 -NoPublish          # 내보내기 + 빌드 (배포 없이)
+cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
+```
+
+내보내면 시장 분석과 매물 순위가 파이썬 없이 열린다(스냅샷 80개 파일 · 8.2MB · 50초).
+매물 분석은 붙여넣은 텍스트를 그 자리에서 평가하므로 정적으로는 성립하지 않는다.
+배포·주기 동기화·공개 범위는 [docs/deploy.md](docs/deploy.md) 에 있다.
 
 ## 휴대폰에서 보기
 

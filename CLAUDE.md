@@ -15,6 +15,7 @@
 | 데이터를 채우거나 지역을 넓힌다 | [docs/data.md](docs/data.md) |
 | 코드 위치를 찾는다 | [docs/architecture.md](docs/architecture.md) |
 | 느려진 것을 고친다 | [docs/performance.md](docs/performance.md) |
+| 정적 사이트를 내보내거나 배포한다 | [docs/deploy.md](docs/deploy.md) |
 
 새로 알아낸 사실은 그 주제의 문서에 적는다. README 로 돌려보내지 말 것 — 다시 뚱뚱해진다.
 

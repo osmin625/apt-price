@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { api } from '../api'
+import { api, STATIC_MODE } from '../api'
 import Hint from '../components/Hint'
 import Loading from '../components/Loading'
 import RankTable from '../components/RankTable'
@@ -117,9 +117,13 @@ export default function RankingView({ months, setMonths, onSelect }) {
             ))}
           </div>
         </div>
-        <button className="ghost" onClick={load} disabled={busy}>
-          {busy ? '계산 중…' : '새로고침'}
-        </button>
+        {/* 정적 사이트에서는 다시 부를 것이 없다 — 같은 파일을 또 읽을 뿐인데
+            '새로고침' 은 다시 계산한다는 뜻으로 읽힌다. */}
+        {!STATIC_MODE && (
+          <button className="ghost" onClick={load} disabled={busy}>
+            {busy ? '계산 중…' : '새로고침'}
+          </button>
+        )}
       </div>
 
       {err && <p className="empty">{err}</p>}
@@ -132,7 +136,16 @@ export default function RankingView({ months, setMonths, onSelect }) {
 
       {data && data.count === 0 && (
         <p className="empty">
-          아직 쌓인 매물이 없습니다. <b>매물 분석</b> 탭에서 매물을 붙여넣으면 여기 쌓입니다.
+          아직 쌓인 매물이 없습니다.{' '}
+          {STATIC_MODE ? (
+            <>
+              로컬 대시보드의 <b>매물 분석</b> 탭에서 붙여넣고 다시 내보내면 여기 보입니다.
+            </>
+          ) : (
+            <>
+              <b>매물 분석</b> 탭에서 매물을 붙여넣으면 여기 쌓입니다.
+            </>
+          )}
         </p>
       )}
 
@@ -146,7 +159,8 @@ export default function RankingView({ months, setMonths, onSelect }) {
           <RankTable
             items={data.items}
             basis={basis}
-            onDelete={remove}
+            /* 정적에서는 지울 수 없다. 눌리는데 실패하는 버튼을 두지 않는다. */
+            onDelete={STATIC_MODE ? null : remove}
             deleting={deleting}
             onSelect={onSelect}
           />

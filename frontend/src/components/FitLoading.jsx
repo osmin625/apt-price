@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { api } from '../api'
+import { api, STATIC_MODE } from '../api'
 import Loading from './Loading'
 
 /**
@@ -34,6 +34,7 @@ export default function FitLoading({ months, what = '모델' }) {
   useEffect(() => {
     let alive = true
     setSource(undefined)
+    if (STATIC_MODE) return
     api
       .modelStatus({ months })
       .then((d) => alive && setSource(d.source ?? null))
@@ -42,6 +43,10 @@ export default function FitLoading({ months, what = '모델' }) {
       alive = false
     }
   }, [months])
+
+  // 정적 사이트에서는 적합이 일어나지 않는다 — 내보낸 파일을 읽을 뿐이다.
+  // 여기서 '계산하는 중' 이라고 적으면 일어나지 않는 일을 적는 셈이다.
+  if (STATIC_MODE) return <Loading label={`${what} 불러오는 중`} />
 
   if (source === null) {
     return (
