@@ -79,6 +79,34 @@ function snapshotPath(path) {
   return `${import.meta.env.BASE_URL}snapshot${p}/${name}.json`
 }
 
+/**
+ * 스냅샷 메타. **한 번만 받고 공유한다.**
+ *
+ * `cache: 'no-store'` 인 이유가 핵심이다. 스냅샷 파일 이름은 고정이고(`months=12.json`),
+ * GitHub Pages 는 기본적으로 10분쯤 캐시를 허용한다. 그래서 새로 배포한 뒤에도
+ * 다시 찾아온 사람은 **옛 파일을 받으면서 화면에는 아무 표시도 보지 못한다.**
+ *
+ * 실제로 겪었다. 21:59 에 배포했는데 배너가 20:29 로 떠 있었다 — 배너도 캐시된
+ * meta.json 에서 나온 값이었으니, "언제 것인지 적는다" 는 장치가 바로 그 캐시
+ * 때문에 거짓을 적고 있었다. 오래된 값을 최신으로 읽게 만드는 쪽이다.
+ *
+ * 그래서 메타만 캐시를 끄고 받아, 그 안의 `generated_at` 을 나머지 요청의 버전
+ * 토큰으로 쓴다(`?v=...`). 같은 배포에서는 그대로 캐시를 타고, 새 배포에서는
+ * URL 이 달라져 반드시 새로 받는다. 파일 하나(약 1KB)만 더 받는 비용이다.
+ */
+let metaPromise = null
+
+function snapshotMetaOnce() {
+  if (!metaPromise) {
+    metaPromise = fetch(`${import.meta.env.BASE_URL}snapshot/meta.json`, {
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+  }
+  return metaPromise
+}
+
 async function request(path, options = {}) {
   const write = options.method && options.method !== 'GET'
 
@@ -91,7 +119,10 @@ async function request(path, options = {}) {
         405,
       )
     }
-    const url = snapshotPath(path)
+    // 배포 시점을 버전 토큰으로 붙인다 — 위 snapshotMetaOnce 주석 참조.
+    const meta = await snapshotMetaOnce()
+    const stamp = meta?.generated_at
+    const url = snapshotPath(path) + (stamp ? `?v=${encodeURIComponent(stamp)}` : '')
     let res
     try {
       res = await fetch(url)
@@ -174,11 +205,6 @@ export const api = {
  * 같은 종류의 잘못이다.
  */
 export async function snapshotMeta() {
-  try {
-    const res = await fetch(`${import.meta.env.BASE_URL}snapshot/meta.json`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+  // request() 와 **같은 것**을 쓴다. 따로 받으면 둘이 다른 배포를 가리킬 수 있다.
+  return snapshotMetaOnce()
 }
