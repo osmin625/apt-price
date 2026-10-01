@@ -136,6 +136,9 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/macro/latest", {}),
     ]
 
+    # 매크로 인사이트는 모델 계수를 쓰므로 months 가 붙는다. 화면은 12개월만 부른다.
+    plan.append(Req("/api/macro/insights", {"months": 12}))
+
     # 매크로는 지표 6 x 기간 3 = 18개뿐이다. 화면의 선택지와 1:1 로 맞춘다.
     for m in MACRO_METRICS:
         for since in MACRO_SINCE:

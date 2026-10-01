@@ -810,3 +810,9 @@ tr.is-deleting td { opacity: 0.4; }
   .macro-legend { gap: 4px 8px; }
   .macro-key { font-size: 11px; }
 }
+
+/* 사분면 산점도 — 두 축을 겹쳐야 보이는 것을 보여 준다 */
+.quad-chart { width: 100%; margin-top: 10px; }
+.quad-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.quad-chart text { pointer-events: none; }
+.quad-chart g { cursor: default; }

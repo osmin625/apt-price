@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 import Loading from '../components/Loading'
+import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
  * 매크로 — 한국부동산원 공표 통계를 경기 남부 17개 시군구로 묶어 본다.
@@ -29,8 +30,11 @@ export default function MacroView() {
   const [error, setError] = useState(null)
   const [hidden, setHidden] = useState(() => new Set())
 
+  const [ins, setIns] = useState(null)
+
   useEffect(() => {
     api.macroMetrics().then(setMeta).catch(() => setMeta(null))
+    api.macroInsights().then(setIns).catch(() => setIns(null))
   }, [])
 
   useEffect(() => {
@@ -97,6 +101,8 @@ export default function MacroView() {
           </div>
         </div>
       </div>
+
+      {ins && <Insights ins={ins} />}
 
       {!data ? (
         <div className="card">
@@ -311,4 +317,171 @@ function colorAt(i, n) {
   if (i == null) return 'var(--text-muted)'
   const hue = Math.round((i / Math.max(n, 1)) * 320)
   return `hsl(${hue} 62% 48%)`
+}
+
+/* 읽을 거리 셋. 문장을 자동 생성하지 않고 **그림**으로 둔 이유는, 해석 문장이 근거
+   숫자와 떨어지면 추정을 사실처럼 보여 주는 것이 되기 때문이다. 점의 위치가 곧 근거다. */
+function Insights({ ins }) {
+  const { cycle, rally, model_gap: gap, has_fit: hasFit } = ins
+  return (
+    <>
+      <div className="card">
+        <h2>
+          지금 어느 국면인가
+          <span className="muted small"> 시군구 {cycle.items.length}곳</span>
+        </h2>
+        <p className="muted small">{cycle.note}</p>
+        <QuadrantScatter
+          items={cycle.items}
+          x={(d) => d.from_peak}
+          y={(d) => d.m3}
+          xLabel={cycle.x_label}
+          yLabel={cycle.y_label}
+          quadrants={['신고가 경신 중', '바닥에서 반등', '전고점 아래 · 정체/하락', '고점 부근에서 꺾임']}
+          xDecimals={0}
+          tip={(d) => (
+            <>
+              <div className="t-title">{d.name}</div>
+              <div className="t-row">
+                전고점({d.peak_ym}) 대비 {d.from_peak > 0 ? '+' : ''}{fmt(d.from_peak, 1)}%
+              </div>
+              <div className="t-row">
+                저점({d.trough_ym})에서 +{fmt(d.from_trough, 1)}%
+              </div>
+              <div className="t-row">
+                3개월 {d.m3 > 0 ? '+' : ''}{fmt(d.m3, 2)}% · 12개월{' '}
+                {d.m12 > 0 ? '+' : ''}{fmt(d.m12, 2)}%
+              </div>
+              {d.accel != null && (
+                <div className="t-row">
+                  직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p
+                </div>
+              )}
+            </>
+          )}
+        />
+        {cycle.excluded.length > 0 && (
+          <p className="paste-warn" style={{ marginTop: 8 }}>
+            {cycle.excluded.join(' · ')}는 공표 기간이 24개월이 안 돼 사이클을 판단할 수
+            없어 뺐습니다. 분구 시점에 통계가 새로 시작했기 때문입니다.
+          </p>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>그 상승을 전세가 받쳐 줬나</h2>
+        <p className="muted small">{rally.note}</p>
+        <QuadrantScatter
+          items={rally.items}
+          x={(d) => d.sale_12m}
+          y={(d) => d.ratio_12m}
+          xLabel={rally.x_label}
+          yLabel={rally.y_label}
+          quadrants={['오르고 전세도 붙음', '안 올랐는데 전세는 붙음', '안 오르고 전세도 빠짐', '매매만 간 상승']}
+          xDecimals={0}
+          tip={(d) => (
+            <>
+              <div className="t-title">{d.name}</div>
+              <div className="t-row">
+                12개월 매매 {d.sale_12m > 0 ? '+' : ''}{fmt(d.sale_12m, 1)}%
+              </div>
+              <div className="t-row">
+                전세가율 {fmt(d.ratio_now, 1)}% ({d.ratio_12m > 0 ? '+' : ''}
+                {fmt(d.ratio_12m, 1)}%p)
+              </div>
+            </>
+          )}
+        />
+      </div>
+
+      <div className="card">
+        <h2>
+          모델과 어긋나는 곳
+          {gap.spearman != null && (
+            <span className="muted small"> 순위상관 {fmt(gap.spearman, 3)}</span>
+          )}
+        </h2>
+        {!hasFit ? (
+          <p className="empty">
+            적합이 아직 캐시에 없어 비교할 수 없습니다. <b>시장 분석</b> 탭을 한 번 열면
+            계산되고, 그 뒤 이 화면으로 돌아오면 보입니다.
+          </p>
+        ) : (
+          <>
+            <p className="muted small">{gap.note}</p>
+            <QuadrantScatter
+              items={gap.items}
+              x={(d) => d.rank_reb}
+              y={(d) => d.rank_coef}
+              xLabel={gap.x_label}
+              yLabel={gap.y_label}
+              xOrigin={null}
+              yOrigin={null}
+              invertX
+              invertY
+              diagonal
+              xDecimals={0}
+              yDecimals={0}
+              tip={(d) => (
+                <>
+                  <div className="t-title">{d.name}</div>
+                  <div className="t-row">
+                    부동산원 {d.rank_reb}위 · 평당 {fmt(d.reb, 0)}만원
+                  </div>
+                  <div className="t-row">
+                    모델 {d.rank_coef}위 · 구 계수 {d.coef_pct > 0 ? '+' : ''}
+                    {fmt(d.coef_pct, 1)}%{d.is_base ? ' (기준구)' : ''}
+                  </div>
+                  <div className="t-row">
+                    순위 차 {d.rank_gap > 0 ? '+' : ''}{d.rank_gap}
+                  </div>
+                </>
+              )}
+            />
+            <div className="table-wrap" style={{ marginTop: 10 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>시군구</th>
+                    <th className="num">부동산원</th>
+                    <th className="num">모델</th>
+                    <th className="num">순위 차</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...gap.items]
+                    .sort((a, b) => Math.abs(b.rank_gap) - Math.abs(a.rank_gap))
+                    .slice(0, 5)
+                    .map((d) => (
+                      <tr key={d.sgg_cd}>
+                        <td>{d.name}</td>
+                        <td className="num">
+                          {d.rank_reb}위 <span className="muted small">{fmt(d.reb, 0)}만원/평</span>
+                        </td>
+                        <td className="num">
+                          {d.rank_coef}위{' '}
+                          <span className="muted small">
+                            {d.coef_pct > 0 ? '+' : ''}
+                            {fmt(d.coef_pct, 1)}%
+                          </span>
+                        </td>
+                        <td className={`num ${d.rank_gap > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                          {d.rank_gap > 0 ? '+' : ''}
+                          {d.rank_gap}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small" style={{ marginTop: 6 }}>
+              가장 많이 벌어진 다섯 곳입니다. 어느 쪽이 맞는지는 이 표가 말해 주지
+              않습니다 — 그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나,
+              모델이 뭔가를 놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
+            </p>
+          </>
+        )}
+      </div>
+    </>
+  )
 }

@@ -195,6 +195,7 @@ export const api = {
   macroMetrics: () => request('/macro/metrics'),
   macroSeries: (params) => request(`/macro/series${qs(params)}`),
   macroLatest: () => request('/macro/latest'),
+  macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),
   stations: () => request('/map/stations'),
