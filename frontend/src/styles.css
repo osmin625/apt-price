@@ -816,3 +816,23 @@ tr.is-deleting td { opacity: 0.4; }
 .quad-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
 .quad-chart text { pointer-events: none; }
 .quad-chart g { cursor: default; }
+
+/* ── 매크로 카드 격자 ─────────────────────────────────────────────────
+   시장 분석의 요인 카드(.factor)와 같은 규격을 쓴다. 전부 전폭으로 두니 그림
+   하나 보려고 한참 스크롤해야 했다. 카드에는 모양만 두고 자세한 것은 창으로 띄운다. */
+.macro-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px; margin-top: 14px;
+}
+.macro-card { display: flex; flex-direction: column; }
+.macro-card .factor-head { margin-bottom: 4px; }
+/* 높이를 맞춰야 격자가 들쭉날쭉하지 않다. 그림과 표가 같은 자리를 차지한다. */
+.macro-card-body { margin-top: 8px; min-height: 152px; display: flex; align-items: center; }
+.macro-card-body > * { width: 100%; }
+.macro-card-body .empty { padding: 18px 0; }
+.macro-card .quad-chart, .macro-card .macro-chart { margin-top: 0; }
+
+.macro-mini { width: 100%; font-size: 11.5px; }
+.macro-mini td { padding: 3px 4px; border: none; }
+.macro-mini td:first-child { color: var(--text-secondary); }
+.macro-mini-gap td { text-align: center; padding: 2px 0; opacity: 0.75; }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 import Loading from '../components/Loading'
+import Modal from '../components/Modal'
 import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
@@ -31,6 +32,8 @@ export default function MacroView() {
   const [hidden, setHidden] = useState(() => new Set())
 
   const [ins, setIns] = useState(null)
+  // 어떤 카드를 창으로 띄웠나. null 이면 격자만 보인다.
+  const [open, setOpen] = useState(null)
 
   useEffect(() => {
     api.macroMetrics().then(setMeta).catch(() => setMeta(null))
@@ -102,79 +105,122 @@ export default function MacroView() {
         </div>
       </div>
 
-      {ins && <Insights ins={ins} />}
+      <div className="macro-grid">
+        <MacroCard
+          title="지금 어느 국면인가"
+          sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월` : '불러오는 중'}
+          onOpen={() => setOpen('cycle')}
+          ready={!!ins}
+        >
+          {ins && <CycleChart ins={ins} compact />}
+        </MacroCard>
 
-      {!data ? (
-        <div className="card">
-          <Loading label="공표 통계를 불러오는 중" compact />
-        </div>
-      ) : (
-        <>
-          <div className="card">
-            <h2>
-              {data.label}
-              <span className="muted small">
-                {' '}
-                {data.unit} · 시군구 {data.n_districts}곳 · {data.months[0]}~
-                {data.months[data.months.length - 1]}
-              </span>
-            </h2>
-            <p className="muted small">{data.note}</p>
-            <MultiLine data={data} hidden={hidden} />
-            <Legend data={data} hidden={hidden} onToggle={toggle} />
-            {data.items.some((i) => i.partial) && (
-              <p className="paste-warn" style={{ marginTop: 8 }}>
-                화성시 분구(만세·효행·병점·동탄)는 <b>분구 시점부터</b> 공표가 시작돼
-                시계열이 짧습니다. 없는 기간을 채우지 않았으므로 선이 중간에서 시작합니다 —
-                긴 추이를 비교할 때는 이 점을 감안해야 합니다.
-              </p>
-            )}
-          </div>
+        <MacroCard
+          title="그 상승을 전세가 받쳐 줬나"
+          sub="12개월 매매 × 전세가율 변화"
+          onOpen={() => setOpen('rally')}
+          ready={!!ins}
+        >
+          {ins && <RallyChart ins={ins} compact />}
+        </MacroCard>
 
-          <div className="card">
-            <h2>최신값</h2>
-            <p className="muted small">
-              {data.label} 기준 · {data.items[0]?.latest_ym} 공표. 변화율은 선택한 기간의
-              처음 대비입니다.
+        <MacroCard
+          title="모델과 어긋나는 곳"
+          sub={
+            ins?.model_gap?.spearman != null
+              ? `순위상관 ${fmt(ins.model_gap.spearman, 3)}`
+              : '적합이 필요합니다'
+          }
+          onOpen={() => setOpen('gap')}
+          ready={!!ins && ins.has_fit}
+        >
+          {ins && ins.has_fit && <GapChart ins={ins} compact />}
+        </MacroCard>
+
+        <MacroCard
+          title={data ? data.label : '지표 추이'}
+          sub={
+            data
+              ? `${data.unit} · 시군구 ${data.n_districts}곳 · ${data.months[0]}~${
+                  data.months[data.months.length - 1]
+                }`
+              : '불러오는 중'
+          }
+          onOpen={() => setOpen('series')}
+          ready={!!data}
+        >
+          {data && <MultiLine data={data} hidden={hidden} compact />}
+        </MacroCard>
+
+        <MacroCard
+          title="최신값"
+          sub={data ? `${data.label} · ${data.items[0]?.latest_ym} 공표` : '불러오는 중'}
+          onOpen={() => setOpen('table')}
+          ready={!!data}
+        >
+          {data && <MiniTable data={data} />}
+        </MacroCard>
+      </div>
+
+      {open === 'cycle' && ins && (
+        <Modal title="지금 어느 국면인가" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.cycle.note}</p>
+          <CycleChart ins={ins} />
+          {ins.cycle.excluded.length > 0 && (
+            <p className="paste-warn" style={{ marginTop: 8 }}>
+              {ins.cycle.excluded.join(' · ')}는 공표 기간이 24개월이 안 돼 사이클을
+              판단할 수 없어 뺐습니다. 분구 시점에 통계가 새로 시작했기 때문입니다.
             </p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>시군구</th>
-                    <th className="num">{data.label}</th>
-                    <th className="num">기간 변화</th>
-                    <th>시작</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((i) => (
-                    <tr key={i.sgg_cd}>
-                      <td>{i.name}</td>
-                      <td className="num">
-                        <b>{fmt(i.latest, data.decimals)}</b>
-                        <span className="muted small"> {data.unit}</span>
-                      </td>
-                      <td
-                        className={`num ${
-                          i.change_pct > 0 ? 'tone-pos' : i.change_pct < 0 ? 'tone-neg' : ''
-                        }`}
-                      >
-                        {i.change_pct == null
-                          ? '—'
-                          : `${i.change_pct > 0 ? '+' : ''}${fmt(i.change_pct, 1)}%`}
-                      </td>
-                      <td className="muted small">
-                        {i.first_ym}
-                        {i.partial ? ' (분구 후)' : ''}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+          )}
+        </Modal>
+      )}
+
+      {open === 'rally' && ins && (
+        <Modal title="그 상승을 전세가 받쳐 줬나" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.rally.note}</p>
+          <RallyChart ins={ins} />
+        </Modal>
+      )}
+
+      {open === 'gap' && ins && (
+        <Modal title="모델과 어긋나는 곳" onClose={() => setOpen(null)} wide>
+          {!ins.has_fit ? (
+            <p className="empty">
+              적합이 아직 캐시에 없어 비교할 수 없습니다. <b>시장 분석</b> 탭을 한 번
+              열면 계산되고, 그 뒤 이 화면으로 돌아오면 보입니다.
+            </p>
+          ) : (
+            <>
+              <p className="muted small">{ins.model_gap.note}</p>
+              <GapChart ins={ins} />
+              <GapTable gap={ins.model_gap} />
+            </>
+          )}
+        </Modal>
+      )}
+
+      {open === 'series' && data && (
+        <Modal title={data.label} onClose={() => setOpen(null)} wide>
+          <p className="muted small">{data.note}</p>
+          <MultiLine data={data} hidden={hidden} />
+          <Legend data={data} hidden={hidden} onToggle={toggle} />
+          {data.items.some((i) => i.partial) && (
+            <p className="paste-warn" style={{ marginTop: 8 }}>
+              화성시 분구(만세·효행·병점·동탄)는 <b>분구 시점부터</b> 공표가 시작돼
+              시계열이 짧습니다. 없는 기간을 채우지 않았으므로 선이 중간에서 시작합니다.
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {open === 'table' && data && (
+        <Modal title="최신값" onClose={() => setOpen(null)} wide>
+          <p className="muted small">
+            {data.label} 기준 · {data.items[0]?.latest_ym} 공표. 변화율은 선택한 기간의
+            처음 대비입니다.
+          </p>
+          <FullTable data={data} />
+        </Modal>
       )}
     </>
   )
@@ -182,17 +228,17 @@ export default function MacroView() {
 
 /* 17개 선을 한 축에. 색은 순위로 돌린다 — 이름마다 고정색을 주면 17개를 구분할
    만큼 색이 없고, 어차피 범례에서 짚어 보게 된다. */
-function MultiLine({ data, hidden }) {
+function MultiLine({ data, hidden, compact = false }) {
   const [ref, { width }] = useMeasure()
   const tip = useTooltip()
-  const H = 300
-  const PAD = { t: 12, r: 12, b: 26, l: 52 }
+  const H = compact ? 150 : 300
+  const PAD = compact ? { t: 8, r: 8, b: 14, l: 28 } : { t: 12, r: 12, b: 26, l: 52 }
 
   const shown = data.items.filter((i) => !hidden.has(i.sgg_cd))
   const months = data.months
 
   const { xOf, yOf, ticks, paths } = useMemo(() => {
-    const w = Math.max(width || 640, 320)
+    const w = Math.max(width || 640, compact ? 200 : 320)
     const iw = w - PAD.l - PAD.r
     const ih = H - PAD.t - PAD.b
     const idx = new Map(months.map((m, i) => [m, i]))
@@ -222,7 +268,7 @@ function MultiLine({ data, hidden }) {
         .join(' '),
     }))
     return { xOf, yOf, ticks: niceTicks(lo, hi, 4), paths }
-  }, [width, shown, months])
+  }, [width, shown, months, compact])
 
   // x축 라벨은 연 단위로만. 월까지 찍으면 겹쳐서 못 읽는다.
   const yearMarks = months
@@ -231,19 +277,21 @@ function MultiLine({ data, hidden }) {
 
   return (
     <div className="macro-chart" ref={ref}>
-      <svg viewBox={`0 0 ${Math.max(width || 640, 320)} ${H}`} role="img"
+      <svg viewBox={`0 0 ${Math.max(width || 640, compact ? 200 : 320)} ${H}`} role="img"
            aria-label={`${data.label} 시군구별 추이`}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.l} x2={(width || 640) - PAD.r} y1={yOf(t)} y2={yOf(t)}
                   stroke="var(--border)" strokeDasharray="2 3" />
-            <text x={PAD.l - 6} y={yOf(t) + 3} textAnchor="end"
-                  fontSize="10" fill="var(--text-muted)">
-              {fmt(t, data.decimals)}
-            </text>
+            {!compact && (
+              <text x={PAD.l - 6} y={yOf(t) + 3} textAnchor="end"
+                    fontSize="10" fill="var(--text-muted)">
+                {fmt(t, data.decimals)}
+              </text>
+            )}
           </g>
         ))}
-        {yearMarks.map(({ m }) => (
+        {!compact && yearMarks.map(({ m }) => (
           <text key={m} x={xOf(m)} y={H - 8} textAnchor="middle"
                 fontSize="10" fill="var(--text-muted)">
             {m.slice(0, 4)}
@@ -255,7 +303,7 @@ function MultiLine({ data, hidden }) {
             d={p.d}
             fill="none"
             stroke={colorAt(i, paths.length)}
-            strokeWidth="1.8"
+            strokeWidth={compact ? 1.2 : 1.8}
             strokeLinejoin="round"
             onMouseEnter={(e) =>
               tip.show(e, (
@@ -319,169 +367,262 @@ function colorAt(i, n) {
   return `hsl(${hue} 62% 48%)`
 }
 
-/* 읽을 거리 셋. 문장을 자동 생성하지 않고 **그림**으로 둔 이유는, 해석 문장이 근거
-   숫자와 떨어지면 추정을 사실처럼 보여 주는 것이 되기 때문이다. 점의 위치가 곧 근거다. */
-function Insights({ ins }) {
-  const { cycle, rally, model_gap: gap, has_fit: hasFit } = ins
+/* ── 카드 ──────────────────────────────────────────────────────────────
+   시장 분석의 요인 카드와 같은 규격(.factor)을 쓴다. 매크로 탭이 처음에는 전부
+   전폭이라 그림 하나 보려고 한참 스크롤해야 했다.
+
+   카드 안에는 **모양만** 둔다. 300px 폭에 이름표 17개를 적으면 읽을 수가 없고,
+   읽히지도 않는 글자를 그려 놓는 것은 자리만 먹는다. 자세한 것은 눌러서 띄운다. */
+function MacroCard({ title, sub, onOpen, ready, children }) {
+  return (
+    <div className="factor macro-card">
+      <div className="factor-head">
+        <button
+          className="linklike factor-open"
+          onClick={onOpen}
+          disabled={!ready}
+          aria-haspopup="dialog"
+        >
+          <strong>{title}</strong>
+          <span className="factor-caret" aria-hidden="true">
+            &#10530;
+          </span>
+        </button>
+      </div>
+      <div className="muted small">{sub}</div>
+      <div className="macro-card-body">
+        {ready ? children : <div className="empty">준비 중</div>}
+      </div>
+    </div>
+  )
+}
+
+function CycleChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.cycle.items}
+      x={(d) => d.from_peak}
+      y={(d) => d.m3}
+      xLabel={ins.cycle.x_label}
+      yLabel={ins.cycle.y_label}
+      quadrants={['신고가 경신 중', '바닥에서 반등', '전고점 아래 · 정체/하락', '고점 부근에서 꺾임']}
+      xDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            전고점({d.peak_ym}) 대비 {d.from_peak > 0 ? '+' : ''}
+            {fmt(d.from_peak, 1)}%
+          </div>
+          <div className="t-row">
+            저점({d.trough_ym})에서 +{fmt(d.from_trough, 1)}%
+          </div>
+          <div className="t-row">
+            3개월 {d.m3 > 0 ? '+' : ''}
+            {fmt(d.m3, 2)}% · 12개월 {d.m12 > 0 ? '+' : ''}
+            {fmt(d.m12, 2)}%
+          </div>
+          {d.accel != null && (
+            <div className="t-row">
+              직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p
+            </div>
+          )}
+        </>
+      )}
+    />
+  )
+}
+
+function RallyChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.rally.items}
+      x={(d) => d.sale_12m}
+      y={(d) => d.ratio_12m}
+      xLabel={ins.rally.x_label}
+      yLabel={ins.rally.y_label}
+      quadrants={['오르고 전세도 붙음', '안 올랐는데 전세는 붙음', '안 오르고 전세도 빠짐', '매매만 간 상승']}
+      xDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            12개월 매매 {d.sale_12m > 0 ? '+' : ''}
+            {fmt(d.sale_12m, 1)}%
+          </div>
+          <div className="t-row">
+            전세가율 {fmt(d.ratio_now, 1)}% ({d.ratio_12m > 0 ? '+' : ''}
+            {fmt(d.ratio_12m, 1)}%p)
+          </div>
+        </>
+      )}
+    />
+  )
+}
+
+function GapChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.model_gap.items}
+      x={(d) => d.rank_reb}
+      y={(d) => d.rank_coef}
+      xLabel={ins.model_gap.x_label}
+      yLabel={ins.model_gap.y_label}
+      xOrigin={null}
+      yOrigin={null}
+      invertX
+      invertY
+      diagonal
+      xDecimals={0}
+      yDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            부동산원 {d.rank_reb}위 · 평당 {fmt(d.reb, 0)}만원
+          </div>
+          <div className="t-row">
+            모델 {d.rank_coef}위 · 구 계수 {d.coef_pct > 0 ? '+' : ''}
+            {fmt(d.coef_pct, 1)}%{d.is_base ? ' (기준구)' : ''}
+          </div>
+          <div className="t-row">
+            순위 차 {d.rank_gap > 0 ? '+' : ''}
+            {d.rank_gap}
+          </div>
+        </>
+      )}
+    />
+  )
+}
+
+function GapTable({ gap }) {
+  const top = [...gap.items]
+    .sort((a, b) => Math.abs(b.rank_gap) - Math.abs(a.rank_gap))
+    .slice(0, 5)
   return (
     <>
-      <div className="card">
-        <h2>
-          지금 어느 국면인가
-          <span className="muted small"> 시군구 {cycle.items.length}곳</span>
-        </h2>
-        <p className="muted small">{cycle.note}</p>
-        <QuadrantScatter
-          items={cycle.items}
-          x={(d) => d.from_peak}
-          y={(d) => d.m3}
-          xLabel={cycle.x_label}
-          yLabel={cycle.y_label}
-          quadrants={['신고가 경신 중', '바닥에서 반등', '전고점 아래 · 정체/하락', '고점 부근에서 꺾임']}
-          xDecimals={0}
-          tip={(d) => (
-            <>
-              <div className="t-title">{d.name}</div>
-              <div className="t-row">
-                전고점({d.peak_ym}) 대비 {d.from_peak > 0 ? '+' : ''}{fmt(d.from_peak, 1)}%
-              </div>
-              <div className="t-row">
-                저점({d.trough_ym})에서 +{fmt(d.from_trough, 1)}%
-              </div>
-              <div className="t-row">
-                3개월 {d.m3 > 0 ? '+' : ''}{fmt(d.m3, 2)}% · 12개월{' '}
-                {d.m12 > 0 ? '+' : ''}{fmt(d.m12, 2)}%
-              </div>
-              {d.accel != null && (
-                <div className="t-row">
-                  직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p
-                </div>
-              )}
-            </>
-          )}
-        />
-        {cycle.excluded.length > 0 && (
-          <p className="paste-warn" style={{ marginTop: 8 }}>
-            {cycle.excluded.join(' · ')}는 공표 기간이 24개월이 안 돼 사이클을 판단할 수
-            없어 뺐습니다. 분구 시점에 통계가 새로 시작했기 때문입니다.
-          </p>
-        )}
+      <div className="table-wrap" style={{ marginTop: 10 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>시군구</th>
+              <th className="num">부동산원</th>
+              <th className="num">모델</th>
+              <th className="num">순위 차</th>
+            </tr>
+          </thead>
+          <tbody>
+            {top.map((d) => (
+              <tr key={d.sgg_cd}>
+                <td>{d.name}</td>
+                <td className="num">
+                  {d.rank_reb}위 <span className="muted small">{fmt(d.reb, 0)}만원/평</span>
+                </td>
+                <td className="num">
+                  {d.rank_coef}위{' '}
+                  <span className="muted small">
+                    {d.coef_pct > 0 ? '+' : ''}
+                    {fmt(d.coef_pct, 1)}%
+                  </span>
+                </td>
+                <td className={`num ${d.rank_gap > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                  {d.rank_gap > 0 ? '+' : ''}
+                  {d.rank_gap}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      <div className="card">
-        <h2>그 상승을 전세가 받쳐 줬나</h2>
-        <p className="muted small">{rally.note}</p>
-        <QuadrantScatter
-          items={rally.items}
-          x={(d) => d.sale_12m}
-          y={(d) => d.ratio_12m}
-          xLabel={rally.x_label}
-          yLabel={rally.y_label}
-          quadrants={['오르고 전세도 붙음', '안 올랐는데 전세는 붙음', '안 오르고 전세도 빠짐', '매매만 간 상승']}
-          xDecimals={0}
-          tip={(d) => (
-            <>
-              <div className="t-title">{d.name}</div>
-              <div className="t-row">
-                12개월 매매 {d.sale_12m > 0 ? '+' : ''}{fmt(d.sale_12m, 1)}%
-              </div>
-              <div className="t-row">
-                전세가율 {fmt(d.ratio_now, 1)}% ({d.ratio_12m > 0 ? '+' : ''}
-                {fmt(d.ratio_12m, 1)}%p)
-              </div>
-            </>
-          )}
-        />
-      </div>
-
-      <div className="card">
-        <h2>
-          모델과 어긋나는 곳
-          {gap.spearman != null && (
-            <span className="muted small"> 순위상관 {fmt(gap.spearman, 3)}</span>
-          )}
-        </h2>
-        {!hasFit ? (
-          <p className="empty">
-            적합이 아직 캐시에 없어 비교할 수 없습니다. <b>시장 분석</b> 탭을 한 번 열면
-            계산되고, 그 뒤 이 화면으로 돌아오면 보입니다.
-          </p>
-        ) : (
-          <>
-            <p className="muted small">{gap.note}</p>
-            <QuadrantScatter
-              items={gap.items}
-              x={(d) => d.rank_reb}
-              y={(d) => d.rank_coef}
-              xLabel={gap.x_label}
-              yLabel={gap.y_label}
-              xOrigin={null}
-              yOrigin={null}
-              invertX
-              invertY
-              diagonal
-              xDecimals={0}
-              yDecimals={0}
-              tip={(d) => (
-                <>
-                  <div className="t-title">{d.name}</div>
-                  <div className="t-row">
-                    부동산원 {d.rank_reb}위 · 평당 {fmt(d.reb, 0)}만원
-                  </div>
-                  <div className="t-row">
-                    모델 {d.rank_coef}위 · 구 계수 {d.coef_pct > 0 ? '+' : ''}
-                    {fmt(d.coef_pct, 1)}%{d.is_base ? ' (기준구)' : ''}
-                  </div>
-                  <div className="t-row">
-                    순위 차 {d.rank_gap > 0 ? '+' : ''}{d.rank_gap}
-                  </div>
-                </>
-              )}
-            />
-            <div className="table-wrap" style={{ marginTop: 10 }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>시군구</th>
-                    <th className="num">부동산원</th>
-                    <th className="num">모델</th>
-                    <th className="num">순위 차</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...gap.items]
-                    .sort((a, b) => Math.abs(b.rank_gap) - Math.abs(a.rank_gap))
-                    .slice(0, 5)
-                    .map((d) => (
-                      <tr key={d.sgg_cd}>
-                        <td>{d.name}</td>
-                        <td className="num">
-                          {d.rank_reb}위 <span className="muted small">{fmt(d.reb, 0)}만원/평</span>
-                        </td>
-                        <td className="num">
-                          {d.rank_coef}위{' '}
-                          <span className="muted small">
-                            {d.coef_pct > 0 ? '+' : ''}
-                            {fmt(d.coef_pct, 1)}%
-                          </span>
-                        </td>
-                        <td className={`num ${d.rank_gap > 0 ? 'tone-neg' : 'tone-pos'}`}>
-                          {d.rank_gap > 0 ? '+' : ''}
-                          {d.rank_gap}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="muted small" style={{ marginTop: 6 }}>
-              가장 많이 벌어진 다섯 곳입니다. 어느 쪽이 맞는지는 이 표가 말해 주지
-              않습니다 — 그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나,
-              모델이 뭔가를 놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
-            </p>
-          </>
-        )}
-      </div>
+      <p className="muted small" style={{ marginTop: 6 }}>
+        가장 많이 벌어진 다섯 곳입니다. 어느 쪽이 맞는지는 이 표가 말해 주지 않습니다 —
+        그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나, 모델이 뭔가를
+        놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
+      </p>
     </>
+  )
+}
+
+/* 카드 안에는 위아래 세 곳씩만. 전체는 눌러서 본다. */
+function MiniTable({ data }) {
+  const n = data.items.length
+  const row = (i) => (
+    <tr key={i.sgg_cd}>
+      <td>{i.name}</td>
+      <td className="num">
+        <b>{fmt(i.latest, data.decimals)}</b>
+      </td>
+      <td
+        className={`num ${
+          i.change_pct > 0 ? 'tone-pos' : i.change_pct < 0 ? 'tone-neg' : ''
+        }`}
+      >
+        {i.change_pct == null
+          ? '—'
+          : `${i.change_pct > 0 ? '+' : ''}${fmt(i.change_pct, 1)}%`}
+      </td>
+    </tr>
+  )
+  return (
+    <table className="macro-mini">
+      <tbody>
+        {data.items.slice(0, 3).map(row)}
+        {n > 6 && (
+          <tr className="macro-mini-gap">
+            <td colSpan={3} className="muted small">
+              ⋯ {n - 6}곳 더
+            </td>
+          </tr>
+        )}
+        {n > 3 && data.items.slice(-3).map(row)}
+      </tbody>
+    </table>
+  )
+}
+
+function FullTable({ data }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>시군구</th>
+            <th className="num">{data.label}</th>
+            <th className="num">기간 변화</th>
+            <th>시작</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.items.map((i) => (
+            <tr key={i.sgg_cd}>
+              <td>{i.name}</td>
+              <td className="num">
+                <b>{fmt(i.latest, data.decimals)}</b>
+                <span className="muted small"> {data.unit}</span>
+              </td>
+              <td
+                className={`num ${
+                  i.change_pct > 0 ? 'tone-pos' : i.change_pct < 0 ? 'tone-neg' : ''
+                }`}
+              >
+                {i.change_pct == null
+                  ? '—'
+                  : `${i.change_pct > 0 ? '+' : ''}${fmt(i.change_pct, 1)}%`}
+              </td>
+              <td className="muted small">
+                {i.first_ym}
+                {i.partial ? ' (분구 후)' : ''}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

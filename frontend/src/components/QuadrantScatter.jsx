@@ -39,11 +39,16 @@ export default function QuadrantScatter({
   yDecimals = 1,
   tip: renderTip,
   height = 340,
+  // 카드 안에 들어가는 축소판. 300px 폭에 이름표 17개를 적으면 읽을 수가 없어서
+  // **구름의 모양만** 보여 준다. 자세한 것은 눌러서 띄우는 창에 있다.
+  compact = false,
 }) {
   const [ref, { width }] = useMeasure()
   const tip = useTooltip()
-  const W = Math.max(width || 640, 320)
-  const PAD = { t: 16, r: 18, b: 38, l: 52 }
+  const W = Math.max(width || 640, compact ? 200 : 320)
+  const PAD = compact
+    ? { t: 8, r: 10, b: 16, l: 26 }
+    : { t: 16, r: 18, b: 38, l: 52 }
 
   const g = useMemo(() => {
     const iw = W - PAD.l - PAD.r
@@ -78,6 +83,7 @@ export default function QuadrantScatter({
         const py = sy(y(d))
         // 겹치면 아래로 밀되 **그림 안에 가둔다.** 예전에는 무한정 밀어서 이름표가
         // SVG 밖으로 흘러 아래 표를 덮었다.
+        if (compact) { placed.push({ x: px, y: py }); return { d, px, py, ly: py } }
         const top = PAD.t + 9
         const bottom = PAD.t + ih - 2
         let ly = Math.min(Math.max(py - 7, top), bottom)
@@ -102,7 +108,7 @@ export default function QuadrantScatter({
       iw,
       ih,
     }
-  }, [items, W, height, xOrigin, yOrigin, invertX, invertY])
+  }, [items, W, height, xOrigin, yOrigin, invertX, invertY, compact])
 
   if (!g) return <p className="empty">그릴 값이 없습니다.</p>
 
@@ -128,11 +134,13 @@ export default function QuadrantScatter({
           <g key={`y${t}`}>
             <line x1={PAD.l} x2={W - PAD.r} y1={g.sy(t)} y2={g.sy(t)}
                   stroke="var(--border)" strokeDasharray="2 3" />
-            <text x={PAD.l - 6} y={g.sy(t) + 3} textAnchor="end" fontSize="10"
-                  fill="var(--text-muted)">{fmt(t, yDecimals)}</text>
+            {!compact && (
+              <text x={PAD.l - 6} y={g.sy(t) + 3} textAnchor="end" fontSize="10"
+                    fill="var(--text-muted)">{fmt(t, yDecimals)}</text>
+            )}
           </g>
         ))}
-        {g.xTicks.map((t) => (
+        {!compact && g.xTicks.map((t) => (
           <text key={`x${t}`} x={g.sx(t)} y={height - 20} textAnchor="middle" fontSize="10"
                 fill="var(--text-muted)">{fmt(t, xDecimals)}</text>
         ))}
@@ -149,7 +157,7 @@ export default function QuadrantScatter({
                 stroke="var(--text-muted)" strokeDasharray="4 4" opacity="0.7" />
         )}
 
-        {quadrants && (
+        {quadrants && !compact && (
           <>
             <text x={W - PAD.r - 4} y={PAD.t + 11} textAnchor="end" fontSize="10.5"
                   fill="var(--text-muted)">{quadrants[0]}</text>
@@ -166,15 +174,21 @@ export default function QuadrantScatter({
           <g key={d.sgg_cd}
              onMouseEnter={(e) => tip.show(e, renderTip ? renderTip(d) : <div className="t-title">{label(d)}</div>)}
              onMouseLeave={tip.hide}>
-            <circle cx={px} cy={py} r="4.5" fill="var(--series-1)" opacity="0.85" />
-            <text x={px + 7} y={ly} fontSize="10" fill="var(--text-secondary)">{label(d)}</text>
+            <circle cx={px} cy={py} r={compact ? 3 : 4.5} fill="var(--series-1)" opacity="0.85" />
+            {!compact && (
+              <text x={px + 7} y={ly} fontSize="10" fill="var(--text-secondary)">{label(d)}</text>
+            )}
           </g>
         ))}
 
-        <text x={W / 2} y={height - 5} textAnchor="middle" fontSize="10.5"
-              fill="var(--text-muted)">{xLabel}</text>
-        <text x={12} y={PAD.t + g.ih / 2} fontSize="10.5" fill="var(--text-muted)"
-              transform={`rotate(-90 12 ${PAD.t + g.ih / 2})`} textAnchor="middle">{yLabel}</text>
+        {!compact && (
+          <>
+            <text x={W / 2} y={height - 5} textAnchor="middle" fontSize="10.5"
+                  fill="var(--text-muted)">{xLabel}</text>
+            <text x={12} y={PAD.t + g.ih / 2} fontSize="10.5" fill="var(--text-muted)"
+                  transform={`rotate(-90 12 ${PAD.t + g.ih / 2})`} textAnchor="middle">{yLabel}</text>
+          </>
+        )}
       </svg>
       {tip.node}
     </div>
