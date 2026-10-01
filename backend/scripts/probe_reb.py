@@ -45,15 +45,20 @@ def main() -> int:
     print(f"통계표: {args.table} ({reb.TABLES.get(args.table, '이름 미등록')})")
     print()
 
-    # 1) 우리 17개가 CLS_IDS 에 다 있나
-    missing = [c for c in DISTRICTS if c not in reb.CLS_IDS]
-    extra = [c for c in reb.CLS_IDS if c not in DISTRICTS]
+    # 1) 이 표의 분류에서 우리 17개를 다 찾았나.
+    #    지역코드는 표마다 다르므로 박아 두지 않고 매번 경로로 찾는다.
+    try:
+        cls = reb.district_cls_ids(args.table)
+    except reb.RebError as exc:
+        print(f"[X] 지역코드 조회 실패: {exc}")
+        return 1
+
+    missing = [c for c in DISTRICTS if c not in cls]
     if missing:
-        print(f"[X] CLS_IDS 에 빠진 시군구: {[(c, DISTRICTS[c]) for c in missing]}")
-    if extra:
-        print(f"[X] DISTRICTS 에 없는 코드가 CLS_IDS 에 있음: {extra}")
-    if not missing and not extra:
-        print(f"[O] 시군구 {len(DISTRICTS)}개가 CLS_IDS 와 1:1 로 맞습니다.")
+        print(f"[X] 이 표에서 못 찾은 시군구: {[(c, DISTRICTS[c]) for c in missing]}")
+    else:
+        print(f"[O] 시군구 {len(DISTRICTS)}개를 {args.table} 의 분류에서 모두 찾았습니다.")
+    extra: list[str] = []
     print()
 
     # 2) 실제로 받아 보고, 받은 값이 그 지역 것인지 경로로 검산

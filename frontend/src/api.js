@@ -191,6 +191,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text, complex_id: complexId ?? null }),
     }),
+  // 매크로 — 한국부동산원 공표 통계
+  macroMetrics: () => request('/macro/metrics'),
+  macroSeries: (params) => request(`/macro/series${qs(params)}`),
+  macroLatest: () => request('/macro/latest'),
+
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),
   stations: () => request('/map/stations'),
   walkPath: (id, params) => request(`/map/walk-path/${id}${qs(params)}`),

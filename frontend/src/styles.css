@@ -786,3 +786,27 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
 .tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
 tr.is-deleting td { opacity: 0.4; }
+
+/* ── 매크로 ───────────────────────────────────────────────────────────────
+   시군구 17개를 한 축에 그린다. KB 가 5개까지만 그려 주던 것을 전부 펼치는 것이
+   이 탭의 요점이라, 범례가 길어지는 것은 감수하고 접지 않는다. */
+.macro-chart { width: 100%; margin-top: 10px; }
+.macro-chart svg { width: 100%; height: auto; display: block; }
+
+.macro-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 12px;
+}
+.macro-key {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: none; padding: 2px 4px; cursor: pointer;
+  font-size: 11.5px; color: var(--text-secondary); border-radius: 5px;
+}
+.macro-key:hover { background: color-mix(in srgb, var(--series-1) 8%, transparent); }
+.macro-key i { width: 10px; height: 3px; border-radius: 2px; flex: none; }
+/* 숨긴 지역은 지우지 않고 흐리게 둔다 — 목록에서 사라지면 다시 켤 수가 없다. */
+.macro-key.is-off { color: var(--text-muted); text-decoration: line-through; }
+
+@media (max-width: 720px) {
+  .macro-legend { gap: 4px 8px; }
+  .macro-key { font-size: 11px; }
+}

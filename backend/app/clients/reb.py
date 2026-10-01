@@ -36,21 +36,27 @@ data.go.kr 의 API 유형이 `LINK` 다. 즉 data.go.kr 이 중계하지 않고 
     A_2024_00062  (월) 중위매매가격_아파트
     A_2024_00072  (월) 평균 매매가격 대비 전세가격_아파트  ← 전세가율
 
-## 지역 코드 — 왜 표를 박아 두고도 매번 검사하는가
+## 지역 코드는 표마다 다르다 — 박아 두면 틀린다
 
-R-ONE 은 자체 `CLS_ID`(지역코드)를 쓴다. 우리 `molit.DISTRICTS` 와 이어 붙이려면
-법정동코드가 필요한데, **API 응답에는 그게 없다.** `SttsApiTblItm.do` 는
-`ITM_ID`·`ITM_NM` 만 주고, 법정동코드는 포털의 '통계코드 검색 > 분류코드 조회'
-화면에만 나온다. 그래서 아래 `CLS_IDS` 는 그 화면에서 받아 **법정동코드 앞 5자리로
-우리 표와 대조한 결과**를 적어 둔 것이다. 17개가 전부 맞았고, 화성시
-분구(41591·41593·41595·41597)까지 일치했다 — 우리가 실거래 0건을 겪고서야 찾아낸
-그 코드를 한국부동산원도 똑같이 쓴다는 독립 확인이다.
+처음에는 지수표(`A_2024_00045`)의 분류코드 조회 화면에서 법정동코드로 대조해
+`CLS_IDS` 를 박아 두고 모든 표에 썼다. **틀렸다.** 적재를 돌리자 검사가 잡았다.
 
-박아 둔 표는 언젠가 낡는다. 화성시가 그랬듯 행정구역은 바뀌고, 그때 **틀린 코드는
-오류가 아니라 빈 결과나 남의 지역 값으로 조용히 돌아온다.** 그래서 데이터를 받을
-때마다 응답의 `CLS_FULLNM`(예: `경기>경부2권>수원시>영통구`)이 우리가 기대한
-시·구 이름으로 끝나는지 검사한다(`check_region`). 이름으로 **맞추지는** 않고
-**검산만** 한다 — 맞추는 데 이름을 쓰면 다른 시의 같은 이름 구에 붙을 수 있다.
+    [X] 화성시 만세구  R-ONE 경로가 '경기>서해안권>부천시>원미구' 로 끝이 다릅니다.
+
+같은 `530091` 이 지수표에서는 화성시 만세구인데 평균매매가격표(`A_2024_00060`)
+에서는 부천시 원미구였다. 가격표에는 `(구)원미구` 같은 **옛 행정구역 항목이 더**
+들어 있어 번호가 3칸씩 밀린다. 지수표 분류 236개, 가격표 245개다.
+
+그래서 코드를 박지 않고 **표마다 `SttsApiTblItm.do` 로 받아 경로로 찾는다.**
+`ITM_FULLNM` 이 `경기>서해안권>화성시>만세구` 처럼 시와 구를 다 담고 있어 모호하지
+않다. 끝 조각이 우리 구 이름과 **정확히 같아야** 하므로 `(구)원미구` 같은 항목은
+저절로 걸러진다. 후보가 둘 이상이면 고르지 않고 실패시킨다 — 잘못 붙이면 남의
+지역 시세가 섞이고, 못 붙이면 줄 하나가 비는 것뿐이다.
+
+받은 뒤에도 `CLS_FULLNM` 으로 한 번 더 검산한다(`check_region`). 찾을 때 쓴 것과
+같은 경로지만, 응답이 요청한 지역과 다르게 올 가능성까지 닫아 둔다. **틀린 코드는
+오류가 아니라 남의 지역 값으로 조용히 돌아오기** 때문이다 — 화성시 분구 때 실거래
+0건으로 겪은 것과 같은 실패 방식이다.
 
 ## 화성시 분구는 시계열이 짧다
 
@@ -88,35 +94,8 @@ TABLES: dict[str, str] = {
 # 확인했다(지수=100001). 표마다 다를 수 있으므로 None 이면 생략하고 전부 받는다.
 DEFAULT_ITM_ID = "100001"
 
-# 우리 시군구 코드 → R-ONE 지역코드(CLS_ID).
-#
-# 출처는 R-ONE '통계코드 검색 > A_2024_00045 > 분류코드 조회' 다. 그 화면이 주는
-# 법정동코드 앞 5자리로 molit.DISTRICTS 와 대조해 적었다 — 기억으로 적은 코드는
-# 하나도 없다. 모듈 주석의 '지역 코드' 항목 참조.
-CLS_IDS: dict[str, str] = {
-    # 수원시
-    "41111": "530060",  # 장안구
-    "41113": "530061",  # 권선구
-    "41115": "530062",  # 팔달구
-    "41117": "530063",  # 영통구
-    # 용인시
-    "41461": "530056",  # 처인구
-    "41463": "530057",  # 기흥구
-    "41465": "530058",  # 수지구
-    # 화성시 — 분구
-    "41591": "530091",  # 만세구
-    "41593": "530092",  # 효행구
-    "41595": "530093",  # 병점구
-    "41597": "530094",  # 동탄구
-    # 안양시
-    "41171": "530045",  # 만안구
-    "41173": "530046",  # 동안구
-    # 단일 코드 시
-    "41370": "520033",  # 오산시
-    "41430": "520022",  # 의왕시
-    "41410": "520021",  # 군포시
-    "41290": "520018",  # 과천시
-}
+# 표별 지역코드 캐시. {통계표: {우리 시군구코드: CLS_ID}}
+_CLS_CACHE: dict[str, dict[str, str]] = {}
 
 
 class RebError(RuntimeError):
@@ -134,6 +113,7 @@ class RebPoint:
     region_name: str     # R-ONE 표기. 대조용으로 남긴다
     ym: str              # "YYYYMM"
     value: float
+    unit: str = ""       # 공표 단위(UI_NM). '지수'/'%'/'천원'/'천원/㎡'
 
 
 def available() -> bool:
@@ -187,11 +167,52 @@ def _unwrap(data: dict, root: str) -> tuple[int, list[dict]]:
 def region_codes(table_id: str) -> list[dict]:
     """표의 항목·분류 목록. 지역은 `ITM_TAG == "분류"` 로 온다.
 
-    주의: 여기에는 **법정동코드가 없다.** 우리 코드와 잇는 것은 `CLS_IDS` 다.
+    주의: 여기에는 **법정동코드가 없다.** 우리 시군구와 잇는 것은 `ITM_FULLNM`
+    경로다 — `district_cls_ids` 참조.
     """
     data = _get("SttsApiTblItm.do", {"STATBL_ID": table_id, "pSize": 1000})
     _, rows = _unwrap(data, "SttsApiTblItm")
     return rows
+
+
+def _path_matches(full_name: str, our_name: str) -> bool:
+    """`경기>서해안권>화성시>만세구` 가 `화성시 만세구` 인가.
+
+    끝 조각이 **정확히** 같아야 한다. 가격표에 섞여 있는 `(구)원미구` 같은 옛
+    행정구역이 `원미구` 로 잡히면 안 되기 때문이다.
+    """
+    parts = [p.strip() for p in (full_name or "").split(">") if p.strip()]
+    if not parts:
+        return False
+    want = our_name.split()  # ["화성시", "만세구"] 또는 ["오산시"]
+    if parts[-1] != want[-1]:
+        return False
+    if len(want) == 2 and want[0] not in parts:
+        return False
+    return True
+
+
+def district_cls_ids(table_id: str) -> dict[str, str]:
+    """이 표에서 우리 17개 시군구의 `CLS_ID`. 표마다 다르므로 매번 조회한다.
+
+    후보가 둘 이상이면 **고르지 않고 실패시킨다.** 잘못 붙이면 남의 지역 시세가
+    섞이지만, 못 붙이면 줄 하나가 비는 것뿐이다.
+    """
+    if table_id in _CLS_CACHE:
+        return _CLS_CACHE[table_id]
+
+    rows = [r for r in region_codes(table_id) if r.get("ITM_TAG") == "분류"]
+    out: dict[str, str] = {}
+    for sgg, our_name in DISTRICTS.items():
+        hits = [r for r in rows if _path_matches(str(r.get("ITM_FULLNM") or ""), our_name)]
+        if len(hits) > 1:
+            paths = [str(h.get("ITM_FULLNM")) for h in hits]
+            raise RebError(f"{our_name}: {table_id} 에서 후보가 여럿입니다 — {paths}")
+        if hits:
+            out[sgg] = str(hits[0]["ITM_ID"])
+
+    _CLS_CACHE[table_id] = out
+    return out
 
 
 def check_region(sgg_cd: str, full_name: str) -> str | None:
@@ -209,15 +230,8 @@ def check_region(sgg_cd: str, full_name: str) -> str | None:
         return f"{sgg_cd} 는 우리 대상 시군구가 아닙니다."
     if not full_name:
         return f"{ours}: CLS_FULLNM 이 비어 있어 검산할 수 없습니다."
-
-    parts = [p.strip() for p in full_name.split(">") if p.strip()]
-    tail = parts[-1] if parts else ""
-    want = ours.split()  # ["수원시", "영통구"] 또는 ["오산시"]
-
-    if tail != want[-1]:
-        return f"{ours}: R-ONE 경로가 '{full_name}' 로 끝이 다릅니다."
-    if len(want) == 2 and want[0] not in parts:
-        return f"{ours}: R-ONE 경로 '{full_name}' 에 '{want[0]}' 가 없습니다."
+    if not _path_matches(full_name, ours):
+        return f"{ours}: R-ONE 경로가 '{full_name}' 입니다."
     return None
 
 
@@ -270,6 +284,10 @@ def fetch(
                     region_name=str(r.get("CLS_FULLNM") or r.get("CLS_NM") or ""),
                     ym=str(r.get("WRTTIME_IDTFR_ID") or ""),
                     value=float(val),
+                    # 단위를 값과 함께 가져간다. 천원을 만원으로 잘못 읽으면
+                    # 평당가가 10배로 튀는데, 그건 그래프에서 '비싼 동네'로만
+                    # 보여서 조용히 지나간다.
+                    unit=str(r.get("UI_NM") or ""),
                 )
             )
 
@@ -290,9 +308,11 @@ def fetch_district(
     end_ym: str | None = None,
 ) -> list[RebPoint]:
     """우리 시군구 코드로 받는다. 받은 값이 그 지역 것인지 **검산까지** 한다."""
-    cls_id = CLS_IDS.get(sgg_cd)
+    cls_id = district_cls_ids(table_id).get(sgg_cd)
     if not cls_id:
-        raise RebError(f"{sgg_cd} 의 R-ONE 지역코드가 CLS_IDS 에 없습니다.")
+        raise RebError(
+            f"{DISTRICTS.get(sgg_cd, sgg_cd)}: {table_id} 에 이 지역이 없습니다."
+        )
 
     points = fetch(table_id, cls_id, sgg_cd=sgg_cd, start_ym=start_ym, end_ym=end_ym)
     if points:

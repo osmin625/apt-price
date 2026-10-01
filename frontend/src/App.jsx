@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
 import MarketView from './views/MarketView'
 import ComplexDetail from './views/ComplexDetail'
+import MacroView from './views/MacroView'
 import MapView from './views/MapView'
 import ModelView from './views/ModelView'
 import CompareView from './views/CompareView'
@@ -24,6 +25,7 @@ import RankingView from './views/RankingView'
  */
 const TABS = [
   { id: 'market', label: '시장 분석', static: true },
+  { id: 'macro', label: '매크로', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   { id: 'compare', label: '매물 분석' },
@@ -129,6 +131,8 @@ export default function App() {
         />
       ) : tab === 'market' ? (
         <MarketView filters={filters} setFilters={setFilters} meta={meta} />
+      ) : tab === 'macro' ? (
+        <MacroView />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (

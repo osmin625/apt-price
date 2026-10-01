@@ -9,7 +9,15 @@ from sqlalchemy import func, select
 from .config import settings
 from .db import SessionLocal, engine
 from .models import Base, Complex, ComplexStation, Station, Trade
-from .routers import analysis, complexes, listings, map as map_router, model, quotes
+from .routers import (
+    analysis,
+    complexes,
+    listings,
+    macro,
+    map as map_router,
+    model,
+    quotes,
+)
 from .services import fit_worker, hedonic, model_view
 
 # 주의: create_all 은 없는 '테이블'만 만들고 기존 테이블에 '컬럼'은 추가하지 않는다.
@@ -36,6 +44,7 @@ app.include_router(listings.router)
 app.include_router(model.router)
 app.include_router(map_router.router)
 app.include_router(quotes.router)
+app.include_router(macro.router)
 
 
 @app.on_event("startup")

@@ -263,3 +263,55 @@ class Quote(Base):
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     seen_count: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class RebStat(Base):
+    """한국부동산원 공표 통계 — 시군구·월 단위.
+
+    ## 왜 우리 DB 에 넣나
+
+    KB부동산 데이터허브에서 경기 남부 17개 시군구를 모아 보려다 막혔다. 시군구
+    선택은 되는데 차트가 5개까지만 그려지고, 무엇보다 **선택이 URL 에도 공유링크에도
+    남지 않아** 열 때마다 17번을 다시 클릭해야 했다. 그래서 공표 통계를 직접 받아
+    한 화면에 놓는다.
+
+    ## 한 행의 뜻
+
+    (시군구, 지표, 월) 하나에 값 하나. 지표는 `reb.TABLES` 의 이름을 쓴다
+    (sale_index, jeonse_index, jeonse_ratio, avg_sale_price, avg_unit_price,
+    med_sale_price).
+
+    지표를 세로로 쌓는(long) 구조인 이유: 한국부동산원이 표를 늘리면 컬럼이 아니라
+    행만 늘어난다. 가로로(wide) 두면 표가 추가될 때마다 마이그레이션이 필요하다.
+
+    ## 유니크 키에 NULL 을 두지 않는다
+
+    SQLite 의 UNIQUE 는 NULL 끼리를 서로 다른 값으로 보므로, 키에 들어가는 세 컬럼은
+    전부 NOT NULL 이다. 값이 없으면 행을 만들지 않는다 — 0 으로 채우면 '그 달에
+    지수가 0' 이라는 거짓이 된다.
+    """
+
+    __tablename__ = "reb_stats"
+    __table_args__ = (
+        UniqueConstraint("sgg_cd", "metric", "ym", name="uq_reb_stat"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sgg_cd: Mapped[str] = mapped_column(String(5), index=True)
+    metric: Mapped[str] = mapped_column(String(32), index=True)
+    ym: Mapped[str] = mapped_column(String(6), index=True)  # "YYYYMM"
+    value: Mapped[float] = mapped_column(Float)
+
+    # 받은 그대로의 지역 경로(경기>경부2권>수원시>영통구). 나중에 코드가 낡아
+    # 엉뚱한 지역이 들어왔는지 **사후에도** 확인할 수 있게 남긴다.
+    region_name: Mapped[str] = mapped_column(String(60), default="")
+
+    # 한국부동산원이 붙여 주는 단위(UI_NM). '지수' / '%' / '천원' / '천원/㎡'.
+    #
+    # 값을 우리 단위(만원)로 바꿔서 저장하지 않는다. 받은 숫자를 그대로 두고 단위를
+    # 같이 적는 쪽이 안전하다 — 처음에 천원을 만원으로 읽어 평당 2.2억이라는 값을
+    # 만들 뻔했다. 공표값과 저장값이 같아야 나중에 대조할 수 있다.
+    # 화면에 쓸 때 `services/macro.py` 가 한 곳에서 환산한다.
+    unit: Mapped[str] = mapped_column(String(16), default="")
+
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
