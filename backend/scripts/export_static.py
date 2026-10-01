@@ -74,6 +74,13 @@ MONTHS = (12, 24, 36)
 RANK_DAYS = (None, 7, 14, 30)
 RANK_BASIS = ("market", "factor")
 
+# 매크로 탭의 지표·기간 선택지. MacroView 의 버튼·셀렉트와 같아야 한다.
+MACRO_METRICS = (
+    "sale_index", "jeonse_index", "jeonse_ratio",
+    "avg_unit_price", "avg_sale_price", "med_sale_price",
+)
+MACRO_SINCE = ("202401", "202001", "201201")
+
 
 def qkey(params: dict) -> str:
     """쿼리를 파일 이름 한 조각으로. 규칙은 모듈 주석 참조 — api.js 와 같아야 한다."""
@@ -124,7 +131,15 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/complexes/meta/filters", {}),
         # 지도 — 역 마커. 파라미터가 없어 한 개뿐이다.
         Req("/api/map/stations", {}),
+        # 매크로 — 한국부동산원 공표 통계. 기간·지표 조합이 작아 전부 내보낸다.
+        Req("/api/macro/metrics", {}),
+        Req("/api/macro/latest", {}),
     ]
+
+    # 매크로는 지표 6 x 기간 3 = 18개뿐이다. 화면의 선택지와 1:1 로 맞춘다.
+    for m in MACRO_METRICS:
+        for since in MACRO_SINCE:
+            plan.append(Req("/api/macro/series", {"metric": m, "since": since}))
 
     for m in MONTHS:
         # 시장 분석 — 요인별 보정계수
@@ -308,7 +323,7 @@ def main() -> int:
         "git_head": git_head(),
         "months": list(MONTHS),
         # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
-        "tabs": ["market", "map"] + (["ranking"] if with_quotes else []),
+        "tabs": ["market", "macro", "map"] + (["ranking"] if with_quotes else []),
         "includes_quotes": with_quotes,
         "data": data_counts(),
         "files": ok,
