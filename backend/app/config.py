@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     tmap_app_key: str = ""
     tmap_base_url: str = "https://apis.openapi.sk.com/tmap/routes/pedestrian"
 
+    # 한국부동산원 부동산통계 Open API(R-ONE) 인증키.
+    # data.go.kr 15134761 은 API 유형이 LINK 라 **MOLIT 키를 쓸 수 없다** — R-ONE 에서
+    # 따로 발급받는다. 없으면 샘플 모드(5행 고정)로 동작해 적재는 안 되지만
+    # scripts/probe_reb.py 의 코드 대조는 그대로 돈다.
+    reb_service_key: str = ""
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @property
