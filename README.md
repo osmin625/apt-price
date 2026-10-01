@@ -44,8 +44,13 @@ cd ../frontend && npm install && npm run dev
 cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 ```
 
-내보내면 시장 분석과 매물 순위가 파이썬 없이 열린다(스냅샷 80개 파일 · 8.2MB · 50초).
-매물 분석은 붙여넣은 텍스트를 그 자리에서 평가하므로 정적으로는 성립하지 않는다.
+내보내면 시장 분석과 매물 순위가 파이썬 없이 열린다. 매물 분석은 붙여넣은 텍스트를
+그 자리에서 평가하므로 정적으로는 성립하지 않는다.
+
+**지도 탭은 기본으로 꺼져 있다.** 데이터는 늘 내보내지만, 카카오 JS 키가 공개 번들에
+들어가야 하므로 켜는 것을 의도적인 행위로 두었다 — `frontend/.env.static.local` 에
+키와 `VITE_STATIC_MAP=1` 을 넣고 카카오 개발자센터에 배포 주소를 등록하면 된다.
+
 배포·주기 동기화·공개 범위는 [docs/deploy.md](docs/deploy.md) 에 있다.
 
 ## 휴대폰에서 보기

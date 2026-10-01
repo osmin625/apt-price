@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { api, snapshotMeta, STATIC_MODE } from './api'
+import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
 import MarketView from './views/MarketView'
 import ComplexDetail from './views/ComplexDetail'
 import MapView from './views/MapView'
@@ -13,15 +13,18 @@ import RankingView from './views/RankingView'
  *
  * 나머지는 서버가 필요해서 빼는 것이 아니라, **서버 없이는 틀린 답을 내기 때문에**
  * 뺀다. 매물 분석은 붙여넣은 텍스트를 파싱하고 그 자리에서 평가하므로 미리 파일로
- * 만들어 둘 수가 없다. 지도·분해 모델은 만들 수는 있지만 스냅샷이 무거워져
- * (지도 응답이 기간당 1.2MB) 이번 범위에서 뺐다 — 필요해지면 export_static.py 의
- * 목록에 넣고 여기 `static: true` 만 켜면 된다.
+ * 만들어 둘 수가 없다. 분해 모델은 만들 수는 있지만 아직 안 넣었다 —
+ * export_static.py 의 목록에 넣고 여기 `static: true` 만 켜면 된다.
+ *
+ * 지도는 데이터가 아니라 **키 때문에** 조건부다. 응답은 늘 내보내지만, 카카오 JS
+ * 키가 공개 번들에 들어가야 하므로 켜는 것을 의도적인 행위로 만들었다
+ * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/deploy.md.
  *
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
  */
 const TABS = [
   { id: 'market', label: '시장 분석', static: true },
-  { id: 'map', label: '지도' },
+  { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   { id: 'compare', label: '매물 분석' },
   { id: 'ranking', label: '매물 순위', static: true },

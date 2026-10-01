@@ -40,6 +40,23 @@ export class ApiError extends Error {
 export const STATIC_MODE = import.meta.env.VITE_DATA_MODE === 'static'
 
 /**
+ * 정적 사이트에 지도 탭을 실을지.
+ *
+ * 지도만 **키가 필요하다.** 카카오 지도를 띄우려면 JS 키가 번들에 들어가야 하고,
+ * 공개 사이트라면 그 키는 누구나 읽을 수 있다. JS 키는 원래 클라이언트에 노출되는
+ * 키라(카카오 지도를 쓰는 모든 사이트의 소스에 보인다) 그 자체가 사고는 아니지만,
+ * 보호 수단인 도메인 허용목록이 Referer 기반이어서 우회가 불가능하지는 않다.
+ *
+ * 그러니 **기본은 끈 상태**로 두고, 켜는 것을 의도적인 행위로 만든다. 켜는 방법은
+ * `frontend/.env.static.local`(gitignore 됨)을 만들어 키와 이 변수를 같이 넣는 것이다.
+ * 자세한 것은 docs/deploy.md.
+ *
+ * 백엔드가 지오코딩에 쓰는 `KAKAO_REST_KEY` 는 **다른 키**이고 backend/.env 에만
+ * 있다. 이쪽으로는 절대 나가지 않는다.
+ */
+export const STATIC_MAP = import.meta.env.VITE_STATIC_MAP === '1'
+
+/**
  * 요청을 스냅샷 파일 경로로. **`scripts/export_static.py` 의 `target_of()` 와
  * 반드시 같아야 한다.** 한쪽만 바꾸면 화면은 404 를 받고, 그건 "데이터가 없다"
  * 로 보인다 — 조용히 틀리는 쪽이다. 그래서 규칙을 양쪽 주석에 같이 적는다.

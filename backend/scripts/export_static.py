@@ -62,6 +62,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = BASE_DIR.parent / "frontend" / "public" / "snapshot"
@@ -101,37 +102,78 @@ def quote_complex_ids() -> list[int]:
     return sorted(i for i in ids if i is not None)
 
 
-def build_plan(with_quotes: bool) -> list[tuple[str, dict]]:
+class Req(NamedTuple):
+    """내보낼 요청 하나.
+
+    `allow_404` 는 **없는 것이 정상인** 응답을 위한 것이다. 도보 경로는 역 정보가
+    없는 단지에서 404 가 나는데 그건 고장이 아니다. 프론트도 그때 null 로 받아
+    점선 직선을 그린다. 이걸 실패로 세면 매 실행이 실패로 끝나고, 그러면
+    **진짜 실패와 구분할 수 없게 된다.**
+    """
+
+    path: str
+    params: dict
+    allow_404: bool = False
+
+
+def build_plan(with_quotes: bool) -> list[Req]:
     """내보낼 요청 목록. 화면이 부르는 것과 1:1 로 맞춘다."""
-    plan: list[tuple[str, dict]] = [
+    plan: list[Req] = [
         # App 부팅 시
-        ("/api/health", {}),
-        ("/api/complexes/meta/filters", {}),
+        Req("/api/health", {}),
+        Req("/api/complexes/meta/filters", {}),
+        # 지도 — 역 마커. 파라미터가 없어 한 개뿐이다.
+        Req("/api/map/stations", {}),
     ]
 
     for m in MONTHS:
         # 시장 분석 — 요인별 보정계수
-        plan.append(("/api/model/factors", {"months": m}))
+        plan.append(Req("/api/model/factors", {"months": m}))
         # FitLoading 이 문구를 고르려고 부른다. 정적에서는 곧바로 오지만,
         # 없으면 404 가 콘솔에 남는다.
-        plan.append(("/api/model/status", {"months": m}))
-        # 시장 분석 — 도보거리 상세 창(산점도 + 같은 단지 안 비교)
-        plan.append(("/api/model/fit", {"months": m}))
-        plan.append(("/api/map/complexes", {"months": m}))
+        plan.append(Req("/api/model/status", {"months": m}))
+        # 시장 분석의 도보거리 상세 창과 지도 탭이 같이 쓴다.
+        plan.append(Req("/api/model/fit", {"months": m}))
+        plan.append(Req("/api/map/complexes", {"months": m}))
 
     if with_quotes:
         for m in MONTHS:
             for basis in RANK_BASIS:
                 for days in RANK_DAYS:
-                    plan.append((
+                    plan.append(Req(
                         "/api/quotes/ranking",
                         {"months": m, "basis": basis, "days": days},
                     ))
         for cid in quote_complex_ids():
             for m in MONTHS:
-                plan.append((f"/api/complexes/{cid}", {"months": m}))
+                plan.append(Req(f"/api/complexes/{cid}", {"months": m}))
 
     return plan
+
+
+def walk_path_plan(out: Path) -> list[Req]:
+    """지도 마커를 눌렀을 때 받는 도보 경로.
+
+    **이 목록은 계획 단계에 알 수 없다.** 지도에 뜨는 단지 집합은
+    `/api/map/complexes` 가 정하는데(거래가 있고 좌표가 있는 단지), 여기서 DB 를
+    다시 질의하면 그 조건을 재구현하는 셈이라 어긋날 수 있다. 그래서 1단계에서
+    내보낸 지도 응답을 **읽어서** 그 id 를 쓴다 — 이미 받아 둔 답이 있으면 다시
+    묻지 않는다.
+
+    기간이 달라도 마커 집합은 거의 같지만 완전히 같지는 않다(그 기간에 거래가
+    없는 단지는 빠진다). 기간별 파일을 다 모아 합집합을 쓴다. 경로 자체는 기간과
+    무관하므로 단지당 한 개면 된다.
+    """
+    ids: set[int] = set()
+    for m in MONTHS:
+        f = out / "map" / "complexes" / f"months={m}.json"
+        if not f.exists():
+            continue
+        payload = json.loads(f.read_text(encoding="utf-8"))
+        for item in payload.get("items", []):
+            if item.get("id") is not None:
+                ids.add(int(item["id"]))
+    return [Req(f"/api/map/walk-path/{i}", {}, allow_404=True) for i in sorted(ids)]
 
 
 def clear(out: Path) -> int:
@@ -198,58 +240,79 @@ def main() -> int:
 
     from app.main import app
 
-    plan = build_plan(with_quotes)
     removed = clear(out)
     if removed:
         say(f"이전 스냅샷 {removed}개 파일 삭제")
 
-    say(f"내보낼 요청 {len(plan)}건 -> {out}")
-    say("")
-
     ok = 0
+    absent = 0
     failures: list[dict] = []
     total_bytes = 0
     t_all = time.perf_counter()
 
-    with TestClient(app) as client:
-        for i, (path, params) in enumerate(plan, 1):
+    def run(plan: list[Req], label: str) -> None:
+        """계획 하나를 실행한다. 단계가 둘이라 함수로 뺐다 — 도보 경로 목록은
+        1단계 결과(지도 응답)를 읽어야 정해지므로 처음부터 알 수 없다."""
+        nonlocal ok, absent, total_bytes
+        say(f"{label} — 요청 {len(plan)}건 -> {out}")
+        # 도보 경로는 1,851건이라 한 줄씩 적으면 로그가 읽히지 않는다. 묶어서 적는다.
+        verbose = len(plan) <= 120
+        for i, req in enumerate(plan, 1):
             t0 = time.perf_counter()
-            query = {k: v for k, v in params.items() if v is not None and v != ""}
+            query = {k: v for k, v in req.params.items() if v is not None and v != ""}
             try:
-                r = client.get(path, params=query, timeout=600)
+                r = client.get(req.path, params=query, timeout=600)
             except Exception as exc:  # noqa: BLE001
-                failures.append({"path": path, "params": query, "error": repr(exc)})
-                say(f"  [{i}/{len(plan)}] X {path} {query} — {exc!r}")
+                failures.append({"path": req.path, "params": query, "error": repr(exc)})
+                say(f"  [{i}/{len(plan)}] X {req.path} {query} — {exc!r}")
                 continue
 
             dt = time.perf_counter() - t0
+            if r.status_code == 404 and req.allow_404:
+                # 없는 것이 정상. 파일을 만들지 않고, 프론트는 404 를 받아 null 로 둔다.
+                absent += 1
+                continue
             if r.status_code != 200:
                 failures.append({
-                    "path": path, "params": query,
+                    "path": req.path, "params": query,
                     "status": r.status_code, "body": r.text[:200],
                 })
-                say(f"  [{i}/{len(plan)}] X {path} {query} — HTTP {r.status_code}")
+                say(f"  [{i}/{len(plan)}] X {req.path} {query} — HTTP {r.status_code}")
                 continue
 
-            dest = target_of(out, path, params)
+            dest = target_of(out, req.path, req.params)
             dest.parent.mkdir(parents=True, exist_ok=True)
             # 파싱하지 않고 바이트 그대로 — 다시 만들지 않는 것이 가장 확실하다.
             dest.write_bytes(r.content)
             ok += 1
             total_bytes += len(r.content)
-            kb = len(r.content) / 1024
-            say(f"  [{i}/{len(plan)}] {dest.relative_to(out)}  {kb:,.0f}KB  {dt:.2f}s")
+            if verbose:
+                kb = len(r.content) / 1024
+                say(f"  [{i}/{len(plan)}] {dest.relative_to(out)}  {kb:,.0f}KB  {dt:.2f}s")
+        if not verbose:
+            say(f"  {label} 완료 — 저장 {ok}건 · 경로 없음 {absent}건")
+
+    with TestClient(app) as client:
+        base = build_plan(with_quotes)
+        run(base, "1단계: 화면 데이터")
+        say("")
+        # 2단계는 1단계가 내보낸 지도 응답에서 단지 id 를 읽어 만든다.
+        walks = walk_path_plan(out)
+        run(walks, "2단계: 도보 경로")
 
     elapsed = time.perf_counter() - t_all
+    attempted = len(base) + len(walks)
 
     meta = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "git_head": git_head(),
         "months": list(MONTHS),
-        "tabs": ["market"] + (["ranking"] if with_quotes else []),
+        # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
+        "tabs": ["market", "map"] + (["ranking"] if with_quotes else []),
         "includes_quotes": with_quotes,
         "data": data_counts(),
         "files": ok,
+        "walk_paths_absent": absent,
         "bytes": total_bytes,
         "export_seconds": round(elapsed, 1),
         "failures": failures,
@@ -260,7 +323,10 @@ def main() -> int:
     )
 
     say("")
-    say(f"성공 {ok}/{len(plan)} · {total_bytes / 1024 / 1024:.1f}MB · {elapsed:.1f}s")
+    say(
+        f"성공 {ok}/{attempted} · 경로 없음 {absent}건(정상) · "
+        f"{total_bytes / 1024 / 1024:.1f}MB · {elapsed:.1f}s"
+    )
     if failures:
         # 빈 결과는 조용하다. 실패를 종료 코드로 올려 스케줄러가 알 수 있게 한다.
         say("")
