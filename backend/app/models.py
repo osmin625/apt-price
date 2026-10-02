@@ -322,3 +322,40 @@ class RebStat(Base):
     base: Mapped[str] = mapped_column(String(40), default="")
 
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class QuoteNote(Base):
+    """매물 줄에 사람이 적는 비고. "130동 민간임대" 처럼.
+
+    ## 왜 Quote 가 아니라 유닛에 붙나
+
+    순위표의 한 줄은 호가 하나가 아니라 **접힌 단위**(단지·동·평형·층)다. 같은 집이
+    값을 바꿔 다시 올라오면 새 `Quote` 행이 생기고 대표도 그 새 행으로 바뀐다.
+    메모를 `quote_id` 에 붙이면 **값이 바뀌는 순간 메모가 사라진다** — 적어 둔 사람은
+    아무 경고도 못 받는다.
+
+    그래서 `quotes.unit_key()` 와 **같은 키**에 붙인다. 호가가 바뀌어도, 새 매물이
+    같은 층대에 올라와도 그 줄의 메모는 그대로 남는다.
+
+    ## 유니크 키에 NULL 을 두지 않는다
+
+    SQLite 의 UNIQUE 는 NULL 끼리를 서로 다른 값으로 보므로 동은 "", 층은 0 을 쓴다.
+    `Quote` 가 같은 이유로 같은 규칙을 쓰고 있고, 두 키가 어긋나면 메모가 엉뚱한
+    줄에 붙는다.
+    """
+
+    __tablename__ = "quote_notes"
+    __table_args__ = (
+        UniqueConstraint("complex_id", "dong", "area_key", "floor", name="uq_quote_note"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    complex_id: Mapped[int] = mapped_column(ForeignKey("complexes.id"), index=True)
+    dong: Mapped[str] = mapped_column(String(20), default="")
+    area_key: Mapped[int] = mapped_column(Integer)
+    floor: Mapped[int] = mapped_column(Integer, default=0)
+
+    text: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

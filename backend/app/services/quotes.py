@@ -318,6 +318,18 @@ def display_units(rows: list[Quote]) -> list[dict]:
         # 삭제는 이 줄이 대표하는 **모든** 행을 지운다. 대표만 지우면 나머지가 다음
         # 조회에서 각자 한 줄로 되살아나 지운 것처럼 보이지 않는다.
         item["quote_ids"] = [q.id for c in chains for q in c.rows]
+
+        # 이 줄을 **언제 처음 넣었나**. chain_payload 의 first_seen 은 대표 사슬의
+        # 것이라, 같은 층대에 나중에 올라온 매물이 대표가 되면 날짜가 앞당겨진 것처럼
+        # 보인다. 줄 전체 기준이어야 "이 줄이 언제부터 있었나" 에 답이 된다.
+        seen = [q.first_seen_at for c in chains for q in c.rows if q.first_seen_at]
+        item["added_on"] = min(seen).date().isoformat() if seen else None
+
+        # 비고를 붙일 키. unit_key 와 **같아야** 한다 — 어긋나면 메모가 엉뚱한 줄에 간다.
+        k = unit_key(rep.latest)
+        item["note_key"] = {
+            "complex_id": k[0], "dong": k[1], "area_key": k[2], "floor": k[3],
+        }
         out.append(item)
     return out
 

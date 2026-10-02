@@ -41,6 +41,27 @@ export default function RankingView({ months, setMonths, onSelect }) {
     }
   }
 
+  /* 저장한 비고를 **목록 상태에도** 넣는다.
+     안 그러면 기준을 바꿨다가 돌아왔을 때 방금 적은 것이 사라진 것처럼 보인다 —
+     서버에는 남아 있지만 화면이 옛 응답을 들고 있기 때문이다. */
+  const noteSaved = (key, text) =>
+    setData((d) =>
+      d
+        ? {
+            ...d,
+            items: d.items.map((i) =>
+              i.note_key &&
+              i.note_key.complex_id === key.complex_id &&
+              i.note_key.dong === key.dong &&
+              i.note_key.area_key === key.area_key &&
+              i.note_key.floor === key.floor
+                ? { ...i, note: text }
+                : i,
+            ),
+          }
+        : d,
+    )
+
   const load = () => {
     setBusy(true)
     setErr(null)
@@ -163,6 +184,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
             onDelete={STATIC_MODE ? null : remove}
             deleting={deleting}
             onSelect={onSelect}
+            onNoteSaved={noteSaved}
           />
           {data.skipped?.length > 0 && (
             <p className="paste-warn" style={{ marginTop: 8 }}>

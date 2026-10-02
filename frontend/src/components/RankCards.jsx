@@ -3,6 +3,7 @@ import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
 import PriceTrail from './PriceTrail'
+import NoteCell from './NoteCell'
 
 const TONE = {
   저평가: 'good',
@@ -32,7 +33,7 @@ const TONE = {
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
-export default function RankCards({ items, basis, onDelete, deleting, onSelect }) {
+export default function RankCards({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
   return (
     <ul className="rank-cards">
       {items.map((i, n) => {
@@ -103,9 +104,18 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect }
               </span>
             </div>
 
+            {/* 비고는 카드에서도 고칠 수 있어야 한다. 좁은 화면이라고 읽기만
+                되게 두면 휴대폰으로 보던 사람이 적어 둘 데가 없다. */}
+            {i.note_key && (
+              <div className="rc-note">
+                <NoteCell item={i} onSaved={onNoteSaved} />
+              </div>
+            )}
+
             <div className="rc-foot">
               <span className="muted small">
                 {i.confirmed_on ? `확인 ${i.confirmed_on.slice(5).replace('-', '.')}` : '확인일자 없음'}
+                {i.added_on ? ` · 추가 ${i.added_on.slice(5).replace('-', '.')}` : ''}
               </span>
               {onDelete && (
                 <button

@@ -181,6 +181,8 @@ export const api = {
     request('/model/compare', { method: 'POST', body: JSON.stringify(body) }),
   quoteRanking: (params) => request(`/quotes/ranking${qs(params)}`),
   deleteQuote: (id) => request(`/quotes/${id}`, { method: 'DELETE' }),
+  putQuoteNote: (body) =>
+    request('/quotes/note', { method: 'PUT', body: JSON.stringify(body) }),
   parseBulk: (text, params) =>
     request('/model/parse-bulk', {
       method: 'POST',

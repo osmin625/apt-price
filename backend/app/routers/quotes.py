@@ -5,12 +5,13 @@
 기간의 실거래로 전부 다시 계산된다.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Complex, Quote
+from ..models import Complex, Quote, QuoteNote
 from ..services import quotes as quotes_svc
 from ..services import ranking
 
@@ -61,6 +62,21 @@ def ranking_all(
         })
 
     out = ranking.evaluate_many(db, payload, months=months, basis=basis)
+
+    # 비고를 붙인다. 유닛 키로 맞추므로 호가가 바뀌어도 메모는 그 줄에 남는다.
+    notes = {
+        (n.complex_id, n.dong, n.area_key, n.floor): n.text
+        for n in db.execute(select(QuoteNote)).scalars().all()
+    }
+    by_quote = {p["quote_id"]: p.get("note_key") for p in payload}
+    for item in out.get("items", []):
+        k = by_quote.get(item.get("quote_id"))
+        if not k:
+            continue
+        item["note_key"] = k
+        item["note"] = notes.get(
+            (k["complex_id"], k["dong"], k["area_key"], k["floor"]), ""
+        )
     out["months"] = months
     out["total_quotes"] = len(rows)
     out["revised_units"] = sum(1 for p in payload if p["revisions"] > 1)
@@ -112,3 +128,47 @@ def clear_quotes(db: Session = Depends(get_db)):
     db.query(Quote).delete()
     db.commit()
     return {"deleted": n}
+
+
+class NoteIn(BaseModel):
+    """비고 한 줄. 키는 `quotes.unit_key()` 와 같아야 한다."""
+
+    complex_id: int
+    dong: str = ""
+    area_key: int
+    floor: int = 0
+    text: str = Field(default="", max_length=300)
+
+
+@router.put("/note")
+def put_note(body: NoteIn, db: Session = Depends(get_db)):
+    """비고를 쓰거나 지운다. 빈 문자열이면 지운다.
+
+    유닛 키에 붙이므로 같은 집의 호가가 바뀌어도 메모는 그 줄에 남는다 —
+    `quote_id` 에 붙이면 값이 바뀌는 순간 조용히 사라진다.
+    """
+    if not db.get(Complex, body.complex_id):
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다.")
+
+    key = (QuoteNote.complex_id == body.complex_id,
+           QuoteNote.dong == (body.dong or ""),
+           QuoteNote.area_key == body.area_key,
+           QuoteNote.floor == (body.floor or 0))
+    row = db.execute(select(QuoteNote).where(*key)).scalar_one_or_none()
+
+    text = body.text.strip()
+    if not text:
+        if row:
+            db.delete(row)
+            db.commit()
+        return {"text": ""}
+
+    if row:
+        row.text = text
+    else:
+        db.add(QuoteNote(
+            complex_id=body.complex_id, dong=body.dong or "",
+            area_key=body.area_key, floor=body.floor or 0, text=text,
+        ))
+    db.commit()
+    return {"text": text}

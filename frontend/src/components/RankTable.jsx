@@ -6,6 +6,7 @@ import GroupHint from './GroupHint'
 import Hint from './Hint'
 import PriceTrail from './PriceTrail'
 import RankCards from './RankCards'
+import NoteCell from './NoteCell'
 
 const TONE = {
   저평가: 'good',
@@ -45,7 +46,7 @@ function useNarrow(query = '(max-width: 720px)') {
   return narrow
 }
 
-export default function RankTable({ items, basis, onDelete, deleting, onSelect }) {
+export default function RankTable({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
   const narrow = useNarrow()
   if (!items?.length) return null
 
@@ -67,6 +68,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect }
           onDelete={onDelete}
           deleting={deleting}
           onSelect={onSelect}
+          onNoteSaved={onNoteSaved}
         />
       ) : (
       <div className="table-wrap">
@@ -85,6 +87,8 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect }
               <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>요인 적정</th>
               <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>대비</th>
               <th>판정</th>
+              <th className="num">추가</th>
+              <th className="col-note">비고</th>
               {onDelete && <th />}
             </tr>
           </thead>
@@ -164,6 +168,16 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect }
                   <span className="verdict" data-tone={TONE[i.verdict]} style={{ fontSize: 13 }}>
                     {i.verdict}
                   </span>
+                </td>
+                {/* 우리가 이 줄을 **언제 넣었나**. 매물에 적힌 '확인' 일자와 다르다 —
+                    확인은 중개사가 매물을 확인한 날이고 이쪽은 우리 데이터 기준이다. */}
+                <td className="num muted small">{i.added_on ? i.added_on.slice(5) : '—'}</td>
+                <td className="col-note">
+                  {i.note_key ? (
+                    <NoteCell item={i} onSaved={onNoteSaved} />
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
                 </td>
                 {onDelete && (
                   <td>
