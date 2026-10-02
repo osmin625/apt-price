@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Complex, Quote, QuoteNote
+from ..models import Complex, DongTag, Quote, QuoteNote
 from ..services import quotes as quotes_svc
 from ..services import ranking
 
@@ -69,6 +69,15 @@ def ranking_all(
         for n in db.execute(select(QuoteNote)).scalars().all()
     }
     by_quote = {p["quote_id"]: p.get("note_key") for p in payload}
+    # 민간임대 표시는 **동에 붙어 있고 여기서 파생한다.** 비고에 글자를 써 넣으면
+    # 표시를 끈 뒤에도 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
+    rental = {
+        (t.complex_id, t.dong)
+        for t in db.execute(select(DongTag).where(DongTag.rental.is_(True)))
+        .scalars()
+        .all()
+    }
+
     for item in out.get("items", []):
         k = by_quote.get(item.get("quote_id"))
         if not k:
@@ -76,6 +85,9 @@ def ranking_all(
         item["note_key"] = k
         item["note"] = notes.get(
             (k["complex_id"], k["dong"], k["area_key"], k["floor"]), ""
+        )
+        item["note_auto"] = (
+            ["민간임대"] if (k["complex_id"], k["dong"]) in rental else []
         )
     out["months"] = months
     out["total_quotes"] = len(rows)

@@ -869,3 +869,19 @@ tr.is-deleting td { opacity: 0.4; }
 
 .rc-note { margin-top: 6px; }
 .rc-note .note-cell input { border-color: var(--border); background: var(--surface-1); }
+
+/* ── 동 정보 · 민간임대 표시 ──────────────────────────────────────────
+   민간임대 동은 분양 물건과 성격이 달라 시세가 다른데 실거래가에는 그 구분이 없다.
+   사람이 표시해 두면 매물 순위의 비고에 파생돼 따라붙는다. */
+.rental-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.rental-check input { cursor: pointer; }
+tbody tr.is-rental { background: color-mix(in srgb, var(--warning) 7%, transparent); }
+
+.note-tag {
+  display: inline-block; flex: none;
+  font-size: 10.5px; font-weight: 600; line-height: 1.5;
+  padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+  background: color-mix(in srgb, var(--warning) 22%, var(--surface-1));
+  color: var(--text-secondary);
+}
+.note-ro .note-tag { margin-right: 4px; }

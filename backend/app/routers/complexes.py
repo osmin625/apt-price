@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -118,7 +119,7 @@ def dongs(complex_id: int, db: Session = Depends(get_db)):
     하면 오타도 나고 그 동이 얼마나 먼지도 모르는데, 목록으로 주면 둘 다 해결된다.
     좌표를 못 잡은 동은 `walk_min` 이 없다 — 그때는 단지 중심점으로 계산한다.
     """
-    from ..models import ComplexDong
+    from ..models import ComplexDong, DongTag
 
     if not db.get(Complex, complex_id):
         raise HTTPException(404, "단지를 찾을 수 없습니다")
@@ -126,6 +127,14 @@ def dongs(complex_id: int, db: Session = Depends(get_db)):
     rows = db.execute(
         select(ComplexDong).where(ComplexDong.complex_id == complex_id)
     ).scalars().all()
+
+    # 사람이 표시한 것. 적재로 다시 채워지는 complex_dongs 와 섞지 않는다.
+    tags = {
+        t.dong: t
+        for t in db.execute(
+            select(DongTag).where(DongTag.complex_id == complex_id)
+        ).scalars().all()
+    }
 
     # 동별 가격 프리미엄은 적합 결과에 들어 있다. 적합이 아직 없으면(첫 요청) 비워
     # 두고 거리만 준다 — 이 엔드포인트가 14초짜리 적합을 기다리게 만들 이유는 없다.
@@ -157,6 +166,7 @@ def dongs(complex_id: int, db: Session = Depends(get_db)):
             "walk_distance_m": round(r.walk_distance_m) if r.walk_distance_m else None,
             "premium_pct": (prem.get(r.dong) or {}).get("pct"),
             "premium_n": (prem.get(r.dong) or {}).get("n"),
+            "rental": bool(getattr(tags.get(r.dong), "rental", False)),
         }
         for r in sorted(rows, key=sort_key)
     ]
@@ -168,6 +178,7 @@ def dongs(complex_id: int, db: Session = Depends(get_db)):
         "premium_spread_pct": round(max(prems) - min(prems), 1) if len(prems) > 1 else None,
         # 동 사이 편차가 크면 동 선택이 그만큼 중요하다는 신호다.
         "spread_min": round(max(known) - min(known), 1) if len(known) > 1 else None,
+        "rental_dongs": sorted(d for d, t in tags.items() if t.rental),
     }
 
 
@@ -222,3 +233,39 @@ def filters(db: Session = Depends(get_db)):
         "stations": stations,
         "reference_year": date.today().year,
     }
+
+
+class RentalIn(BaseModel):
+    rental: bool
+
+
+@router.put("/{complex_id}/dongs/{dong}/rental")
+def set_rental(
+    complex_id: int, dong: str, body: RentalIn, db: Session = Depends(get_db)
+):
+    """동을 민간임대로 표시하거나 해제한다.
+
+    표시를 끄면 행을 지운다. `rental=False` 행을 남겨 두면 '표시한 적 없음' 과
+    '표시했다가 껐음' 이 구분되지 않는데, 그 구분에 쓸 데가 없다.
+    """
+    from ..models import DongTag
+
+    if not db.get(Complex, complex_id):
+        raise HTTPException(404, "단지를 찾을 수 없습니다")
+
+    row = db.execute(
+        select(DongTag).where(DongTag.complex_id == complex_id, DongTag.dong == dong)
+    ).scalar_one_or_none()
+
+    if not body.rental:
+        if row:
+            db.delete(row)
+            db.commit()
+        return {"dong": dong, "rental": False}
+
+    if row:
+        row.rental = True
+    else:
+        db.add(DongTag(complex_id=complex_id, dong=dong, rental=True))
+    db.commit()
+    return {"dong": dong, "rental": True}

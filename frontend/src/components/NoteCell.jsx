@@ -47,9 +47,24 @@ export default function NoteCell({ item, onSaved }) {
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
+  /* 민간임대 같은 표시는 **단지 상세에서 동에 붙인 것**이 파생돼 온다. 비고에
+     글자로 써 넣지 않는 이유: 써 넣으면 표시를 끈 뒤에도 남고, 사용자가 직접 쓴
+     메모와 구분되지 않는다. 배지로 두면 표시를 끄는 순간 같이 사라진다. */
+  const auto = item.note_auto || []
+
   if (STATIC_MODE) {
     // 정적 사이트에서는 쓸 수 없다. 눌리는데 실패하는 칸을 두지 않는다.
-    return item.note ? <span className="note-ro">{item.note}</span> : <span className="muted">—</span>
+    if (!auto.length && !item.note) return <span className="muted">—</span>
+    return (
+      <span className="note-ro">
+        {auto.map((t) => (
+          <b className="note-tag" key={t}>
+            {t}
+          </b>
+        ))}
+        {item.note}
+      </span>
+    )
   }
 
   const commit = async () => {
@@ -71,6 +86,11 @@ export default function NoteCell({ item, onSaved }) {
 
   return (
     <span className={`note-cell is-${state}`}>
+      {auto.map((t) => (
+        <b className="note-tag" key={t} title="단지 상세에서 이 동을 민간임대로 표시했습니다">
+          {t}
+        </b>
+      ))}
       <input
         value={text}
         placeholder="비고"

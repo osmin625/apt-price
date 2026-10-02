@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     Date,
     DateTime,
@@ -356,6 +357,38 @@ class QuoteNote(Base):
     floor: Mapped[int] = mapped_column(Integer, default=0)
 
     text: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DongTag(Base):
+    """사람이 동에 붙이는 표시. 지금은 민간임대 하나다.
+
+    ## 왜 ComplexDong 에 컬럼을 더하지 않나
+
+    `ComplexDong` 은 국토부 동 정보와 카카오 좌표로 **다시 채워지는** 테이블이다.
+    사람이 손으로 표시한 값을 거기 섞어 두면 적재 한 번에 조용히 날아갈 수 있다.
+    들어온 데이터와 사람이 적은 것은 섞지 않는다.
+
+    ## 민간임대를 왜 표시하나
+
+    민간임대 동은 분양 물건과 성격이 달라 같은 단지·같은 평형이어도 시세가 다르다.
+    그런데 국토부 실거래가에는 그 구분이 없다. 매물 순위에서 '왜 이 동만 유독 싼가'
+    를 매번 다시 알아내는 대신, 한 번 표시해 두고 그 줄에 띄운다.
+
+    표시는 **비고에 글자를 써 넣지 않고** 파생해서 보여 준다. 써 넣으면 표시를 끈
+    뒤에도 글자가 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
+    """
+
+    __tablename__ = "dong_tags"
+    __table_args__ = (UniqueConstraint("complex_id", "dong", name="uq_dong_tag"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    complex_id: Mapped[int] = mapped_column(ForeignKey("complexes.id"), index=True)
+    dong: Mapped[str] = mapped_column(String(20), index=True)
+
+    rental: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )

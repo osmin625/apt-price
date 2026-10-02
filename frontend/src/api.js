@@ -163,6 +163,11 @@ export const api = {
   complex: (id, params) => request(`/complexes/${id}${qs(params)}`),
   areaTypes: (id) => request(`/complexes/${id}/area-types`),
   dongs: (id) => request(`/complexes/${id}/dongs`),
+  setDongRental: (id, dong, rental) =>
+    request(`/complexes/${id}/dongs/${encodeURIComponent(dong)}/rental`, {
+      method: 'PUT',
+      body: JSON.stringify({ rental }),
+    }),
   quotes: (id, params) => request(`/complexes/${id}/quotes${qs(params)}`),
   evaluate: (body, params) =>
     request(`/listings/evaluate${qs(params)}`, { method: 'POST', body: JSON.stringify(body) }),
