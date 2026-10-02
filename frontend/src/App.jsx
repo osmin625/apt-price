@@ -144,7 +144,7 @@ export default function App() {
           onSelect={openDetail}
         />
       ) : (
-        <CompareView months={Math.max(filters.months, 12)} meta={meta} onSelect={openDetail} />
+        <CompareView months={Math.max(filters.months, 12)} />
       )}
     </div>
   )
