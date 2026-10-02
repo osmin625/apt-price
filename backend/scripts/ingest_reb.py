@@ -44,7 +44,7 @@ from app.db import SessionLocal
 from app.models import RebStat
 
 
-def upsert(db, points: list[reb.RebPoint]) -> int:
+def upsert(db, points: list[reb.RebPoint], base: str = "") -> int:
     """같은 (시군구·지표·월)이 다시 오면 값을 갱신한다.
 
     한국부동산원은 공표 후에도 수치를 **수정한다**(잠정치 -> 확정치). 그래서
@@ -60,6 +60,7 @@ def upsert(db, points: list[reb.RebPoint]) -> int:
             "value": p.value,
             "region_name": p.region_name[:60],
             "unit": p.unit[:16],
+            "base": base[:40],
         }
         for p in points
         if p.ym and p.sgg_cd
@@ -74,6 +75,7 @@ def upsert(db, points: list[reb.RebPoint]) -> int:
             "value": stmt.excluded.value,
             "region_name": stmt.excluded.region_name,
             "unit": stmt.excluded.unit,
+            "base": stmt.excluded.base,
         },
     )
     db.execute(stmt)
@@ -98,13 +100,21 @@ def main() -> int:
         print(f"모르는 통계표: {unknown}")
         return 1
 
+    # 기준시점은 표 메타에 있다. 한 번만 받아 둔다.
+    try:
+        meta = reb.table_meta()
+    except reb.RebError as exc:
+        print(f"통계표 메타를 받지 못했습니다: {exc}")
+        meta = {}
+
     total = 0
     problems: list[str] = []
 
     with SessionLocal() as db:
         for tid in tables:
             metric = reb.TABLES[tid]
-            print(f"\n{tid}  {metric}")
+            base = str((meta.get(tid) or {}).get("RPSTUI_NM") or "")
+            print(f"\n{tid}  {metric}" + (f"  [{base}]" if base else ""))
             got_any = False
 
             for sgg, name in DISTRICTS.items():
@@ -117,7 +127,7 @@ def main() -> int:
                     problems.append(f"{metric}/{name}: {exc}")
                     continue
 
-                n = upsert(db, pts)
+                n = upsert(db, pts, base)
                 total += n
                 if n:
                     got_any = True

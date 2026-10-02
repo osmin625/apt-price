@@ -18,8 +18,15 @@ NOT_INGESTED = (
 
 @router.get("/metrics")
 def metrics(db: Session = Depends(get_db)):
-    """고를 수 있는 지표 목록과 적재 여부."""
-    return {"metrics": mc.METRICS, "ingested": mc.available(db)}
+    """고를 수 있는 지표 목록과 적재 여부.
+
+    기준시점(`base`)은 적재된 데이터에서 읽는다. 코드에 박으면 한국부동산원이
+    리베이스할 때 조용히 거짓이 된다 — 실제로 한 번 틀렸다.
+    """
+    return {
+        "metrics": mc.metrics_with_base(db),
+        "ingested": mc.available(db),
+    }
 
 
 @router.get("/series")

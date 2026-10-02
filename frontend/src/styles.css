@@ -836,3 +836,15 @@ tr.is-deleting td { opacity: 0.4; }
 .macro-mini td { padding: 3px 4px; border: none; }
 .macro-mini td:first-child { color: var(--text-secondary); }
 .macro-mini-gap td { text-align: center; padding: 2px 0; opacity: 0.75; }
+
+/* 설명문 툴팁 — 차트 값과 달리 줄바꿈이 필요하다 */
+.chart-tooltip.is-wide { white-space: normal; max-width: 320px; }
+.chart-tooltip.is-wide .t-row { color: var(--text-secondary); font-variant-numeric: normal; }
+.chart-tooltip .muted { color: var(--text-muted); font-weight: 400; }
+
+/* 고른 지표의 설명. 호버가 없는 터치 화면에서도 읽혀야 해서 항상 보인다. */
+.metric-note {
+  margin: 12px 0 0; font-size: 12.5px; line-height: 1.6;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border); padding-left: 10px;
+}

@@ -7,15 +7,18 @@ const fmt = (n, digits = 0) =>
 
 export function useTooltip() {
   const [tip, setTip] = useState(null)
-  const show = useCallback((e, content) => {
-    setTip({ x: e.clientX, y: e.clientY, content })
+  // 세 번째 인자는 덧붙일 클래스다. 차트 값은 한 줄로 붙는 게 읽기 좋지만
+  // (`white-space: nowrap`), 설명문은 그대로 두면 화면 밖까지 한 줄로 뻗는다.
+  // `is-wide` 를 주면 줄바꿈된다.
+  const show = useCallback((e, content, cls = '') => {
+    setTip({ x: e.clientX, y: e.clientY, content, cls })
   }, [])
   const hide = useCallback(() => setTip(null), [])
   const node = tip ? (
     <div
-      className="chart-tooltip"
+      className={`chart-tooltip${tip.cls ? ` ${tip.cls}` : ''}`}
       style={{
-        left: Math.min(tip.x + 14, window.innerWidth - 220),
+        left: Math.min(tip.x + 14, window.innerWidth - (tip.cls ? 340 : 220)),
         top: Math.max(tip.y - 12, 8),
       }}
     >

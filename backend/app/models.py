@@ -314,4 +314,11 @@ class RebStat(Base):
     # 화면에 쓸 때 `services/macro.py` 가 한 곳에서 환산한다.
     unit: Mapped[str] = mapped_column(String(16), default="")
 
+    # 공표 기준시점 문구(RPSTUI_NM). 지수에만 있다 — '기준시점 : 2026.06.=100.0'.
+    #
+    # 코드에 "2026년 1월 = 100" 이라고 박았다가 틀렸다. 한국부동산원은 주기적으로
+    # 기준을 옮기므로(리베이스) 기억으로 적으면 언젠가 거짓이 된다. 받아서 저장하면
+    # 리베이스될 때 다음 적재에서 저절로 따라간다.
+    base: Mapped[str] = mapped_column(String(40), default="")
+
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -164,6 +164,34 @@ def _unwrap(data: dict, root: str) -> tuple[int, list[dict]]:
     return total, rows
 
 
+def table_meta() -> dict[str, dict]:
+    """통계표 목록. 우리가 쓰는 표의 **기준시점**이 여기 있다.
+
+    지수는 기준시점이 100 이고, 한국부동산원은 주기적으로 기준을 옮긴다(리베이스).
+    그래서 "2026년 1월 = 100" 같은 문구를 코드에 박으면 언젠가 거짓이 된다.
+    실제로 그렇게 적었다가 틀렸다 — 받아서 보니 2026년 **6월** 기준이었고,
+    데이터로도 202606 의 값이 모든 시군구에서 정확히 100.000 이었다.
+
+    그래서 적재할 때 `RPSTUI_NM` 을 같이 받아 행에 저장한다. 리베이스되면 다음
+    적재에서 저절로 따라간다.
+    """
+    out: dict[str, dict] = {}
+    page = 1
+    while page <= 30:  # 738개 / 100 = 8페이지. 여유를 두되 무한루프는 막는다.
+        data = _get("SttsApiTbl.do", {"pIndex": page, "pSize": 100})
+        total, rows = _unwrap(data, "SttsApiTbl")
+        if not rows:
+            break
+        for r in rows:
+            tid = str(r.get("STATBL_ID") or "")
+            if tid in TABLES:
+                out[tid] = r
+        if len(out) == len(TABLES) or len(rows) < 100:
+            break
+        page += 1
+    return out
+
+
 def region_codes(table_id: str) -> list[dict]:
     """표의 항목·분류 목록. 지역은 `ITM_TAG == "분류"` 로 온다.
 

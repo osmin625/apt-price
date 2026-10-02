@@ -82,17 +82,11 @@ export default function MacroView() {
         <div className="filters">
           <div className="field">
             <label>지표</label>
-            <div className="rank-basis" style={{ margin: 0 }}>
-              {(meta?.metrics || []).map((m) => (
-                <button
-                  key={m.key}
-                  className={`chip${metric === m.key ? ' on' : ''}`}
-                  onClick={() => setMetric(m.key)}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
+            <MetricChips
+              metrics={meta?.metrics || []}
+              value={metric}
+              onChange={setMetric}
+            />
           </div>
           <div className="field">
             <label htmlFor="mc-since">기간</label>
@@ -103,6 +97,8 @@ export default function MacroView() {
             </select>
           </div>
         </div>
+
+        <MetricNote m={(meta?.metrics || []).find((x) => x.key === metric)} />
       </div>
 
       <div className="macro-grid">
@@ -624,5 +620,67 @@ function FullTable({ data }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+
+/* 지표 칩. 마우스를 올리면 그 숫자가 **무엇이고 어떻게 읽는지**가 뜬다.
+ *
+ * 지표 이름만으로는 알 수 없는 것들이 있다. '전세가율' 이 내려간 것이 좋은 신호인지
+ * 나쁜 신호인지, '매매가격지수 102' 가 비싼 동네라는 뜻인지 아닌지 — 이름은 아무
+ * 말도 해 주지 않는다.
+ *
+ * 호버는 터치 화면에 없으므로, 고른 지표의 설명은 칩 아래에 **항상** 적어 둔다
+ * (`MetricNote`). 호버는 고르기 전에 미리 볼 수 있다는 점에서만 더하는 것이다.
+ */
+function MetricChips({ metrics, value, onChange }) {
+  const tip = useTooltip()
+  return (
+    <div className="rank-basis" style={{ margin: 0 }}>
+      {metrics.map((m) => (
+        <button
+          key={m.key}
+          className={`chip${value === m.key ? ' on' : ''}`}
+          onClick={() => onChange(m.key)}
+          onMouseEnter={(e) =>
+            tip.show(
+              e,
+              <>
+                <div className="t-title">
+                  {m.label} <span className="muted">({m.unit})</span>
+                </div>
+                <div className="t-row">{m.what}</div>
+                <div className="t-row" style={{ marginTop: 4 }}>
+                  {m.read}
+                </div>
+                {m.base && (
+                  <div className="t-row" style={{ marginTop: 4 }}>
+                    기준시점 {m.base}
+                  </div>
+                )}
+              </>,
+              'is-wide',
+            )
+          }
+          onMouseLeave={tip.hide}
+        >
+          {m.label}
+        </button>
+      ))}
+      {tip.node}
+    </div>
+  )
+}
+
+/* 고른 지표의 설명. 호버가 없는 터치 화면에서도 읽을 수 있어야 한다. */
+function MetricNote({ m }) {
+  if (!m) return null
+  return (
+    <p className="metric-note">
+      <b>{m.label}</b>
+      <span className="muted"> ({m.unit}{m.base ? ` · 기준시점 ${m.base}` : ''})</span>
+      {' — '}
+      {m.what} {m.read}
+    </p>
   )
 }
