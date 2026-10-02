@@ -873,9 +873,21 @@ tr.is-deleting td { opacity: 0.4; }
 /* ── 동 정보 · 민간임대 표시 ──────────────────────────────────────────
    민간임대 동은 분양 물건과 성격이 달라 시세가 다른데 실거래가에는 그 구분이 없다.
    사람이 표시해 두면 매물 순위의 비고에 파생돼 따라붙는다. */
-.rental-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.rental-check input { cursor: pointer; }
-tbody tr.is-rental { background: color-mix(in srgb, var(--warning) 7%, transparent); }
+/* 동 하나당 작은 버튼 하나. 표로 깔면 30개 동이 화면을 반쯤 먹는데, 여기서 하는
+   일은 '민간임대인 동을 골라 두는 것' 하나다. 거리는 title 로 내렸다. */
+.dong-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.dong-chip {
+  min-width: 46px; padding: 5px 9px; font-size: 12.5px; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+}
+.dong-chip:hover:not(:disabled) { border-color: var(--series-1); color: var(--text-primary); }
+.dong-chip:disabled { opacity: 0.5; cursor: default; }
+.dong-chip.is-rental {
+  background: color-mix(in srgb, var(--warning) 26%, var(--surface-1));
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  color: var(--text-primary); font-weight: 600;
+}
 
 .note-tag {
   display: inline-block; flex: none;
