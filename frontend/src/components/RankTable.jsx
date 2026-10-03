@@ -7,6 +7,7 @@ import Hint from './Hint'
 import PriceTrail from './PriceTrail'
 import RankCards from './RankCards'
 import NoteCell from './NoteCell'
+import { gapText, otherOf, toneOf, verdictOf } from './rankBasis'
 
 const TONE = {
   저평가: 'good',
@@ -19,9 +20,20 @@ const TONE = {
 /**
  * 매물 순위표. 일괄 붙여넣기 결과와 누적 순위가 같은 표를 쓴다.
  *
- * **적정가를 두 개 다 보여 준다.** 기준을 바꿨는데 적정가가 그대로면 고장난 것처럼
- * 보인다 — 실제로 그랬다. 실거래 기준과 요인 기준은 서로 다른 값이고, 선택한 쪽을
- * 강조하되 둘 다 두어야 왜 다른지가 보인다.
+ * **선택한 기준의 열만 보여 준다.**
+ *
+ * 예전에는 둘 다 깔고 선택한 쪽만 강조했다. '기준을 바꿨는데 적정가가 그대로면
+ * 고장난 것처럼 보인다' 가 이유였는데, 열이 통째로 바뀌면 그 문제는 더 분명하게
+ * 풀린다 — 바뀐 것이 색이 아니라 표 모양이라 못 알아볼 수가 없다. 대신 열이 둘
+ * 줄어 단지명·비고가 숨 쉴 자리가 생긴다.
+ *
+ * **안 보이는 쪽 값은 버리지 않는다.** 보이는 칸에 마우스를 올리면 다른 기준의
+ * 적정가와 대비가 같이 뜬다. 두 기준이 어긋나는 것 자체가 정보이기 때문이다 —
+ * 광교 84㎡ 가 실거래 기준 1위인데 요인 기준 4위로 내려간 적이 있다.
+ *
+ * **판정도 기준을 따라간다.** 서버가 `verdict`(실거래)와 `verdict_factor`(요인)를
+ * 따로 준다. 안 그러면 요인 기준 화면에서 대비는 -12% 인데 판정은 '적정' 으로
+ * 적히는 일이 생긴다 — 열을 숨기면서 생긴 문제라 같이 고쳤다.
  *
  * **같은 단지 매물만 있으면 두 기준의 순위가 같다.** 우연이 아니라 필연이다 —
  * 요인적정/실거래적정 비율이 단지 안에서 상수이기 때문이다(실측 1.1616, 폭 0.0001).
@@ -48,6 +60,7 @@ function useNarrow(query = '(max-width: 720px)') {
 
 export default function RankTable({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
   const narrow = useNarrow()
+  const isFactor = basis === 'factor'
   if (!items?.length) return null
 
   const byMarket = [...items].sort((a, b) => (a.gap_pct ?? 9e9) - (b.gap_pct ?? 9e9))
@@ -58,9 +71,20 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
     byFactor.every((x, i) => x === byMarket[i]) &&
     items.some((i) => i.gap_factor_pct != null)
   const complexes = new Set(items.map((i) => i.complex_id)).size
+  /* 요인 기준을 골랐는데 **값이 한 줄도 없는** 경우. 적합이 캐시에 없으면 서버가
+     요인 적정가를 못 낸다. 예전에는 실거래 열이 옆에 있어 표가 비어 보이지 않았는데,
+     선택한 기준의 열만 남기면서 '— 만 가득한 표' 가 될 수 있게 됐다. 그건 고장처럼
+     보이고, 왜 그런지도 안 적혀 있다. 그래서 말해 준다. */
+  const noFactor = isFactor && items.every((i) => i.gap_factor_pct == null)
 
   return (
     <>
+      {noFactor && (
+        <p className="paste-warn" style={{ marginBottom: 8 }}>
+          요인 적정가가 아직 없습니다. <b>분석</b> 탭을 한 번 열면 계산되고, 그 뒤
+          이 화면으로 돌아오면 채워집니다. 그때까지는 <b>실거래 기준</b>으로 보세요.
+        </p>
+      )}
       {narrow ? (
         <RankCards
           items={items}
@@ -82,10 +106,8 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
               <th className="num">층</th>
               <th className="num">호가</th>
               <th className="num">확인</th>
-              <th className={`num${basis === 'market' ? ' is-sort' : ''}`}>실거래 적정</th>
-              <th className={`num${basis === 'market' ? ' is-sort' : ''}`}>대비</th>
-              <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>요인 적정</th>
-              <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>대비</th>
+              <th className="num is-sort">{isFactor ? '요인 적정' : '실거래 적정'}</th>
+              <th className="num is-sort">대비</th>
               <th>판정</th>
               <th className="num">추가</th>
               <th className="col-note">비고</th>
@@ -134,39 +156,28 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                 <td className="num muted small">
                   {i.confirmed_on ? i.confirmed_on.slice(5).replace('-', '.') : '—'}
                 </td>
-                <td className={`num muted${basis === 'market' ? ' is-sort' : ''}`}>
-                  {eok(i.fair_price)}
+                <td className="num muted is-sort" title={otherOf(i, isFactor)}>
+                  {isFactor
+                    ? i.factor_price
+                      ? eok(i.factor_price)
+                      : '—'
+                    : eok(i.fair_price)}
+                  {isFactor && <FactorHint parts={i.factor_parts} />}
                 </td>
                 <td
-                  className={`num${basis === 'market' ? ' is-sort' : ''}`}
-                  data-tone={i.gap_pct < -3 ? 'good' : i.gap_pct > 3 ? 'bad' : 'mid'}
+                  className="num is-sort"
+                  title={otherOf(i, isFactor)}
+                  data-tone={toneOf(isFactor ? i.gap_factor_pct : i.gap_pct)}
                 >
-                  {i.gap_pct > 0 ? '+' : ''}
-                  {fmt(i.gap_pct, 1)}%
-                </td>
-                <td className={`num muted${basis === 'factor' ? ' is-sort' : ''}`}>
-                  {i.factor_price ? eok(i.factor_price) : '—'}
-                  <FactorHint parts={i.factor_parts} />
-                </td>
-                <td
-                  className={`num${basis === 'factor' ? ' is-sort' : ''}`}
-                  data-tone={
-                    i.gap_factor_pct == null
-                      ? null
-                      : i.gap_factor_pct < -3
-                        ? 'good'
-                        : i.gap_factor_pct > 3
-                          ? 'bad'
-                          : 'mid'
-                  }
-                >
-                  {i.gap_factor_pct == null
-                    ? '—'
-                    : `${i.gap_factor_pct > 0 ? '+' : ''}${fmt(i.gap_factor_pct, 1)}%`}
+                  {gapText(isFactor ? i.gap_factor_pct : i.gap_pct)}
                 </td>
                 <td>
-                  <span className="verdict" data-tone={TONE[i.verdict]} style={{ fontSize: 13 }}>
-                    {i.verdict}
+                  <span
+                    className="verdict"
+                    data-tone={TONE[verdictOf(i, isFactor)]}
+                    style={{ fontSize: 13 }}
+                  >
+                    {verdictOf(i, isFactor) || '—'}
                   </span>
                 </td>
                 {/* 우리가 이 줄을 **언제 넣었나**. 매물에 적힌 '확인' 일자와 다르다 —

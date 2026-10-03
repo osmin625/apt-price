@@ -92,6 +92,11 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
                 fp = round(m["factor_price"] * k)
                 item["factor_price"] = fp
                 item["gap_factor_pct"] = round((ask - fp) / fp * 100, 1)
+                # 판정도 기준별로 따로 낸다. 'verdict' 는 늘 실거래 기준인데,
+                # 표에서 선택한 기준의 열만 보이게 되면서 요인 기준을 고른 화면에
+                # 실거래 판정이 남으면 **숫자와 판정이 어긋나 보인다** — 대비가
+                # -12% 인데 '적정' 이라고 적히는 식이다.
+                item["verdict_factor"] = verdict_of(item["gap_factor_pct"])
                 # 요인 분해도 같이 보낸다. 표에서 행에 호버하면 "왜 이 값인지" 를
                 # 바로 볼 수 있어야 한다 — 순위만 보고는 납득할 수 없다.
                 item["factor_parts"] = {

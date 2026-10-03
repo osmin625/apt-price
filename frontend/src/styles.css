@@ -444,6 +444,9 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 /* 지금 정렬 기준인 쪽을 굵게 — 표의 is-sort 와 같은 뜻이다 */
 .rc-basis .is-sort { color: var(--text-primary); font-weight: 600; }
 .rc-basis .is-sort em { color: var(--text-primary); }
+/* 안 보이는 쪽 기준. 카드에는 호버가 없으니 한 줄로 내려 적는다 — 열을 숨겼다고
+   값까지 버리지는 않는다. 흐리게 둬서 지금 기준과 섞이지 않게 한다. */
+.rc-basis .rc-other { flex-basis: 100%; font-size: 11.5px; }
 
 .rc-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
 .rc-foot .ghost { padding: 5px 10px; font-size: 12px; }

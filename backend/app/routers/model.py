@@ -529,18 +529,31 @@ def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
         i["rank"] = None
 
     # DB 에 남긴다 — 같은 호가는 중복으로 쌓이지 않고, 값이 바뀌면 새 기록이 된다.
+    #
+    # 줄마다 **이번에 처음 들어온 것인지**를 같이 돌려준다.
+    #
+    # 북마클릿은 누를 때마다 '지금까지 담은 전부' 를 클립보드에 넣는다(여러 단지를
+    # 돌고 마지막에 한 번만 붙여넣게 하려는 것이다). 그래서 두 번째 붙여넣기부터는
+    # 결과에 **이미 본 매물이 섞인다** — 새로 뭐가 들어왔는지 눈으로 골라야 했다.
+    #
+    # `record()` 가 이미 'created' / 'seen' 을 가린다. 그 값을 버리지 않고 줄에 붙이면
+    # 화면에서 새 것만 추릴 수 있다. 실패한 줄은 None 으로 둔다 — 저장이 안 된 것을
+    # '새 것' 이라고 말하면 거짓이고, '있던 것' 이라고 말해도 거짓이다.
     saved = 0
     for i in ok + rest:
         try:
-            if quotes.record(
+            got = quotes.record(
                 db, complex_id=i["complex_id"], dong=i.get("dong"),
                 exclusive_area=i["exclusive_area"], floor=i.get("floor"),
                 floor_band=i.get("floor_band"), asking_price=i["asking_price"],
                 confirmed_on=i.get("confirmed_on"), memo=i.get("memo"),
-            ) == "created":
+            )
+            i["is_new"] = got == "created"
+            if got == "created":
                 saved += 1
         except Exception:
             db.rollback()
+            i["is_new"] = None
 
     return {
         "count": len(merged),

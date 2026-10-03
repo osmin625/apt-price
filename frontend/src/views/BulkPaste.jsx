@@ -17,6 +17,16 @@ import RankTable from '../components/RankTable'
  */
 export default function BulkPaste({ months, incoming }) {
   const [text, setText] = useState('')
+  /* 새로 들어온 것만 볼까.
+   *
+   * 북마클릿은 누를 때마다 **지금까지 담은 전부**를 클립보드에 넣는다 — 여러 단지를
+   * 돌고 마지막에 한 번만 붙여넣게 하려는 것이다. 그 대가로 두 번째 붙여넣기부터는
+   * 결과에 이미 본 매물이 섞이고, 새로 뭐가 들어왔는지 눈으로 골라야 했다.
+   *
+   * 기본을 **새 것만**으로 둔다. 붙여넣은 직후에 궁금한 것은 '이번에 뭐가 늘었나'
+   * 이고, 전체 목록은 어차피 매물 순위 탭에 늘 있다. 다만 **숨긴 건수는 적는다** —
+   * 몇 건이 어디로 갔는지 안 보이면 읽다 만 줄 알게 된다. */
+  const [onlyNew, setOnlyNew] = useState(true)
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
   const [basis, setBasis] = useState('market')
@@ -58,6 +68,13 @@ export default function BulkPaste({ months, incoming }) {
       setBusy(false)
     }
   }
+
+  /* `is_new` 가 없는 응답(저장이 실패한 줄, 또는 옛 백엔드)은 **숨기지 않는다.**
+     모르는 것을 '이미 읽은 것' 으로 치면 읽은 매물이 조용히 사라진다. */
+  const items = res?.items || []
+  const newCount = items.filter((i) => i.is_new !== false).length
+  const shownItems = onlyNew ? items.filter((i) => i.is_new !== false) : items
+  const hidden = items.length - shownItems.length
 
   return (
     <div className="card">
@@ -102,11 +119,24 @@ export default function BulkPaste({ months, incoming }) {
           {busy
             ? <span className="live">읽는 중…</span>
             : res
-              ? `${res.found}건 발견 · 중복 ${res.merged_away}건 합쳐 ${res.count}건 · 새로 저장 ${res.new_saved}건`
+              ? `${res.found}건 발견 · 중복 ${res.merged_away}건 합쳐 ${res.count}건 · 새로 저장 ${res.new_saved}건` +
+                (onlyNew && hidden > 0 ? ` · 이미 읽은 ${hidden}건 숨김` : '')
               : '붙여넣는 즉시 읽습니다.'}
         </span>
         {res && (
           <>
+            {[
+              [true, `새로 ${newCount}건`],
+              [false, `전부 ${res.items.length}건`],
+            ].map(([k, t]) => (
+              <button
+                key={String(k)}
+                className={`chip${onlyNew === k ? ' on' : ''}`}
+                onClick={() => setOnlyNew(k)}
+              >
+                {t}
+              </button>
+            ))}
             {[
               ['market', '실거래 기준'],
               ['factor', '요인 기준'],
@@ -139,7 +169,14 @@ export default function BulkPaste({ months, incoming }) {
 
       {res?.items?.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <RankTable items={res.items} basis={basis} />
+          {shownItems.length > 0 ? (
+            <RankTable items={shownItems} basis={basis} />
+          ) : (
+            <p className="empty">
+              새로 들어온 매물이 없습니다. 담아 둔 {res.items.length}건은 이미 읽은
+              것입니다 — <b>전부</b>를 누르면 보입니다.
+            </p>
+          )}
         </div>
       )}
 

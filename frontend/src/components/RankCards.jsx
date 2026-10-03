@@ -1,4 +1,5 @@
 import { eok, fmt } from './Charts'
+import { gapText, otherOf, verdictOf } from './rankBasis'
 import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
@@ -28,12 +29,15 @@ const TONE = {
  *
  *   1) 순위 · 단지 · 판정      — 이 매물이 뭐고 쌀까 비쌀까
  *   2) 호가 · 괴리율           — 가장 크게. 답이 여기 있다
- *   3) 두 기준의 적정가         — 근거
+ *   3) 선택한 기준의 적정가    — 근거
  *   4) 확인일자 · 접힌 건수     — 곁다리
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
 export default function RankCards({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
+  /* 표와 **같은 규칙**을 쓴다. 각자 고르면 같은 매물이 표와 카드에서 다른 판정을
+     달게 된다 — 화면 폭에 따라 답이 달라지는 셈이다. */
+  const isFactor = basis === 'factor'
   return (
     <ul className="rank-cards">
       {items.map((i, n) => {
@@ -53,8 +57,8 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
               ) : (
                 <span className="rc-name">{i.complex_name}</span>
               )}
-              <span className="verdict" data-tone={TONE[i.verdict]}>
-                {i.verdict}
+              <span className="verdict" data-tone={TONE[verdictOf(i, isFactor)]}>
+                {verdictOf(i, isFactor) || '—'}
               </span>
             </div>
 
@@ -80,28 +84,16 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
               </span>
             </div>
 
+            {/* 선택한 기준만 적는다. 다른 기준 값은 호버/탭으로 내린다 — 두 기준이
+                어긋나는 것 자체가 정보라, 안 보인다고 버리지는 않는다. */}
             <div className="rc-basis">
-              <span className={basis === 'market' ? 'is-sort' : ''}>
-                실거래 {eok(i.fair_price)}
-                {i.gap_pct != null && (
-                  <em>
-                    {' '}
-                    {i.gap_pct > 0 ? '+' : ''}
-                    {fmt(i.gap_pct, 1)}%
-                  </em>
-                )}
+              <span className="is-sort" title={otherOf(i, isFactor)}>
+                {isFactor ? '요인' : '실거래'}{' '}
+                {isFactor ? (i.factor_price ? eok(i.factor_price) : '—') : eok(i.fair_price)}
+                <em> {gapText(isFactor ? i.gap_factor_pct : i.gap_pct)}</em>
+                {isFactor && <FactorHint parts={i.factor_parts} />}
               </span>
-              <span className={basis === 'factor' ? 'is-sort' : ''}>
-                요인 {i.factor_price ? eok(i.factor_price) : '—'}
-                {i.gap_factor_pct != null && (
-                  <em>
-                    {' '}
-                    {i.gap_factor_pct > 0 ? '+' : ''}
-                    {fmt(i.gap_factor_pct, 1)}%
-                  </em>
-                )}
-                <FactorHint parts={i.factor_parts} />
-              </span>
+              <span className="rc-other muted small">{otherOf(i, isFactor)}</span>
             </div>
 
             {/* 비고는 카드에서도 고칠 수 있어야 한다. 좁은 화면이라고 읽기만
