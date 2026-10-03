@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import Hint from '../components/Hint'
@@ -15,12 +15,34 @@ import RankTable from '../components/RankTable'
  * 순위 상위가 같은 값 여러 줄로 채워져 아무것도 알 수 없다 — 서버에서 합치고
  * 몇 곳에 올라와 있는지를 `x4` 로 표시한다.
  */
-export default function BulkPaste({ months }) {
+export default function BulkPaste({ months, incoming }) {
   const [text, setText] = useState('')
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
   const [basis, setBasis] = useState('market')
   const [err, setErr] = useState(null)
+
+  /* 바깥(App 의 전역 Ctrl+V)에서 밀어 넣은 텍스트. 탭을 열고 입력칸을 누르는
+     과정을 없앤다 — 북마클릿으로 담은 뒤 대시보드에서 그냥 붙여넣으면 끝이다. */
+  useEffect(() => {
+    if (!incoming) return
+    setText(incoming.text)
+    run(incoming.text)
+    // incoming.at 이 바뀔 때마다 — 같은 글을 다시 붙여넣어도 동작해야 한다
+  }, [incoming?.at])
+
+  /* 클립보드에서 바로 가져오기. Ctrl+V 조차 생략한다.
+     localhost 는 보안 컨텍스트라 readText 가 허용된다. 권한이 막히면 그렇게 말한다. */
+  const fromClipboard = async () => {
+    try {
+      const t = await navigator.clipboard.readText()
+      if (!t.trim()) return setErr('클립보드가 비어 있습니다.')
+      setText(t)
+      run(t)
+    } catch (e) {
+      setErr('클립보드를 읽지 못했습니다. 입력칸에 Ctrl+V 로 붙여넣어 주세요.')
+    }
+  }
 
   const run = async (value, nextBasis = basis) => {
     const t = (value ?? text).trim()
@@ -49,6 +71,15 @@ export default function BulkPaste({ months }) {
           ]}
         />
       </h2>
+
+      <div className="bulk-actions">
+        <button className="ghost" onClick={fromClipboard} disabled={busy}>
+          {busy ? '읽는 중…' : '📋 클립보드에서 가져오기'}
+        </button>
+        <span className="muted small">
+          또는 아래에 붙여넣기. 대시보드 아무 곳에서나 <b>Ctrl+V</b> 해도 됩니다.
+        </span>
+      </div>
 
       <textarea
         className="bulk-input"

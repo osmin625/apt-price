@@ -897,3 +897,7 @@ tr.is-deleting td { opacity: 0.4; }
   color: var(--text-secondary);
 }
 .note-ro .note-tag { margin-right: 4px; }
+
+/* 붙여넣기 단축 — 북마클릿으로 담은 뒤 창만 바꾸면 끝나게 한다 */
+.bulk-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 8px; }
+.bulk-actions .muted.small { line-height: 1.5; }

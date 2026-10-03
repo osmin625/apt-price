@@ -22,7 +22,7 @@ import BulkPaste from './BulkPaste'
  *
  * 요인별 비교는 분해 모델 탭의 계수로 같은 질문에 답할 수 있다.
  */
-export default function CompareView({ months: initialMonths }) {
+export default function CompareView({ months: initialMonths, incoming }) {
   const [months, setMonths] = useState(initialMonths ?? 12)
   const [saved, setSaved] = useState([])
   const [basis, setBasis] = useState('market')
@@ -67,7 +67,7 @@ export default function CompareView({ months: initialMonths }) {
         </div>
       </div>
 
-      <BulkPaste months={months} />
+      <BulkPaste months={months} incoming={incoming} />
 
       {saved.length > 0 && (
         <SavedListings

@@ -45,11 +45,36 @@ export default function App() {
   const [health, setHealth] = useState(null)
   const [detailId, setDetailId] = useState(null)
   const [snap, setSnap] = useState(null)
+  // 전역 Ctrl+V 로 들어온 매물 텍스트. `at` 이 바뀔 때마다 다시 읽는다.
+  const [pasted, setPasted] = useState(null)
 
   useEffect(() => {
     api.filters().then(setMeta).catch(() => setMeta(null))
     api.health().then(setHealth).catch(() => setHealth(null))
     if (STATIC_MODE) snapshotMeta().then(setSnap)
+  }, [])
+
+  /* 대시보드 **아무 곳에서나** Ctrl+V 하면 매물로 읽는다.
+   *
+   * 북마클릿으로 담은 뒤 '매물 분석 탭으로 가서 입력칸을 누르고 붙여넣기' 를 거쳐야
+   * 했는데, 그 세 걸음이 전체 과정에서 제일 번거로웠다. 창을 바꾸고 Ctrl+V 하면 끝나게 한다.
+   *
+   * 입력칸 안에서 누른 붙여넣기는 건드리지 않는다 — 비고를 적다가 붙여넣는 것까지
+   * 가로채면 못 쓴다. 매물처럼 생긴 글(가격 줄이 있는)만 받는다. */
+  useEffect(() => {
+    if (STATIC_MODE) return // 정적 사이트에서는 쓰기가 안 된다
+    const onPaste = (e) => {
+      const el = e.target
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      const text = e.clipboardData?.getData('text') || ''
+      if (!/^\s*(매매|전세|월세)\s*[\d억]/m.test(text)) return
+      e.preventDefault()
+      setTab('compare')
+      setDetailId(null)
+      setPasted({ text, at: Date.now() })
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
   }, [])
 
   const openDetail = (id) => {
@@ -144,7 +169,7 @@ export default function App() {
           onSelect={openDetail}
         />
       ) : (
-        <CompareView months={Math.max(filters.months, 12)} />
+        <CompareView months={Math.max(filters.months, 12)} incoming={pasted} />
       )}
     </div>
   )
