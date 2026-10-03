@@ -23,32 +23,15 @@ export default function FactorPrice({ fair, model, gap, gapFactor }) {
 
   return (
     <div className="factor-price">
-      <div className="fp-heads">
-        <div className="fp-head">
-          <span className="fair-label">실거래 기준</span>
-          <span className="fair-value">{eok(fair.fair_price)}</span>
-          <span className="fair-sub">
-            같은 단지·평형 {fair.sample_count}건
-            {gap ? ` · 호가 ${gap.pct > 0 ? '+' : ''}${gap.pct}%` : ''}
-          </span>
-        </div>
-        <div className="fp-head">
-          <span className="fair-label">요인 기준</span>
-          <span className="fair-value">{eok(adj)}</span>
-          <span className="fair-sub">
-            펀더멘털만
-            {gapFactor ? ` · 호가 ${gapFactor.pct > 0 ? '+' : ''}${gapFactor.pct}%` : ''}
-          </span>
-        </div>
-        <div className="fp-head">
-          <span className="fair-label">단지 고유 프리미엄</span>
-          <span className="fair-value">
-            {model.complex_premium_pct > 0 ? '+' : ''}
-            {fmt(model.complex_premium_pct, 1)}%
-          </span>
-          <span className="fair-sub">요인으로 설명 안 되는 부분</span>
-        </div>
-      </div>
+      {/* 금액 세 개는 카드 위에 이미 있다. 여기서는 **왜 갈리는지**만 본다. */}
+      <p className="fp-lead">
+        요인 기준 <b>{eok(adj)}</b> — 실거래 기준과의 차이{' '}
+        <b>
+          {model.complex_premium_pct > 0 ? '+' : ''}
+          {fmt(model.complex_premium_pct, 1)}%
+        </b>
+        <span className="muted small"> 가 이 단지에 붙어 있는 고유 프리미엄입니다.</span>
+      </p>
 
       <table className="fp-table">
         <thead>

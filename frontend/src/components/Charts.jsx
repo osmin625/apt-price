@@ -7,15 +7,18 @@ const fmt = (n, digits = 0) =>
 
 export function useTooltip() {
   const [tip, setTip] = useState(null)
-  const show = useCallback((e, content) => {
-    setTip({ x: e.clientX, y: e.clientY, content })
+  // 세 번째 인자는 덧붙일 클래스다. 차트 값은 한 줄로 붙는 게 읽기 좋지만
+  // (`white-space: nowrap`), 설명문은 그대로 두면 화면 밖까지 한 줄로 뻗는다.
+  // `is-wide` 를 주면 줄바꿈된다.
+  const show = useCallback((e, content, cls = '') => {
+    setTip({ x: e.clientX, y: e.clientY, content, cls })
   }, [])
   const hide = useCallback(() => setTip(null), [])
   const node = tip ? (
     <div
-      className="chart-tooltip"
+      className={`chart-tooltip${tip.cls ? ` ${tip.cls}` : ''}`}
       style={{
-        left: Math.min(tip.x + 14, window.innerWidth - 220),
+        left: Math.min(tip.x + 14, window.innerWidth - (tip.cls ? 340 : 220)),
         top: Math.max(tip.y - 12, 8),
       }}
     >
@@ -158,10 +161,18 @@ export function PremiumBars({
                 e,
                 <>
                   <div className="t-title">{r.band}</div>
+                  {/* `factor` 는 구간 통계 경로에만 있다. 회귀에서 온 행(요인별
+                      보정계수의 층·노선)에는 없어서 예전에는 호버하는 순간 터졌다. */}
                   <div className="t-row">
-                    보정계수 {r.factor.toFixed(3)} ({positive ? '+' : ''}
-                    {r.premium_pct}%)
+                    {positive ? '+' : ''}
+                    {r.premium_pct}%
+                    {r.factor != null ? ` (보정계수 ${r.factor.toFixed(3)})` : ''}
                   </div>
+                  {r.ci_pct && r.ci_pct[0] !== r.ci_pct[1] && (
+                    <div className="t-row">
+                      95% 신뢰구간 {r.ci_pct[0]} ~ {r.ci_pct[1]}%
+                    </div>
+                  )}
                   <div className="t-row">같은 단지·같은 평형 중앙값 대비</div>
                 </>,
               )
@@ -296,3 +307,14 @@ export { fmt }
 /** 만원 단위 정수를 '억' 표기로. 3.9억 / 12.35억. */
 export const eok = (manwon) =>
   manwon == null ? '—' : `${(manwon / 10000).toFixed(2).replace(/\.?0+$/, '')}억`
+
+/** 작은 지표 한 칸. 여러 화면이 같은 모양으로 쓴다. */
+export function Tile({ label, value, sub }) {
+  return (
+    <div className="tile">
+      <div className="label">{label}</div>
+      <div className="value sm">{value}</div>
+      {sub ? <div className="note">{sub}</div> : null}
+    </div>
+  )
+}

@@ -42,17 +42,37 @@ _pool: ProcessPoolExecutor | None = None
 _inflight: dict[tuple, Future] = {}
 
 # 이 프로세스가 **워커 자신**인지. 풀을 만들 때 초기화 함수로 켠다.
-#
-# 윈도우 spawn 은 자식에서 `__main__` 을 다시 import 한다. uvicorn 의 `__main__.py`
-# 에는 `if __name__ == "__main__"` 가드가 있어 현재는 문제가 없지만, 가드 없는
-# 진입점으로 띄우면 워커가 앱 기동 경로를 다시 타 워커를 또 만들 수 있다.
-# 풀 생성은 어차피 여기 한 곳이므로 못을 박아 둔다.
 _IS_WORKER = False
 
 
 def _mark_worker() -> None:
     global _IS_WORKER
     _IS_WORKER = True
+
+
+def is_worker() -> bool:
+    """이 프로세스가 적합 워커인가.
+
+    ## 모듈 전역만으로는 못 막는다
+
+    `_IS_WORKER` 는 `app.services.fit_worker` 라는 **모듈 객체**에 붙은 값이다. 워커가
+    같은 모듈을 다른 이름으로(다른 sys.path 경로로) 한 번 더 import 하면 전역이 둘이
+    되고, `run()` 이 읽는 쪽은 여전히 False 다. 그러면 워커가 풀을 또 만든다.
+
+    실제로 그렇게 됐다. 프로세스 목록에서 앱(18008) → 워커(4356) → **또 워커(3336)**
+    가 잡혔고, 3336 의 커맨드라인은 `spawn_main(parent_pid=4356)` 이었다. 워커가 워커에
+    적합을 맡기고 기다리는 동안 서버 전체가 멈췄다.
+
+    `multiprocessing.parent_process()` 는 모듈 정체성과 무관하게 **프로세스 단위**로
+    답한다 — 메인 프로세스에서만 None 이고, spawn/fork 로 뜬 자식에서는 항상 부모가
+    잡힌다. 어떤 경로로 import 되었든 이 판정은 흔들리지 않는다.
+    """
+    if _IS_WORKER:
+        return True
+    try:
+        return multiprocessing.parent_process() is not None
+    except Exception:  # 아주 오래된/특이한 런타임 대비
+        return False
 
 
 def compute(months: int, spec: str) -> dict:
@@ -70,6 +90,10 @@ def compute(months: int, spec: str) -> dict:
 
 def _pool_unlocked() -> ProcessPoolExecutor:
     global _pool
+    # 워커는 풀을 만들지 않는다. `run()` 에서 이미 걸러지지만, 풀이 생기는 곳은 여기
+    # 한 곳뿐이므로 여기에도 못을 박아 둔다 — 한 번 뚫려서 서버가 멈춘 적이 있다.
+    if is_worker():
+        raise RuntimeError("적합 워커 안에서는 워커를 또 만들지 않는다")
     if _pool is None:
         # 시작 방식을 명시한다. 플랫폼 기본값에 맡기면 리눅스에서 fork 가 걸려
         # 부모의 DB 커넥션·스레드 상태를 그대로 물려받는다.
@@ -97,7 +121,7 @@ def run(months: int, spec: str, key: tuple) -> dict:
     `key` 는 호출자의 캐시 키다. 같은 키로 동시에 들어온 요청은 **하나의 계산을
     공유한다** — 안 그러면 탭 두 개만 열어도 14초짜리 적합이 두 번 돈다.
     """
-    if IN_PROCESS or _IS_WORKER:
+    if IN_PROCESS or is_worker():
         return compute(months, spec)
 
     with _lock:

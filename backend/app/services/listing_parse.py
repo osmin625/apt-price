@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 from .. import pricing
 
@@ -117,14 +118,31 @@ class ParsedListing:
     exclusive_area: float | None = None
     supply_area: float | None = None      # 공급면적 — 평당가 기준 차이를 짚어 주는 데만 쓴다
     area_is_explicit: bool = False        # '전용' 이라고 적혀 있었는가
+    # 전용면적이 **정수 평**에서 왔다면 그 값. 네이버는 평을 버림해서 쓰므로
+    # (49.58㎡ = 14.998평 → '전용14'), 점이 아니라 [N, N+1)평 구간으로 봐야 한다.
+    area_pyeong: int | None = None
     floor: int | None = None
     total_floor: int | None = None        # '8/15층' 의 15. DB 의 관측 최고층보다 정확하다
     dong: str | None = None               # '129동' — 있으면 역거리를 그 동 기준으로 잡는다
     floor_band: str | None = None
     asking_price: int | None = None       # 만원
     stated_ppp: int | None = None         # 매물에 적힌 평당가 (만원/평)
+    # '3억 2,500 ~ 3억 8,000' 처럼 범위로 올라온 경우. 낮은 쪽을 쓰되 사실을 남긴다.
+    price_is_range: bool = False
     candidates: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+    def warn(self, field: str | None, text: str) -> None:
+        """경고를 **어느 값에 대한 것인지**와 함께 쌓는다.
+
+        화면에서 경고 문구를 줄줄이 늘어놓으면 카드가 금방 길어진다. 대신 해당
+        값(전용면적·층·호가…)에 호버했을 때 뜨게 하려면 그 대응을 여기서 정해 줘야
+        한다. 프런트에서 문구를 키워드로 분류하는 방식은 문구를 고칠 때마다 조용히
+        깨진다.
+
+        field: complex | area | floor | dong | price | None(일반)
+        """
+        self.warnings.append({"field": field, "text": text})
 
     def as_dict(self) -> dict:
         return {
@@ -133,12 +151,14 @@ class ParsedListing:
             "exclusive_area": self.exclusive_area,
             "supply_area": self.supply_area,
             "area_is_explicit": self.area_is_explicit,
+            "area_pyeong": self.area_pyeong,
             "floor": self.floor,
             "total_floor": self.total_floor,
             "dong": self.dong,
             "floor_band": self.floor_band,
             "asking_price": self.asking_price,
             "stated_ppp": self.stated_ppp,
+            "price_is_range": self.price_is_range,
             "candidates": self.candidates,
             "warnings": self.warnings,
         }
@@ -212,10 +232,9 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
         # 평형과 대조한 뒤(`routers/model._resolve_area`)에나 나오므로, 여기서는
         # **환산 사실만** 적는다. '전용 112.4㎡' 라고 써 두면 바로 다음 줄에서
         # '공급으로 보인다' 고 뒤집히게 된다.
-        warns.append(
+        warns.append({"field": "area", "text":
             "평 → ㎡ 환산(1평 = 3.305785㎡): "
-            + ", ".join(f"{py:g}평 → {m2:.2f}㎡" for py, m2 in converted)
-        )
+            + ", ".join(f"{py:g}평 → {m2:.2f}㎡" for py, m2 in converted)})
 
     exclusive: float | None = None
     excl_span: tuple[int, int] | None = None
@@ -230,7 +249,8 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
             supply, exclusive = float(m.group(1)), float(m.group(2))
             if exclusive > supply:
                 supply, exclusive = exclusive, supply
-                warns.append("공급/전용 순서가 뒤바뀐 것 같아 작은 쪽을 전용으로 봤습니다.")
+                warns.append({"field": "area",
+                              "text": "공급/전용 순서가 뒤바뀐 것 같아 작은 쪽을 전용으로 봤습니다."})
             return exclusive, supply, True, warns
 
         m = _AREA_ONE.search(text)
@@ -290,6 +310,36 @@ def parse_stated_ppp(text: str) -> int | None:
     return int(m.group(1).replace(",", "")) if m else None
 
 
+_HEAD_DONG = re.compile(r"\s*(?:\d{1,4}|[가-힣])\s*동\s*$")
+
+
+def _head_name(text: str) -> str:
+    """첫 줄에서 동 표기를 뗀 **단지명 부분**의 정규화 키.
+
+    '임광 8동' → '임광', '주공그린빌5 505동' → '주공그린빌5'.
+    동이 없으면 첫 줄 전체를 쓴다.
+    """
+    line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    return pricing.name_key(_HEAD_DONG.sub("", line.strip()))
+
+
+def name_fragments(text: str) -> list[str]:
+    """첫 줄의 단지명을 **조각으로** 나눈다. '신성,신안,쌍용,진흥' → [신성, 신안, 쌍용, 진흥]
+
+    시공사 여러 곳이 함께 지은 단지를 네이버는 한 줄로 묶어 쓰는데, 국토부는 시공사마다
+    따로 기록한다. 수원 영통동 '신성,신안,쌍용,진흥' 은 국토부에 '신나무실신성'·
+    '신나무실신안'·'신나무실쌍용'·'신나무실진흥' 네 단지로 들어 있다(각 60여 건).
+    이름만으로는 1:N 이라 고를 수 없고, 그래서 조각을 따로 내어 준다.
+
+    조각 하나로는 못 고른다 — '쌍용' 은 전국에 흔하다. 어느 단지인지는 **동 번호**가
+    가른다(`routers/model._resolve_by_dong`).
+    """
+    line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    line = _HEAD_DONG.sub("", line.strip())
+    parts = re.split(r"[,/·∙・]+", line)
+    return [p for p in (x.strip() for x in parts) if len(p) >= 2]
+
+
 def _name_candidates(text: str, complexes: list) -> list[dict]:
     """텍스트 안에서 우리 DB 의 단지명을 찾는다.
 
@@ -303,6 +353,26 @@ def _name_candidates(text: str, complexes: list) -> list[dict]:
         nk = cx.name_key or pricing.name_key(cx.name)
         if len(nk) >= 3 and nk in key:
             hits.append((len(nk), cx, True))
+
+    if not hits:
+        # **두 글자 단지**는 위 규칙으로 영원히 못 찾는다. `임광`(수원 매탄동, 1,320세대)
+        # 처럼 실재하는 단지가 2,469곳 중 346곳(14%)이나 된다.
+        #
+        # 길이 제한이 있던 이유는 오탐이다. `현대`·`대우` 같은 두 글자를 본문 전체에서
+        # 찾으면 '현대건설 시공' 같은 홍보문구에 걸린다. 그래서 **찾는 자리를 좁힌다** —
+        # 단지명은 목록의 첫 줄에 있고, 그 줄은 '임광 8동' 처럼 이름과 동뿐이다.
+        # 거기서 동을 떼고 남은 것과 **정확히 같을 때만** 인정한다.
+        head = _head_name(text)
+        if head:
+            same = [
+                cx for cx in complexes
+                if (cx.name_key or pricing.name_key(cx.name)) == head
+            ]
+            # 같은 이름이 여러 곳이면(`현대` 는 장안구에만 네 곳) 찍지 않는다.
+            # 후보로만 올려 사용자가 고르게 한다.
+            exact = len(same) == 1
+            for cx in same:
+                hits.append((len(head), cx, exact))
 
     if not hits:
         # 완전 포함이 없으면 **앞부분이 겹치는** 단지를 후보로 올린다.
@@ -336,17 +406,111 @@ def _name_candidates(text: str, complexes: list) -> list[dict]:
     ]
 
 
+# 목록에서 매물이 시작되는 지점. 네이버 목록은 **단지명 → 가격 → 아파트…** 3줄이
+# 반복되고 나머지(중개사명·홍보문구·날짜·'관심매물')는 전부 노이즈다.
+_PRICE_LINE = re.compile(r"^\s*(매매|전세|월세)\s*[\d억]")
+# '3억 2,500 ~ 3억 8,000' — 중개사 여러 곳이 다른 값을 올린 경우 범위로 나온다.
+_PRICE_RANGE = re.compile(r"[~〜]\s*\d")
+
+# '집주인확인매물 2026.09.23' / '확인매물 2026.09.23' — 매물마다 붙는 **확인일자**다.
+#
+# 이 줄을 지금까지 노이즈로 버렸는데, 그러면 안 된다. 붙여넣은 시각은 한 번에 넣은
+# 매물이 전부 같으므로 목록 안에서 시점을 가를 수 없다. 매물이 **언제 시점의 것인지**를
+# 말해 주는 단서는 이 날짜뿐이다.
+_CONFIRMED = re.compile(
+    r"확인[^\n\d]{0,8}(20\d\d|\d\d)\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})"
+)
+_DATE_ANY = re.compile(r"(20\d\d)\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})")
+_REL_AGO = re.compile(r"(\d{1,3})\s*(일|주|개월)\s*전")
+
+
+def parse_confirmed_on(text: str, today: date | None = None) -> date | None:
+    """매물의 확인일자. '확인' 이 붙은 날짜를 먼저 보고, 없으면 아무 날짜나 본다.
+
+    네이버는 **현재 올라와 있는 매물만** 보여 주므로 이 날짜는 '언제 올라왔나' 가
+    아니라 '마지막으로 확인된 날' 이다. 그러니 이 날짜가 다르다고 해서 두 매물이
+    다른 시기에 존재했다는 뜻은 아니다 — 둘 다 지금 올라와 있다. 그래도 매물마다
+    다르므로 목록 안에서 시점을 구분하고 거를 수 있는 유일한 값이다.
+    """
+    today = today or date.today()
+    m = _CONFIRMED.search(text) or _DATE_ANY.search(text)
+    if m:
+        y, mo, d = m.group(1), int(m.group(2)), int(m.group(3))
+        y = int(y) if len(y) == 4 else 2000 + int(y)
+        try:
+            got = date(y, mo, d)
+        except ValueError:
+            return None
+        # 미래 날짜는 잘못 읽은 것이다. 없는 것으로 친다.
+        return got if got <= today else None
+    m = _REL_AGO.search(text)
+    if m:
+        unit = m.group(2)
+        days = int(m.group(1)) * (1 if unit == "일" else 7 if unit == "주" else 30)
+        return today - timedelta(days=days)
+    return None
+
+
+
+def split_listings(text: str) -> list[dict]:
+    """붙여넣은 목록을 매물 단위로 쪼갠다.
+
+    **덩어리 전체를 넘기지 않고 3줄만 떼어낸다.** 홍보문구에 '임대분양가27,000'
+    같은 숫자가 섞여 있어 통째로 넘기면 가격·면적 파서가 엉뚱한 값을 집는다.
+    필요한 것은 단지명 줄, 가격 줄, 그리고 면적·층이 든 줄뿐이다.
+
+    매물의 시작은 '**다음 줄이 가격 줄인 줄**'로 잡는다. 단지명을 DB와 대조해
+    찾는 방법도 있지만, 그러면 DB에 없는 단지가 통째로 사라져 몇 건이 빠졌는지도
+    알 수 없게 된다.
+    """
+    lines = text.splitlines()
+    n = len(lines)
+
+    def next_nonblank(i: int) -> int:
+        while i < n and not lines[i].strip():
+            i += 1
+        return i
+
+    starts: list[tuple[int, int]] = []  # (단지명 줄, 가격 줄)
+    for i in range(n - 1):
+        if not lines[i].strip():
+            continue
+        j = next_nonblank(i + 1)
+        if j < n and _PRICE_LINE.match(lines[j]):
+            starts.append((i, j))
+
+    out: list[str] = []
+    for k, (head, price) in enumerate(starts):
+        limit = starts[k + 1][0] if k + 1 < len(starts) else n
+        spec = next_nonblank(price + 1)
+        block = [lines[head], lines[price]]
+        # 면적·층이 든 줄. 보통 가격 바로 다음이지만 한두 줄 밀릴 때가 있다.
+        for idx in range(spec, min(spec + 3, limit)):
+            t = lines[idx]
+            if "㎡" in t or "평" in t or "층" in t:
+                block.append(t)
+                break
+        # 확인일자는 **버리지 않는다**. 다만 3줄 블록에 섞으면 '2026.09.23' 을
+        # 가격·면적 파서가 집을 수 있으므로, 텍스트가 아니라 따로 실어 보낸다.
+        out.append({
+            "text": "\n".join(block),
+            "confirmed_on": parse_confirmed_on("\n".join(lines[head:limit])),
+        })
+    return out
+
+
 def parse_listing(text: str, complexes: list) -> ParsedListing:
     """붙여넣은 텍스트 한 덩이에서 매물 정보를 뽑는다."""
     out = ParsedListing()
     if not text or not text.strip():
-        out.warnings.append("붙여넣은 내용이 비어 있습니다.")
+        out.warn(None, "붙여넣은 내용이 비어 있습니다.")
         return out
 
     # 링크만 붙여넣은 경우를 먼저 잡아 준다 — 왜 안 되는지 알려줘야 한다.
     stripped = text.strip()
     if re.fullmatch(r"https?://\S+", stripped):
-        out.warnings.append(
+        out.warn(
+            None,
             "링크만으로는 매물 정보를 알 수 없습니다. 네이버 부동산 링크에는 "
             "지도 좌표와 검색 조건만 들어 있는 경우가 많고, 매물 페이지를 자동으로 "
             "읽어오는 것은 이용약관 문제가 있습니다. 매물 화면의 **텍스트**를 "
@@ -360,10 +524,16 @@ def parse_listing(text: str, complexes: list) -> ParsedListing:
     body = _STATED_PPP.sub(" ", text)
 
     out.exclusive_area, out.supply_area, out.area_is_explicit, warns = parse_area(body)
+    # '전용14' 처럼 **정수 평**으로 적힌 전용면적인가. 네이버가 버림해서 쓰므로
+    # 그런 값은 점이 아니라 구간으로 다뤄야 한다(`_resolve_area`).
+    m_py = re.search(r"전용\s*(\d{1,3})\s*(?:평)?(?![\d.])", body)
+    if m_py and out.area_is_explicit:
+        out.area_pyeong = int(m_py.group(1))
     out.warnings.extend(warns)
     out.floor, out.total_floor, out.floor_band = parse_floor(body)
     out.dong = parse_dong(text)
     out.asking_price = parse_price(body)
+    out.price_is_range = bool(_PRICE_RANGE.search(body))
 
     # 매물에 적힌 평당가가 공급 기준인지 전용 기준인지는 **계산해 보면 안다**.
     # 이 서비스의 평당가는 전용 기준이라 숫자가 다르게 나오는데, 이유를 말해 주지
@@ -372,7 +542,8 @@ def parse_listing(text: str, complexes: list) -> ParsedListing:
         implied_m2 = out.asking_price / out.stated_ppp * pricing.PYEONG_M2
         ours = pricing.price_per_pyeong(out.asking_price, out.exclusive_area)
         if abs(implied_m2 - out.exclusive_area) > 2.0:
-            out.warnings.append(
+            out.warn(
+                "price",
                 f"매물에 적힌 평당가 {out.stated_ppp:,}만원/평은 "
                 f"공급면적({implied_m2:.0f}㎡) 기준입니다. 이 서비스는 전용"
                 f"{out.exclusive_area:g}㎡ 기준으로 {ours:,.0f}만원/평으로 계산합니다."
@@ -385,19 +556,15 @@ def parse_listing(text: str, complexes: list) -> ParsedListing:
         out.complex_id = exact[0]["id"]
         out.complex_name = exact[0]["name"]
         if len(exact) > 1 and exact[1]["matched_len"] == exact[0]["matched_len"]:
-            out.warnings.append(
-                "이름이 같은 단지가 여러 곳입니다. 아래 후보에서 직접 골라 주세요."
-            )
+            out.warn("complex", "이름이 같은 단지가 여러 곳입니다. 아래 후보에서 직접 골라 주세요.")
     elif cands:
         # 부분 일치뿐이면 **자동 선택하지 않는다.** 1단지/2단지 중 하나를 찍는 꼴이 된다.
-        out.warnings.append(
-            "단지명이 정확히 일치하지 않습니다. 아래 후보 중에서 골라 주세요."
-        )
+        out.warn("complex", "단지명이 정확히 일치하지 않습니다. 아래 후보 중에서 골라 주세요.")
     else:
-        out.warnings.append("텍스트에서 단지명을 찾지 못했습니다. 직접 선택해 주세요.")
+        out.warn('complex', "텍스트에서 단지명을 찾지 못했습니다. 직접 선택해 주세요.")
 
     if out.exclusive_area is None:
-        out.warnings.append("전용면적을 찾지 못했습니다.")
+        out.warn('area', "전용면적을 찾지 못했습니다.")
     if out.asking_price is None:
-        out.warnings.append("가격을 찾지 못했습니다. 비워 두면 요인 분해만 계산됩니다.")
+        out.warn('price', "가격을 찾지 못했습니다. 비워 두면 요인 분해만 계산됩니다.")
     return out

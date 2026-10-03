@@ -38,7 +38,7 @@ from sqlalchemy import select  # noqa: E402
 
 from app import pricing  # noqa: E402
 from app.clients.kakao import KakaoError, search_keyword  # noqa: E402
-from app.clients.molit import SUWON_DISTRICTS  # noqa: E402
+from app.clients.molit import DISTRICTS  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Complex  # noqa: E402
 
@@ -60,7 +60,7 @@ NAME_REJECT = re.compile(
 # 카카오가 주는 주소: "경기 수원시 영통구 영통동 123-4"
 ADDR = re.compile(r"경기(?:도)?\s+수원시\s+(\S+구)\s+(\S+(?:동|가|리))\s*(\S*)")
 
-SGG_BY_NAME = {name.split()[-1]: code for code, name in SUWON_DISTRICTS.items()}
+SGG_BY_NAME = {name.split()[-1]: code for code, name in DISTRICTS.items()}
 
 # 카카오는 준공년도·최고층을 주지 않는다. 동네별 개발 시기로 시뮬레이션하고
 # 국토부 적재 시 실제 값으로 덮어쓴다(ingest_trades / refresh_complex_stats).

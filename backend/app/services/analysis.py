@@ -38,8 +38,17 @@ def load_points(
     필터 값과 맞지 않는다. 화면에 보이는 값과 필터가 어긋나면 안 되므로
     양쪽 모두 Station 을 쓴다.
     """
+    # **엔티티가 아니라 컬럼만 읽는다.** `select(Trade, Complex)` 는 행마다 ORM
+    # 객체 두 개를 만들어 식별 맵에 넣는데, 여기서 쓰는 것은 열 몇 개뿐이다.
+    # 경기 남부로 넓힌 뒤 한 구의 24개월치가 3만 행을 넘으면서 이 비용이 순위
+    # 계산의 절반을 차지했다(프로파일에서 `_instance` 호출 31,602회).
     stmt = (
-        select(Trade, Complex)
+        select(
+            Trade.deal_ym, Trade.deal_date, Trade.exclusive_area, Trade.floor,
+            Trade.deal_amount, Trade.build_year, Trade.apt_dong,
+            Complex.id, Complex.name, Complex.build_year, Complex.max_floor,
+            Complex.station_distance_m, Complex.household_count,
+        )
         .join(Complex, Trade.complex_id == Complex.id)
         .where(Trade.deal_date >= _cutoff(months))
     )
@@ -59,28 +68,29 @@ def load_points(
 
     ref_year = date.today().year
     points: list[TradePoint] = []
-    for trade, cx in db.execute(stmt).all():
-        if area_band and pricing.area_band(trade.exclusive_area) != area_band:
+    for (deal_ym, deal_date, area, floor, amount, t_year, apt_dong,
+         cx_id, cx_name, cx_year, max_floor, st_dist, households) in db.execute(stmt):
+        if area_band and pricing.area_band(area) != area_band:
             continue
-        if station_band and pricing.station_band(cx.station_distance_m) != station_band:
+        if station_band and pricing.station_band(st_dist) != station_band:
             continue
-        if age_band and pricing.age_band(cx.build_year or trade.build_year, ref_year) != age_band:
+        if age_band and pricing.age_band(cx_year or t_year, ref_year) != age_band:
             continue
-        if household_band and pricing.household_band(cx.household_count) != household_band:
+        if household_band and pricing.household_band(households) != household_band:
             continue
         points.append(
             TradePoint(
-                complex_id=cx.id,
-                complex_name=cx.name,
-                deal_ym=trade.deal_ym,
-                deal_date=trade.deal_date.isoformat(),
-                exclusive_area=trade.exclusive_area,
-                floor=trade.floor,
-                deal_amount=trade.deal_amount,
-                build_year=cx.build_year or trade.build_year,
-                max_floor=cx.max_floor,
-                station_distance_m=cx.station_distance_m,
-                apt_dong=(trade.apt_dong or "").strip() or None,
+                complex_id=cx_id,
+                complex_name=cx_name,
+                deal_ym=deal_ym,
+                deal_date=deal_date.isoformat(),
+                exclusive_area=area,
+                floor=floor,
+                deal_amount=amount,
+                build_year=cx_year or t_year,
+                max_floor=max_floor,
+                station_distance_m=st_dist,
+                apt_dong=(apt_dong or "").strip() or None,
             )
         )
     return points
@@ -280,6 +290,7 @@ def estimate_fair_price(
     months: int = 12,
     dong: str | None = None,
     dong_effects: dict | None = None,
+    ctx: dict | None = None,
 ) -> dict | None:
     """실거래 기반 적정 시세 추정.
 
@@ -292,9 +303,17 @@ def estimate_fair_price(
         return None
 
     ref_year = date.today().year
-    district_points = load_points(db, months=months, sgg_cd=cx.sgg_cd)
-    index = pricing.market_index(district_points)
-    factors = pricing.estimate_floor_factors(district_points, index)
+    # 구 단위 표본·시점지수·층계수는 (구, 기간)마다 같다. 목록을 한 번에 평가할 때
+    # 매물 수만큼 다시 만들면 46건에 12초가 든다 — 호출자가 `ctx` 를 넘기면 공유한다.
+    ck = ("district", cx.sgg_cd, months)
+    if ctx is not None and ck in ctx:
+        district_points, index, factors = ctx[ck]
+    else:
+        district_points = load_points(db, months=months, sgg_cd=cx.sgg_cd)
+        index = pricing.market_index(district_points)
+        factors = pricing.estimate_floor_factors(district_points, index)
+        if ctx is not None:
+            ctx[ck] = (district_points, index, factors)
 
     own = [p for p in district_points if p.complex_id == complex_id]
     target_band = pricing.area_band(exclusive_area)
@@ -356,7 +375,22 @@ def estimate_fair_price(
     # 아는 게 적다. 단지 전체 표본 수로 '높음' 을 주면 확신을 과장하게 된다.
     own_n = sum(1 for p in sample if dong and (p.apt_dong or "") == dong) if dong else None
     confidence_note = None
-    if dong:
+
+    # 표본이 **이 단지 밖**에서 온 경우가 먼저다. 거래가 없거나 그 평형이 아직
+    # 거래되지 않은 단지는 유사 입지·연식·면적대 단지로 대신하는데(`basis` 참조),
+    # 그때 '다른 동의 시세로 대신했다' 고 말하면 같은 단지인 줄 알게 된다.
+    # 수원성중흥S-클래스(실거래 1건, 84.66㎡)에 75.97㎡ 매물을 넣었을 때 실제로
+    # 표본 28건이 전부 다른 단지였는데 '106동 거래가 없다' 고 안내했다.
+    own_cx_n = sum(1 for p in sample if p.complex_id == complex_id)
+    outside = n - own_cx_n
+    if outside > own_cx_n:
+        confidence = "낮음"
+        confidence_note = (
+            f"이 단지·이 평형의 실거래는 {own_cx_n}건뿐입니다. 나머지 {outside}건은 "
+            "역거리·연식·면적대가 비슷한 다른 단지 거래로 채웠습니다 — 이 단지 고유의 "
+            "프리미엄은 반영되지 않았습니다."
+        )
+    elif dong:
         if own_n == 0:
             confidence = "낮음"
             confidence_note = (

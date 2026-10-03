@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
+    Date,
     Date,
     DateTime,
     Float,
@@ -205,6 +207,9 @@ class Listing(Base):
     exclusive_area: Mapped[float] = mapped_column(Float)
     supply_area: Mapped[float | None] = mapped_column(Float)  # 참고용 — 전용률 표시에만 사용
     floor: Mapped[int | None] = mapped_column(Integer)
+    # 동은 적정가를 바꾼다(역거리 + 동 프리미엄). 저장해 두지 않으면 나중에 다시
+    # 계산할 때 단지 중심점 기준으로 떨어져 저장 시점과 다른 값이 나온다.
+    dong: Mapped[str | None] = mapped_column(String(20))
     asking_price: Mapped[int] = mapped_column(Integer)  # 만원
     memo: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -252,6 +257,138 @@ class Quote(Base):
     floor_band: Mapped[str] = mapped_column(String(20), default="정보없음")
     asking_price: Mapped[int] = mapped_column(Integer)  # 만원
 
+    # 매물에 적힌 확인일자. 우리가 언제 봤는지(`first_seen_at`)와 다르다 — 한 번에
+    # 붙여넣은 매물은 목격 시각이 전부 같지만 확인일자는 제각각이다.
+    confirmed_on: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     seen_count: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class RebStat(Base):
+    """한국부동산원 공표 통계 — 시군구·월 단위.
+
+    ## 왜 우리 DB 에 넣나
+
+    KB부동산 데이터허브에서 경기 남부 17개 시군구를 모아 보려다 막혔다. 시군구
+    선택은 되는데 차트가 5개까지만 그려지고, 무엇보다 **선택이 URL 에도 공유링크에도
+    남지 않아** 열 때마다 17번을 다시 클릭해야 했다. 그래서 공표 통계를 직접 받아
+    한 화면에 놓는다.
+
+    ## 한 행의 뜻
+
+    (시군구, 지표, 월) 하나에 값 하나. 지표는 `reb.TABLES` 의 이름을 쓴다
+    (sale_index, jeonse_index, jeonse_ratio, avg_sale_price, avg_unit_price,
+    med_sale_price).
+
+    지표를 세로로 쌓는(long) 구조인 이유: 한국부동산원이 표를 늘리면 컬럼이 아니라
+    행만 늘어난다. 가로로(wide) 두면 표가 추가될 때마다 마이그레이션이 필요하다.
+
+    ## 유니크 키에 NULL 을 두지 않는다
+
+    SQLite 의 UNIQUE 는 NULL 끼리를 서로 다른 값으로 보므로, 키에 들어가는 세 컬럼은
+    전부 NOT NULL 이다. 값이 없으면 행을 만들지 않는다 — 0 으로 채우면 '그 달에
+    지수가 0' 이라는 거짓이 된다.
+    """
+
+    __tablename__ = "reb_stats"
+    __table_args__ = (
+        UniqueConstraint("sgg_cd", "metric", "ym", name="uq_reb_stat"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sgg_cd: Mapped[str] = mapped_column(String(5), index=True)
+    metric: Mapped[str] = mapped_column(String(32), index=True)
+    ym: Mapped[str] = mapped_column(String(6), index=True)  # "YYYYMM"
+    value: Mapped[float] = mapped_column(Float)
+
+    # 받은 그대로의 지역 경로(경기>경부2권>수원시>영통구). 나중에 코드가 낡아
+    # 엉뚱한 지역이 들어왔는지 **사후에도** 확인할 수 있게 남긴다.
+    region_name: Mapped[str] = mapped_column(String(60), default="")
+
+    # 한국부동산원이 붙여 주는 단위(UI_NM). '지수' / '%' / '천원' / '천원/㎡'.
+    #
+    # 값을 우리 단위(만원)로 바꿔서 저장하지 않는다. 받은 숫자를 그대로 두고 단위를
+    # 같이 적는 쪽이 안전하다 — 처음에 천원을 만원으로 읽어 평당 2.2억이라는 값을
+    # 만들 뻔했다. 공표값과 저장값이 같아야 나중에 대조할 수 있다.
+    # 화면에 쓸 때 `services/macro.py` 가 한 곳에서 환산한다.
+    unit: Mapped[str] = mapped_column(String(16), default="")
+
+    # 공표 기준시점 문구(RPSTUI_NM). 지수에만 있다 — '기준시점 : 2026.06.=100.0'.
+    #
+    # 코드에 "2026년 1월 = 100" 이라고 박았다가 틀렸다. 한국부동산원은 주기적으로
+    # 기준을 옮기므로(리베이스) 기억으로 적으면 언젠가 거짓이 된다. 받아서 저장하면
+    # 리베이스될 때 다음 적재에서 저절로 따라간다.
+    base: Mapped[str] = mapped_column(String(40), default="")
+
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class QuoteNote(Base):
+    """매물 줄에 사람이 적는 비고. "130동 민간임대" 처럼.
+
+    ## 왜 Quote 가 아니라 유닛에 붙나
+
+    순위표의 한 줄은 호가 하나가 아니라 **접힌 단위**(단지·동·평형·층)다. 같은 집이
+    값을 바꿔 다시 올라오면 새 `Quote` 행이 생기고 대표도 그 새 행으로 바뀐다.
+    메모를 `quote_id` 에 붙이면 **값이 바뀌는 순간 메모가 사라진다** — 적어 둔 사람은
+    아무 경고도 못 받는다.
+
+    그래서 `quotes.unit_key()` 와 **같은 키**에 붙인다. 호가가 바뀌어도, 새 매물이
+    같은 층대에 올라와도 그 줄의 메모는 그대로 남는다.
+
+    ## 유니크 키에 NULL 을 두지 않는다
+
+    SQLite 의 UNIQUE 는 NULL 끼리를 서로 다른 값으로 보므로 동은 "", 층은 0 을 쓴다.
+    `Quote` 가 같은 이유로 같은 규칙을 쓰고 있고, 두 키가 어긋나면 메모가 엉뚱한
+    줄에 붙는다.
+    """
+
+    __tablename__ = "quote_notes"
+    __table_args__ = (
+        UniqueConstraint("complex_id", "dong", "area_key", "floor", name="uq_quote_note"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    complex_id: Mapped[int] = mapped_column(ForeignKey("complexes.id"), index=True)
+    dong: Mapped[str] = mapped_column(String(20), default="")
+    area_key: Mapped[int] = mapped_column(Integer)
+    floor: Mapped[int] = mapped_column(Integer, default=0)
+
+    text: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DongTag(Base):
+    """사람이 동에 붙이는 표시. 지금은 민간임대 하나다.
+
+    ## 왜 ComplexDong 에 컬럼을 더하지 않나
+
+    `ComplexDong` 은 국토부 동 정보와 카카오 좌표로 **다시 채워지는** 테이블이다.
+    사람이 손으로 표시한 값을 거기 섞어 두면 적재 한 번에 조용히 날아갈 수 있다.
+    들어온 데이터와 사람이 적은 것은 섞지 않는다.
+
+    ## 민간임대를 왜 표시하나
+
+    민간임대 동은 분양 물건과 성격이 달라 같은 단지·같은 평형이어도 시세가 다르다.
+    그런데 국토부 실거래가에는 그 구분이 없다. 매물 순위에서 '왜 이 동만 유독 싼가'
+    를 매번 다시 알아내는 대신, 한 번 표시해 두고 그 줄에 띄운다.
+
+    표시는 **비고에 글자를 써 넣지 않고** 파생해서 보여 준다. 써 넣으면 표시를 끈
+    뒤에도 글자가 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
+    """
+
+    __tablename__ = "dong_tags"
+    __table_args__ = (UniqueConstraint("complex_id", "dong", name="uq_dong_tag"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    complex_id: Mapped[int] = mapped_column(ForeignKey("complexes.id"), index=True)
+    dong: Mapped[str] = mapped_column(String(20), index=True)
+
+    rental: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
