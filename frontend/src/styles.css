@@ -901,3 +901,32 @@ tr.is-deleting td { opacity: 0.4; }
 /* 붙여넣기 단축 — 북마클릿으로 담은 뒤 창만 바꾸면 끝나게 한다 */
 .bulk-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 8px; }
 .bulk-actions .muted.small { line-height: 1.5; }
+
+/* ── 그림 읽는 법 ─────────────────────────────────────────────────────
+   접어 둔다. 늘 펼쳐 두면 정작 그림이 아래로 밀린다. */
+.chart-guide { margin: 8px 0 4px; }
+.guide-toggle { font-size: 12.5px; }
+.guide-body {
+  margin-top: 8px; padding: 12px 14px; font-size: 12.5px; line-height: 1.65;
+  background: var(--surface-2, var(--surface-1));
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.guide-axes { margin: 0; }
+.guide-axes > div + div { margin-top: 6px; }
+.guide-axes dt { font-weight: 600; color: var(--text-primary); }
+.guide-axes dd { margin: 1px 0 0; color: var(--text-secondary); }
+.guide-why {
+  margin: 10px 0 0; padding-left: 10px; color: var(--text-secondary);
+  border-left: 2px solid var(--border);
+}
+.guide-quad { margin: 10px 0 0; padding: 0; list-style: none; }
+.guide-quad li { display: flex; gap: 8px; margin-bottom: 4px; color: var(--text-secondary); }
+.guide-quad b { flex: none; min-width: 170px; color: var(--text-primary); }
+.guide-tips { margin: 10px 0 0 16px; padding: 0; color: var(--text-secondary); }
+.guide-tips li { margin-bottom: 5px; }
+.guide-caveat { margin: 10px 0 0; color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  .guide-quad li { display: block; }
+  .guide-quad b { display: block; min-width: 0; margin-bottom: 1px; }
+}
