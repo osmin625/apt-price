@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { eok, fmt } from '../components/Charts'
 import Hint from '../components/Hint'
+import MemoTagPanel from '../components/MemoTagPanel'
 import BulkPaste from './BulkPaste'
 
 /**
- * 매물 분석 — 붙여넣은 매물을 적정가로 진단한다.
+ * 매물 관리 — 붙여넣은 매물을 적정가로 진단하고, 메모 사전을 관리한다.
  *
  * ## A·B 한 건씩 넣던 기능은 뺐다
  *
@@ -15,10 +16,14 @@ import BulkPaste from './BulkPaste'
  * **여러 매물 붙여넣기**로 한 번에 넣고 매물 순위에서 보는 쪽이 쓰기 편했다.
  * 두 건만 견주는 일은 순위표에서 두 줄을 보면 끝난다.
  *
- * 남은 것은 둘이다.
+ * 남은 것은 셋이다.
  *
  * - **여러 매물 붙여넣기**: 목록을 통째로 붙여넣으면 단지·면적·층·호가를 뽑아 쌓는다.
+ * - **메모 사전**: 중개사 메모에서 뽑는 키워드를 무엇까지 비고에 띄울지 고른다.
  * - **저장한 매물**: 기간을 바꾸면 그 기간의 실거래로 적정가가 다시 계산된다.
+ *
+ * 탭 이름을 '매물 분석' 에서 **'매물 관리'** 로 바꾼 것도 이 때문이다. 붙여넣어
+ * 읽기만 하던 탭에 설정이 들어오면서 하는 일이 분석보다 관리에 가까워졌다.
  *
  * 요인별 비교는 분해 모델 탭의 계수로 같은 질문에 답할 수 있다.
  */
@@ -43,7 +48,7 @@ export default function CompareView({ months: initialMonths, incoming }) {
     <>
       <div className="card">
         <h2>
-          매물 분석
+          매물 관리
           <Hint
             notes={[
               '매물 목록을 통째로 붙여넣으면 단지·면적·층·호가를 뽑아 각각 적정가를 진단합니다.',
@@ -68,6 +73,10 @@ export default function CompareView({ months: initialMonths, incoming }) {
       </div>
 
       <BulkPaste months={months} incoming={incoming} />
+
+      {/* 붙여넣기 **다음에** 둔다. 사전은 붙여넣어 쌓인 메모를 세서 보여 주므로,
+          막 붙여넣은 뒤에 보는 것이 자연스럽다. 메모가 하나도 없으면 그렇게 말한다. */}
+      <MemoTagPanel />
 
       {saved.length > 0 && (
         <SavedListings

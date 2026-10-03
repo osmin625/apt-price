@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Complex, DongTag, Quote, QuoteNote
+from ..models import Complex, DongTag, MemoTagPref, Quote, QuoteNote
 from ..services import memo_tags
 from ..services import quotes as quotes_svc
 from ..services import ranking
@@ -74,6 +74,10 @@ def ranking_all(
     # 우리가 확인한 사실이 아니라 올린 사람이 그렇게 적었다는 뜻이기 때문이다.
     # 뽑는 것은 읽을 때마다 한다. 저장할 때 뽑아 두면 사전을 고쳐도 옛 줄은 안 바뀐다.
     memos_of = {p["quote_id"]: p.get("memos") or [] for p in payload}
+    # 끈 태그는 비고에서 뺀다. **원문(memos)은 그대로 보낸다** — 호버에서 왜 그
+    # 키워드가 붙었는지 보려면 원문이 있어야 하고, 끈 것은 '안 보여 주기' 지
+    # '안 읽기' 가 아니다. 사전을 다시 켜면 그 자리에서 되살아난다.
+    off = disabled_tags(db)
     # 민간임대 표시는 **동에 붙어 있고 여기서 파생한다.** 비고에 글자를 써 넣으면
     # 표시를 끈 뒤에도 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
     rental = {
@@ -95,7 +99,7 @@ def ranking_all(
             ["민간임대"] if (k["complex_id"], k["dong"]) in rental else []
         )
         memos = memos_of.get(item.get("quote_id")) or []
-        item["note_tags"] = memo_tags.merge(memos)
+        item["note_tags"] = [t for t in memo_tags.merge(memos) if t not in off]
         item["memos"] = memos
     out["months"] = months
     out["total_quotes"] = len(rows)
@@ -158,6 +162,91 @@ class NoteIn(BaseModel):
     area_key: int
     floor: int = 0
     text: str = Field(default="", max_length=300)
+
+
+def disabled_tags(db: Session) -> set[str]:
+    """비고에 안 띄우기로 한 태그. **행이 없으면 켜진 것**으로 본다.
+
+    규칙을 새로 더했을 때 행이 없다고 꺼져 있으면, 더해 놓고 왜 안 보이는지 한참
+    찾게 된다. 끈 것만 행으로 남긴다.
+    """
+    return {
+        r.name
+        for r in db.execute(select(MemoTagPref).where(MemoTagPref.enabled.is_(False)))
+        .scalars()
+        .all()
+    }
+
+
+def _all_memos(db: Session) -> list[str]:
+    """쌓인 매물의 중개사 메모 전부(중복 제거).
+
+    `Quote.memo` 는 같은 유닛에 여러 중개사 메모가 줄바꿈으로 쌓인 것이라 쪼갠다.
+    같은 글이 여러 매물에 붙어 있으면 한 번만 센다 — 같은 중개사가 같은 문구를
+    여러 매물에 돌려 쓰면 그 말이 사전을 통째로 왜곡한다.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for (memo,) in db.execute(select(Quote.memo).where(Quote.memo != "")).all():
+        for line in (memo or "").split("\n"):
+            t = line.strip()
+            if t and t not in seen:
+                seen.add(t)
+                out.append(t)
+    return out
+
+
+@router.get("/memo-tags")
+def memo_tag_list(db: Session = Depends(get_db)):
+    """메모 사전 현황 — 태그마다 몇 번 나왔고, 비고에 띄우고 있는지.
+
+    횟수는 **쌓인 메모를 그때그때 다시 세서** 낸다. 저장해 두면 사전을 고쳤을 때
+    옛 숫자가 남고, 그 숫자를 보고 사전을 또 고치게 된다.
+    """
+    memos = _all_memos(db)
+    t = memo_tags.tally(memos)
+    off = disabled_tags(db)
+    return {
+        # RULES 순서를 그대로 쓴다. 이 순서가 곧 비고에 나가는 우선순위라,
+        # 화면에서 다른 순서로 보여 주면 왜 저것이 먼저 나오는지 알 수 없다.
+        "tags": [
+            {
+                "name": name,
+                "n": t["counts"][name],
+                "enabled": name not in off,
+                "priority": i + 1,
+            }
+            for i, (name, _) in enumerate(memo_tags.RULES)
+        ],
+        "n_memos": t["n_memos"],
+        "n_untagged": len(t["untagged"]),
+        "untagged": t["untagged"][:12],
+        "unknown": t["unknown"][:12],
+        "max_badges": memo_tags.MAX_BADGES,
+    }
+
+
+class MemoTagIn(BaseModel):
+    enabled: bool
+
+
+@router.put("/memo-tags/{name}")
+def memo_tag_set(name: str, body: MemoTagIn, db: Session = Depends(get_db)):
+    """태그 하나를 비고에 띄울지 바꾼다."""
+    known = {n for n, _ in memo_tags.RULES}
+    if name not in known:
+        raise HTTPException(404, f"모르는 태그입니다: {name}")
+
+    row = db.execute(
+        select(MemoTagPref).where(MemoTagPref.name == name)
+    ).scalar_one_or_none()
+    if row is None:
+        row = MemoTagPref(name=name, enabled=body.enabled)
+        db.add(row)
+    else:
+        row.enabled = body.enabled
+    db.commit()
+    return {"name": name, "enabled": body.enabled}
 
 
 @router.put("/note")

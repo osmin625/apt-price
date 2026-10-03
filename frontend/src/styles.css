@@ -934,6 +934,35 @@ tr.is-deleting td { opacity: 0.4; }
   color: var(--text-primary); font-weight: 600;
 }
 
+/* ── 메모 사전 ────────────────────────────────────────────────────────
+   동 버튼과 **같은 모양**을 쓴다. 하는 일이 같기 때문이다 — 목록을 한눈에 보고
+   눌러서 켜고 끈다. 새 모양을 만들면 같은 동작을 두 가지로 배우게 된다.
+
+   다만 켜진 색은 다르다. 민간임대는 노랑(사용자가 표시한 사실)이고 메모 키워드는
+   파랑(중개사의 말)이다 — 비고 배지에서 쓰는 구분과 같다. */
+.memo-chip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.memo-chip.is-on {
+  background: color-mix(in srgb, var(--series-1) 14%, var(--surface-1));
+  border-color: color-mix(in srgb, var(--series-1) 45%, var(--border));
+  color: var(--text-primary); font-weight: 600;
+}
+/* 끈 것은 흐리게. 숨기지 않는 이유: 뭘 꺼 뒀는지 보여야 다시 켤 수 있다. */
+.memo-chip:not(.is-on) { opacity: 0.55; }
+.memo-chip:not(.is-on):hover:not(:disabled) { opacity: 1; }
+/* 0회 — 지울 규칙이거나 패턴이 실제 표기와 어긋난 것이다. 눈에 띄어야 한다. */
+.memo-chip.is-dead .memo-chip-n { color: var(--neg); }
+.memo-chip-n {
+  font-size: 11px; font-style: normal; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text-muted);
+  padding: 0 4px; border-radius: 4px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+}
+.dong-chip.is-static { cursor: default; display: inline-flex; align-items: center; gap: 5px; }
+
+.memo-unknown { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.memo-untagged { margin: 4px 0 0 16px; padding: 0; font-size: 12.5px; color: var(--text-secondary); }
+.memo-untagged li { margin-bottom: 2px; }
+
 .note-tag {
   display: inline-block; flex: none;
   font-size: 10.5px; font-weight: 600; line-height: 1.5;

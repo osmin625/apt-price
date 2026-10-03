@@ -29,7 +29,9 @@ const TABS = [
   { id: 'analysis', label: '분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
-  { id: 'compare', label: '매물 분석' },
+  // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
+  // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
+  { id: 'compare', label: '매물 관리' },
   { id: 'ranking', label: '매물 순위', static: true },
 ]
 

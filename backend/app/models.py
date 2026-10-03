@@ -335,6 +335,35 @@ class RebStat(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class MemoTagPref(Base):
+    """메모 키워드를 **비고에 띄울지** 여부. 사전 자체가 아니라 그 사전의 표시 설정이다.
+
+    ## 왜 규칙이 아니라 설정만 저장하나
+
+    규칙(정규식)은 `services/memo_tags.py` 의 `RULES` 에 있고 코드다. 그걸 DB 로
+    옮기면 규칙을 고칠 때마다 '실제 메모에 재 보고 적중 수를 주석에 남긴다' 는
+    고리가 끊긴다 — 화면에서 아무렇게나 고칠 수 있게 되면 아무도 재지 않는다.
+
+    반면 **무엇을 띄울지**는 취향이고 사람마다·때마다 다르다. 실측에서 가장 많이
+    걸린 것이 '시스템에어컨'(22/50)인데, 가격 판단에는 거의 쓸모가 없다. 그런
+    것들을 끄는 자리가 필요하다.
+
+    ## 없는 행은 켜진 것으로 본다
+
+    규칙을 새로 더했을 때 행이 없다고 꺼져 있으면, 더해 놓고 왜 안 보이는지
+    한참 찾게 된다. 기본은 **켬**이고, 끈 것만 행으로 남는다.
+    """
+
+    __tablename__ = "memo_tag_prefs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # RULES 의 이름. 규칙이 사라지면 이 행은 그냥 안 쓰이게 둔다 — 지우면 규칙을
+    # 되살렸을 때 꺼 둔 설정이 조용히 켜진다.
+    name: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class QuoteNote(Base):
     """매물 줄에 사람이 적는 비고. "130동 민간임대" 처럼.
 

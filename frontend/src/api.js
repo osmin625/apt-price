@@ -188,6 +188,12 @@ export const api = {
   deleteQuote: (id) => request(`/quotes/${id}`, { method: 'DELETE' }),
   putQuoteNote: (body) =>
     request('/quotes/note', { method: 'PUT', body: JSON.stringify(body) }),
+  memoTags: () => request('/quotes/memo-tags'),
+  setMemoTag: (name, enabled) =>
+    request(`/quotes/memo-tags/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
   parseBulk: (text, params) =>
     request('/model/parse-bulk', {
       method: 'POST',

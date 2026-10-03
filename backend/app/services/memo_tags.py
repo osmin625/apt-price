@@ -84,6 +84,49 @@ def extract(memo: str | None) -> list[str]:
     return [name for name, rx in _COMPILED if rx.search(memo)]
 
 
+# 사전에 없는 낱말을 셀 때 제외하는 말. 세면 많이 나오지만 규칙으로 만들 가치가
+# 없다 — 안 빼면 '좋아요'·'완죤' 이 상위를 채워 정작 볼 것이 안 보인다.
+STOP = {
+    "좋아요", "있어요", "합니다", "입니다", "드실", "쏙드는", "맘에", "완죤",
+    "완전", "강추", "최고", "최상", "추천", "하시면", "같아요", "언제든",
+    "언제든지", "가능", "가능합니다", "주세요", "보시면", "그대로",
+}
+
+# 낱말 후보. 한글 2자 이상, 또는 'P3000' 같은 영문+숫자.
+WORD = re.compile(r"[가-힣]{2,}|[A-Za-z]{1,3}\d{3,5}")
+
+
+def tally(memos: list[str]) -> dict:
+    """메모 목록에 사전을 재 본다. 화면과 `scripts/memo_report.py` 가 같이 쓴다.
+
+    두 곳에서 따로 세면 화면과 보고서가 다른 숫자를 말하게 된다. 한 함수로 둔다.
+    """
+    counts = {name: 0 for name, _ in RULES}
+    untagged: list[str] = []
+    for m in memos:
+        got = extract(m)
+        for name in got:
+            counts[name] += 1
+        if not got:
+            untagged.append(m)
+
+    # 아직 아무 규칙에도 안 걸리는 낱말. 규칙을 늘릴 거리가 여기 있다.
+    free: dict[str, int] = {}
+    for m in memos:
+        for w in set(WORD.findall(m)):
+            if w in STOP or extract(w):
+                continue
+            free[w] = free.get(w, 0) + 1
+    unknown = sorted(free.items(), key=lambda kv: (-kv[1], kv[0]))
+
+    return {
+        "counts": counts,
+        "n_memos": len(memos),
+        "untagged": untagged,
+        "unknown": [{"word": w, "n": n} for w, n in unknown if n >= 2][:30],
+    }
+
+
 def merge(memos: list[str | None]) -> list[str]:
     """한 줄(유닛)에 접힌 여러 매물의 메모를 합친다.
 
