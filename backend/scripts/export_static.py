@@ -136,7 +136,14 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/macro/latest", {}),
     ]
 
-    # 매크로 인사이트는 모델 계수를 쓰므로 months 가 붙는다. 화면은 12개월만 부른다.
+    # 매크로 인사이트.
+    #
+    # **화면이 부르는 모양 그대로** 내보내야 한다. MacroView 는 파라미터 없이
+    # `api.macroInsights()` 로 부르므로 파일은 `insights/default.json` 이어야 하는데,
+    # 처음에 `months=12` 로만 내보냈다가 라이브에서 404 가 났다(그림 셋이 통째로
+    # 비었다). 백엔드 기본값이 months=12 라 내용은 같지만 **파일 이름이 다르다.**
+    # months 를 붙여 부를 수도 있으니 둘 다 내보낸다.
+    plan.append(Req("/api/macro/insights", {}))
     plan.append(Req("/api/macro/insights", {"months": 12}))
 
     # 매크로는 지표 6 x 기간 3 = 18개뿐이다. 화면의 선택지와 1:1 로 맞춘다.
