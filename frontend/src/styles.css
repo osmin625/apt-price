@@ -50,7 +50,12 @@ body {
   line-height: 1.5;
 }
 
-.app { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
+/* 1240px 였다. 분석 탭을 하나로 합치면서 넓혔다 — 격자가 minmax(300px, 1fr) 라
+   1240px(내용 1200px)에서는 **세 칸**이 한계였고, 넓은 화면에서 양옆이 통째로 비었다.
+   1560px 이면 네 칸이다(재 봤다: .factor-grid·.macro-grid 모두 4). 거시 카드 8장이
+   두 줄에 떨어진다.
+   글줄은 따로 묶는다(.card 아래) — 폭을 늘린 만큼 문장이 길어지면 읽기 나빠진다. */
+.app { max-width: 1560px; margin: 0 auto; padding: 24px 20px 64px; }
 
 header.top { margin-bottom: 20px; }
 header.top h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
@@ -64,6 +69,10 @@ header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 }
 .tabs button:hover { color: var(--text-primary); }
 .tabs button[aria-selected='true'] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--series-1); }
+
+/* 넓은 화면에서 문장이 1500px 로 뻗으면 눈이 줄을 잃는다. 숫자·격자는 폭을 다
+   쓰고 글줄만 묶는다. 90ch 는 한글 기준 한 줄 45자 안팎이다. */
+.card > p, .card > .sub, .analysis-section > .section-title + .card > p { max-width: 90ch; }
 
 .card {
   background: var(--surface-1);
@@ -820,6 +829,38 @@ tr.is-deleting td { opacity: 0.4; }
 /* ── 매크로 카드 격자 ─────────────────────────────────────────────────
    시장 분석의 요인 카드(.factor)와 같은 규격을 쓴다. 전부 전폭으로 두니 그림
    하나 보려고 한참 스크롤해야 했다. 카드에는 모양만 두고 자세한 것은 창으로 띄운다. */
+/* 분석 탭의 섹션 건너뛰기. 탭처럼 보이지만 **고르는 것이 아니라 이동**이다 —
+   둘 다 그려져 있고 이것은 스크롤만 옮긴다. 그래서 눌린 모양이 아니라 '지금 여기'
+   표시를 쓴다(aria-current). 위에 붙여 두면 거시로 내려간 뒤에도 미시로 돌아올 수 있다. */
+.section-nav {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; gap: 8px; margin-bottom: 14px; padding: 8px 0;
+  background: var(--page); border-bottom: 1px solid var(--border);
+}
+.section-nav button {
+  display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  background: none; border: 1px solid transparent; font: inherit; text-align: left;
+}
+.section-nav button b { font-size: 13.5px; color: var(--text-secondary); font-weight: 600; }
+.section-nav button span { font-size: 11.5px; color: var(--text-muted); }
+.section-nav button:hover { background: var(--surface-1); }
+.section-nav button.on { border-color: var(--border); background: var(--surface-1); }
+.section-nav button.on b { color: var(--text-primary); }
+
+.analysis-section { scroll-margin-top: 56px; }
+.analysis-section + .analysis-section { margin-top: 26px; }
+.section-title {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 10px; font-size: 17px;
+}
+.section-title span { font-size: 12.5px; font-weight: 400; color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  .section-nav { gap: 4px; }
+  .section-nav button span { display: none; }
+}
+
 .macro-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 18px; margin-top: 14px;
@@ -852,9 +893,13 @@ tr.is-deleting td { opacity: 0.4; }
 /* ── 매물 비고 ────────────────────────────────────────────────────────
    유닛(단지·동·평형·층)에 붙는 메모. 호가가 바뀌어도 그 줄에 남는다. */
 .col-note { min-width: 150px; }
-.note-cell { display: inline-flex; align-items: center; gap: 4px; width: 100%; }
+/* 배지를 **접는다**(wrap). 배지는 flex:none + nowrap 이라, 안 접으면 칸의 최소
+   너비가 배지 수만큼 늘어나 다른 열을 민다 — 중개사 메모 키워드를 넣고 나니
+   1000px 안팎에서 단지명이 한 글자씩 세로로 쪼개졌다. 입력칸에 최소 너비를 줘서
+   접힌 뒤에도 쓸 수 있게 둔다. */
+.note-cell { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; width: 100%; }
 .note-cell input {
-  width: 100%; min-width: 0; font: inherit; font-size: 12.5px;
+  width: 100%; min-width: 72px; flex: 1 1 72px; font: inherit; font-size: 12.5px;
   padding: 3px 6px; border-radius: 6px;
   border: 1px solid transparent; background: transparent; color: var(--text-primary);
 }
@@ -897,6 +942,19 @@ tr.is-deleting td { opacity: 0.4; }
   color: var(--text-secondary);
 }
 .note-ro .note-tag { margin-right: 4px; }
+
+/* 중개사 메모 키워드. 민간임대 배지(채운 노랑)와 **다른 모양**이어야 한다 —
+   저쪽은 사용자가 직접 표시한 사실이고 이쪽은 올린 사람의 말이다. 테두리만 둬서
+   한눈에 "단정한 것이 아니다" 로 읽히게 한다. 이 저장소의 '추정을 사실처럼 보여
+   주지 않는다' 가 배지 모양에까지 적용되는 자리다. */
+.note-tag.is-memo {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--series-1) 40%, transparent);
+  color: var(--text-secondary);
+  cursor: help;
+}
+.note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
+.note-cell .note-tag.is-memo { margin-right: 3px; }
 
 /* 붙여넣기 단축 — 북마클릿으로 담은 뒤 창만 바꾸면 끝나게 한다 */
 .bulk-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 8px; }

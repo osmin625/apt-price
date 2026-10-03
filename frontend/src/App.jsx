@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
-import MarketView from './views/MarketView'
+import AnalysisView from './views/AnalysisView'
 import ComplexDetail from './views/ComplexDetail'
-import MacroView from './views/MacroView'
 import MapView from './views/MapView'
 import ModelView from './views/ModelView'
 import CompareView from './views/CompareView'
@@ -24,8 +23,10 @@ import RankingView from './views/RankingView'
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
  */
 const TABS = [
-  { id: 'market', label: '시장 분석', static: true },
-  { id: 'macro', label: '매크로', static: true },
+  // 시장 분석과 매크로를 합쳤다. 둘은 같은 질문의 두 축(미시·거시)이라 오가며
+  // 보던 것이고, 모델 괴리 차트처럼 **둘을 겹쳐야** 뜻이 생기는 그림도 있다.
+  // 한 탭 안에서 섹션으로 나눈다 — 자세한 것은 AnalysisView 주석.
+  { id: 'analysis', label: '분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   { id: 'compare', label: '매물 분석' },
@@ -39,7 +40,7 @@ const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
 const DEFAULT_FILTERS = { months: 12 }
 
 export default function App() {
-  const [tab, setTab] = useState('market')
+  const [tab, setTab] = useState('analysis')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [meta, setMeta] = useState(null)
   const [health, setHealth] = useState(null)
@@ -154,10 +155,8 @@ export default function App() {
           months={filters.months}
           onClose={() => setDetailId(null)}
         />
-      ) : tab === 'market' ? (
-        <MarketView filters={filters} setFilters={setFilters} meta={meta} />
-      ) : tab === 'macro' ? (
-        <MacroView />
+      ) : tab === 'analysis' ? (
+        <AnalysisView filters={filters} setFilters={setFilters} meta={meta} />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (

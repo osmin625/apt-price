@@ -261,6 +261,16 @@ class Quote(Base):
     # 붙여넣은 매물은 목격 시각이 전부 같지만 확인일자는 제각각이다.
     confirmed_on: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
 
+    # 중개사가 매물에 붙인 한 줄 메모("세끼고 피3000 확정가500할인됨" 같은).
+    # 원문을 **그대로** 둔다. 키워드는 읽을 때 뽑는다(`services/memo_tags.py`) —
+    # 저장할 때 뽑아 두면 사전을 고쳐도 옛 행은 옛 태그를 달고 있다. 실제로 이
+    # 저장소에서 '측정으로 사전을 고친다' 를 전제로 만든 것이라 다시 뽑을 수 있어야 한다.
+    #
+    # 같은 (단지·동·평형·층·호가)를 중개사 여러 곳이 올리면 메모도 여럿이다.
+    # 덮어쓰지 않고 줄바꿈으로 **덧붙인다** — 한 곳만 '급매' 라고 적었어도 그건 사실이고,
+    # 덮어쓰면 나중에 들어온 것이 앞의 것을 조용히 지운다.
+    memo: Mapped[str] = mapped_column(Text, default="")
+
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     seen_count: Mapped[int] = mapped_column(Integer, default=1)

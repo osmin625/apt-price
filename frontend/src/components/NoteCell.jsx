@@ -19,6 +19,11 @@ import { api, STATIC_MODE } from '../api'
  *
  * 실패하면 **입력한 글자를 지우지 않는다.** 되돌려 버리면 쓴 사람이 쓴 것을 잃는다.
  */
+// title 속성의 줄바꿈. JSX 템플릿 리터럴에 실제 줄바꿈을 넣으면 들여쓰기까지
+// 같이 들어가 툴팁이 어긋난다. 상수로 둔다.
+const NL = '\n'
+const NLNL = NL + NL
+
 export default function NoteCell({ item, onSaved }) {
   const [text, setText] = useState(item.note || '')
   const [state, setState] = useState('idle') // idle | saving | saved | error
@@ -52,9 +57,53 @@ export default function NoteCell({ item, onSaved }) {
      메모와 구분되지 않는다. 배지로 두면 표시를 끄는 순간 같이 사라진다. */
   const auto = item.note_auto || []
 
+  /* 중개사 메모에서 뽑은 키워드.
+   *
+   * 민간임대 배지와 **다른 모양**으로 둔다. 저쪽은 사용자가 단지 상세에서 직접
+   * 표시한 사실이고, 이쪽은 **올린 사람이 그렇게 적었다**는 뜻이다. '올수리' 는
+   * 우리가 확인한 것이 아니다. 같은 모양으로 두면 둘이 같은 무게로 읽힌다.
+   *
+   * 셋까지만 배지로 내고 나머지는 '+N' 으로 접는다. 재 봤다 — **줄당** 태그는
+   * 중위 4개·최대 10개다(메모 하나당은 중위 2개인데, 한 줄이 같은 층대 매물 여럿을
+   * 접으므로 합집합이 커진다). 그래서 절반쯤 되는 줄이 '+N' 을 단다.
+   *
+   * 그래도 셋인 이유: 서버가 **가격에 걸리는 순서**로 돌려준다(급매·세안고·분양권P·
+   * 조정가능이 앞, 전망·에어컨·채광이 뒤). 실제로 10개가 붙은 줄의 앞 셋은
+   * 세안고·분양권P·조정가능이었고 접힌 일곱은 설비·전망 얘기였다. 늘려 봐야 중요한
+   * 것이 더 보이지 않고 비고 입력칸만 밀려난다 — 이 칸의 주인은 사람이 쓰는 글이다. */
+  const tags = item.note_tags || []
+  const memos = item.memos || []
+  const MAX = 3
+  const shown = tags.slice(0, MAX)
+  const rest = tags.length - shown.length
+  // 호버에 원문을 같이 띄운다. 키워드가 왜 붙었는지는 원문을 봐야 안다.
+  //
+  // 건수를 먼저 적는다. 한 줄은 같은 층대 매물 여럿을 접은 것이라 태그도 **합집합**이고,
+  // 그래서 한 줄에 '즉시입주' 와 '입주협의' 가 같이 붙을 수 있다 — 서로 다른 매물의
+  // 말이다. 몇 건을 합친 것인지 모르면 그게 모순으로 보인다.
+  const memoTitle = memos.length
+    ? `중개사 메모 ${memos.length}건 (올린 사람의 말입니다)` + NLNL + memos.join(NL)
+    : '중개사 메모에서 뽑은 키워드입니다'
+
+  const Tags = () =>
+    tags.length > 0 && (
+      <>
+        {shown.map((t) => (
+          <b className="note-tag is-memo" key={t} title={memoTitle}>
+            {t}
+          </b>
+        ))}
+        {rest > 0 && (
+          <b className="note-tag is-memo is-more" title={tags.join(' · ') + NLNL + memoTitle}>
+            +{rest}
+          </b>
+        )}
+      </>
+    )
+
   if (STATIC_MODE) {
     // 정적 사이트에서는 쓸 수 없다. 눌리는데 실패하는 칸을 두지 않는다.
-    if (!auto.length && !item.note) return <span className="muted">—</span>
+    if (!auto.length && !tags.length && !item.note) return <span className="muted">—</span>
     return (
       <span className="note-ro">
         {auto.map((t) => (
@@ -62,6 +111,7 @@ export default function NoteCell({ item, onSaved }) {
             {t}
           </b>
         ))}
+        <Tags />
         {item.note}
       </span>
     )
@@ -91,6 +141,7 @@ export default function NoteCell({ item, onSaved }) {
           {t}
         </b>
       ))}
+      <Tags />
       <input
         value={text}
         placeholder="비고"

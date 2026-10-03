@@ -513,6 +513,7 @@ def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
             "asking_price": p["asking_price"],
             "price_is_range": p.get("price_is_range", False),
             "confirmed_on": block["confirmed_on"],
+            "memo": block["memo"],
         })
 
     out = ranking.evaluate_many(db, rows, months=req.months, basis=req.basis)
@@ -535,7 +536,7 @@ def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
                 db, complex_id=i["complex_id"], dong=i.get("dong"),
                 exclusive_area=i["exclusive_area"], floor=i.get("floor"),
                 floor_band=i.get("floor_band"), asking_price=i["asking_price"],
-                confirmed_on=i.get("confirmed_on"),
+                confirmed_on=i.get("confirmed_on"), memo=i.get("memo"),
             ) == "created":
                 saved += 1
         except Exception:

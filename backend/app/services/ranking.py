@@ -136,6 +136,12 @@ def merge_duplicates(items: list[dict]) -> tuple[list[dict], int]:
              i.get("floor"), i.get("asking_price"))
         if k in merged:
             merged[k]["listing_count"] = merged[k].get("listing_count", 1) + 1
+            # 메모는 **합친다.** 여기서 합쳐지는 것이 바로 '한 물건을 중개사 여러
+            # 곳이 올린 경우' 이고, 메모는 중개사마다 다르다. 첫 줄만 남기면
+            # 다른 곳이 적은 '급매' 가 조용히 사라진다.
+            a, b = merged[k].get("memo"), i.get("memo")
+            if b and b.strip() and b.strip() not in (a or ""):
+                merged[k]["memo"] = (a + "\n" + b.strip()) if a else b.strip()
         else:
             i.setdefault("listing_count", 1)
             merged[k] = i

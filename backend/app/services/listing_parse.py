@@ -452,6 +452,44 @@ def parse_confirmed_on(text: str, today: date | None = None) -> date | None:
 
 
 
+# 중개사 메모는 **따옴표 한 줄로 감싸서** 온다. 재 보고 알았다 — 실제 붙여넣기에서
+#
+#     아파트17평 (전용12)3/25층남서향
+#     "
+#     달리는 황소 입주가능,시에2대 지동사거리 접근 좋아 대중교통용이
+#     "
+#     집주인확인매물 2026.09.23
+#
+# 처럼 `"` 만 있는 줄이 여닫는다. 이게 있으니 '어느 줄이 메모인가' 를 길이나 어휘로
+# 추측할 필요가 없다. 추측했다면 중개사명('황소단지내공인중개사사무소')이나 홍보문구를
+# 섞었을 것이다.
+#
+# 메모가 없는 카드도 많다. 중개사 여러 곳이 올린 매물은 접혀서 "중개사 4곳에서
+# 등록했어요" 만 나오고 메모가 없다 — 실제로 46건 중 메모가 붙은 것은 일부였다.
+_MEMO_FENCE = '"'
+
+
+def parse_memo(lines: list[str]) -> str | None:
+    """매물 덩어리에서 중개사 메모. 따옴표 줄 사이의 글이다.
+
+    여는 따옴표만 있고 닫는 것이 없으면 **버린다.** 덩어리 끝까지 읽어 들이면
+    다음 매물의 단지명과 가격까지 메모로 들어간다.
+    """
+    start = None
+    for i, raw in enumerate(lines):
+        if raw.strip() != _MEMO_FENCE:
+            continue
+        if start is None:
+            start = i
+            continue
+        body = [x.strip() for x in lines[start + 1:i] if x.strip()]
+        if body:
+            # 한 줄로 합친다. 줄바꿈을 남기면 순위표 칸에서 높이가 튄다.
+            return " ".join(body)[:300]
+        start = i  # 빈 따옴표쌍이면 여기를 새 시작으로 본다
+    return None
+
+
 def split_listings(text: str) -> list[dict]:
     """붙여넣은 목록을 매물 단위로 쪼갠다.
 
@@ -495,6 +533,9 @@ def split_listings(text: str) -> list[dict]:
         out.append({
             "text": "\n".join(block),
             "confirmed_on": parse_confirmed_on("\n".join(lines[head:limit])),
+            # 메모도 3줄 블록에 섞지 않는다. "피3000"·"임대분양가27,000" 같은 숫자가
+            # 들어 있어 섞으면 가격 파서가 집는다 — 확인일자를 따로 실은 것과 같은 이유다.
+            "memo": parse_memo(lines[head:limit]),
         })
     return out
 

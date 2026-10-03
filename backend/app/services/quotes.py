@@ -25,9 +25,26 @@ from ..models import Quote
 ACTIVE_DAYS = 90
 
 
+def add_memo(old: str | None, new: str | None) -> str:
+    """메모를 덧붙인다. 같은 말이 또 오면 늘리지 않는다.
+
+    덮어쓰지 않는 이유: 같은 매물을 중개사 여러 곳이 올리고 **메모는 제각각**이다.
+    한 곳만 '급매' 라고 적었어도 그건 그 줄에 대한 사실이고, 덮어쓰면 나중에 들어온
+    것이 앞의 것을 조용히 지운다. 같은 목록을 두 번 붙여넣어도 늘지 않아야 하므로
+    이미 들어 있는 줄은 더하지 않는다.
+    """
+    cur = [t for t in (old or "").split("\n") if t.strip()]
+    t = (new or "").strip()
+    if t and t not in cur:
+        cur.append(t)
+    # 한 유닛에 메모가 끝없이 쌓이지 않게 자른다. 태그는 합집합이라 뒤쪽을 잘라도
+    # 앞에서 이미 뽑힌 태그는 남는다.
+    return "\n".join(cur)[:1000]
+
+
 def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: float,
            floor: int | None, floor_band: str | None, asking_price: int,
-           confirmed_on=None) -> str:
+           confirmed_on=None, memo: str | None = None) -> str:
     """호가 하나를 기록한다. 반환값은 'created' | 'seen' — 화면에 알려 주려고 구분한다.
 
     같은 (단지·동·평형·층·호가) 면 새로 쌓지 않고 마지막 목격 시각만 올린다.
@@ -53,6 +70,7 @@ def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: fl
         # 같은 매물이 더 최근에 확인됐다면 그 날짜로 올린다.
         if confirmed_on and (row.confirmed_on is None or confirmed_on > row.confirmed_on):
             row.confirmed_on = confirmed_on
+        row.memo = add_memo(row.memo, memo)
         db.commit()
         return "seen"
 
@@ -62,6 +80,7 @@ def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: fl
         floor_band=floor_band or pricing.floor_band(floor, None),
         asking_price=int(asking_price),
         confirmed_on=confirmed_on,
+        memo=(memo or "").strip()[:1000],
     ))
     db.commit()
     return "created"
@@ -324,6 +343,21 @@ def display_units(rows: list[Quote]) -> list[dict]:
         # 보인다. 줄 전체 기준이어야 "이 줄이 언제부터 있었나" 에 답이 된다.
         seen = [q.first_seen_at for c in chains for q in c.rows if q.first_seen_at]
         item["added_on"] = min(seen).date().isoformat() if seen else None
+
+        # 이 줄에 접힌 **모든** 매물의 중개사 메모. 한 줄은 호가 하나가 아니라
+        # 같은 층대의 여러 매물이고, 메모는 매물마다 다르다 — 한 건만 '급매' 라고
+        # 적혀 있어도 그 줄에는 급매가 있다. 대표 것만 쓰면 그걸 놓친다.
+        #
+        # 원문을 올려 보낸다. 키워드로 바꾸는 것은 라우터에서 한다 — 여기서 바꾸면
+        # 호버에 보여 줄 원문이 사라지고, 사전을 고쳤을 때 다시 뽑을 수도 없다.
+        memos: list[str] = []
+        for c in chains:
+            for q in c.rows:
+                for line in (q.memo or "").split("\n"):
+                    t = line.strip()
+                    if t and t not in memos:
+                        memos.append(t)
+        item["memos"] = memos
 
         # 비고를 붙일 키. unit_key 와 **같아야** 한다 — 어긋나면 메모가 엉뚱한 줄에 간다.
         k = unit_key(rep.latest)

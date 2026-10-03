@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Complex, DongTag, Quote, QuoteNote
+from ..services import memo_tags
 from ..services import quotes as quotes_svc
 from ..services import ranking
 
@@ -69,6 +70,10 @@ def ranking_all(
         for n in db.execute(select(QuoteNote)).scalars().all()
     }
     by_quote = {p["quote_id"]: p.get("note_key") for p in payload}
+    # 중개사 메모에서 뽑은 키워드. 사람이 쓴 비고와 **같은 칸에 다른 모양으로** 둔다 —
+    # 우리가 확인한 사실이 아니라 올린 사람이 그렇게 적었다는 뜻이기 때문이다.
+    # 뽑는 것은 읽을 때마다 한다. 저장할 때 뽑아 두면 사전을 고쳐도 옛 줄은 안 바뀐다.
+    memos_of = {p["quote_id"]: p.get("memos") or [] for p in payload}
     # 민간임대 표시는 **동에 붙어 있고 여기서 파생한다.** 비고에 글자를 써 넣으면
     # 표시를 끈 뒤에도 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
     rental = {
@@ -89,6 +94,9 @@ def ranking_all(
         item["note_auto"] = (
             ["민간임대"] if (k["complex_id"], k["dong"]) in rental else []
         )
+        memos = memos_of.get(item.get("quote_id")) or []
+        item["note_tags"] = memo_tags.merge(memos)
+        item["memos"] = memos
     out["months"] = months
     out["total_quotes"] = len(rows)
     out["revised_units"] = sum(1 for p in payload if p["revisions"] > 1)

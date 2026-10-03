@@ -167,7 +167,7 @@
    *
    * 토스트에 버전을 적어 두면 한 번 눌러 보는 것으로 가려진다.
    */
-  const VER = 'v2';
+  const VER = 'v3';
 
   /*
    * 담아 두는 자리에 **버전을 넣는다.**
@@ -209,7 +209,31 @@
     setTimeout(() => d.remove(), 3000);
   };
 
-  // 카드 한 장을 네 줄로. 못 알아보면 null.
+  /*
+   * 중개사 메모는 **따옴표 줄로 감싸여** 온다. 실제 카드에서
+   *
+   *     아파트17평 (전용12)3/25층남서향
+   *     "
+   *     달리는 황소 입주가능,시에2대 지동사거리 접근 좋아 대중교통용이
+   *     "
+   *     집주인확인매물 2026.09.23
+   *
+   * 처럼 나온다. 이 울타리가 있어서 '어느 줄이 메모인가' 를 길이나 어휘로 추측할
+   * 필요가 없다 — 추측했다면 중개사명('황소단지내공인중개사사무소')이나 홍보문구를
+   * 섞었을 것이고, 그건 조용히 틀린다.
+   *
+   * 백엔드 `listing_parse.parse_memo()` 와 **같은 규칙**이다. 한쪽을 고치면 양쪽을
+   * 같이 고칠 것. 울타리를 그대로 실어 보내므로 파서가 다시 읽을 수 있다.
+   */
+  const memoOf = (filled) => {
+    const at = [];
+    for (let i = 0; i < filled.length; i++) if (filled[i] === '\u0022') at.push(i);
+    if (at.length < 2) return null;
+    const body = filled.slice(at[0] + 1, at[1]).filter((t) => t);
+    return body.length ? body.join(' ').slice(0, 300) : null;
+  };
+
+  // 카드 한 장을 네댓 줄로. 못 알아보면 null.
   const cardText = (raw) => {
     const lines = (raw || '').split('\n').map((l) => l.trim());
     const filled = lines.filter((l) => l);
@@ -234,6 +258,13 @@
         break;
       }
     }
+
+    // 메모는 울타리째 싣는다. 파서가 그 울타리로 찾기 때문이다. 메모가 없는 카드도
+    // 많다 — 중개사 여러 곳이 올린 매물은 접혀서 "중개사 4곳에서 등록했어요" 만
+    // 나온다(실측 46건 중 메모가 붙은 것은 33건).
+    const memo = memoOf(filled);
+    if (memo) out.push('\u0022', memo, '\u0022');
+
     return out.join('\n');
   };
 
