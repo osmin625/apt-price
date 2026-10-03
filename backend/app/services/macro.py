@@ -90,6 +90,17 @@ METRICS: list[dict] = [
         "decimals": 0,
     },
     {
+        "key": "trade_volume",
+        "label": "매매 거래량",
+        "unit": "호",
+        "what": "그 달에 신고된 아파트 매매 거래 건수.",
+        "read": "가격과 **다른 축**입니다. 12개월 거래 배수와 12개월 가격 변화의 "
+                "순위상관이 0.352 밖에 안 됩니다 — 가격만 봐서는 거래가 받쳐 준 "
+                "상승인지 호가만 오른 것인지 구분되지 않습니다. 월별 값은 계절성이 "
+                "커서 톱니처럼 보이니, 추세는 1년 단위로 견주는 것이 맞습니다.",
+        "decimals": 0,
+    },
+    {
         "key": "med_sale_price",
         "label": "중위 매매가격",
         "unit": "만원",
@@ -255,11 +266,16 @@ def cycle_phase(db: Session) -> dict:
     '신고가 / 회복 중 / 정체 / 꺾임' 이 갈린다.
     """
     idx = _series_map(db, "sale_index")
+    # 표본 두께를 점마다 붙인다. 국면을 읽는 자리가 바로 여기이기 때문이다 —
+    # 과천의 '전고점 대비 -5%' 는 월 33건에서 나온 값이고, 동탄의 같은 숫자는
+    # 월 1,137건에서 나왔다. 호버에서 둘을 같이 보여 준다.
+    vol = _series_map(db, "trade_volume")
     items = []
     for sgg, name in DISTRICTS.items():
         s = idx.get(sgg) or []
         if len(s) < MIN_MONTHS:
             continue
+        vs = (vol.get(sgg) or [])[-12:]
         vals = [v for _, v in s]
         yms = [y for y, _ in s]
         pi = max(range(len(vals)), key=lambda i: vals[i])
@@ -279,6 +295,7 @@ def cycle_phase(db: Session) -> dict:
             "m12": round(_pct(vals[-13], cur), 2) if len(vals) > 13 else None,
             "accel": round(m3 - prev3, 2) if (m3 is not None and prev3 is not None) else None,
             "latest_ym": yms[-1],
+            "vol_pm": round(sum(v for _, v in vs) / len(vs)) if vs else None,
         })
     return {
         "items": items,
@@ -390,6 +407,177 @@ def model_gap(db: Session, fit: dict | None) -> dict:
         "note": "대각선 위에 있으면 모델이 공표 평균보다 그 지역을 낮게 보고, 아래면 "
                 "높게 봅니다. 기본은 맞는 것이고, 크게 벌어진 지역이 들여다볼 곳입니다 — "
                 "평형·연식 구성이 특이하거나, 모델이 뭔가를 놓쳤거나입니다.",
+    }
+
+
+# 거래 배수를 내려면 최근 12개월과 **비교할 과거 5년**이 둘 다 있어야 한다.
+# 248개월이 있는 13곳은 통과하고, 2026-02 부터인 화성 분구 4곳은 여기서 빠진다.
+VOL_MIN_MONTHS = 72
+
+
+def _volume_ratio(s: list[tuple[str, float]]) -> tuple[float, float, float] | None:
+    """(최근 12개월 합, 직전 5년 연평균, 배수). 자료가 짧으면 None.
+
+    왜 '직전 5년 평균 대비' 인가. 거래량은 절대값으로는 지역끼리 비교할 수 없다 —
+    과천은 월 33건, 동탄은 월 1,137건이다. 그 구의 평상시와 비교해야 '지금 활발한가'
+    를 같은 축에 놓을 수 있다.
+
+    마지막 달은 신고 지연으로 과소집계될 수 있다. 재 보니 13곳 중 4곳이 직전 12개월
+    평균의 0.8배 밑이었는데(기흥 0.32·과천 0.34), 9곳은 정상이라 전역에 걸친 지연은
+    아니었다. 그래도 12개월 **합**이라 한 달의 영향은 묻힌다 — 마지막 달을 빼고 다시
+    재니 배수가 최대 0.11 바뀌고 순위는 인접 한 쌍만 뒤집혔다. 그래서 포함한다.
+    """
+    if len(s) < VOL_MIN_MONTHS:
+        return None
+    vals = [v for _, v in s]
+    cur = sum(vals[-12:])
+    base = sum(vals[-72:-12]) / 5.0
+    if not base:
+        return None
+    return cur, base, cur / base
+
+
+def volume_support(db: Session) -> dict:
+    """거래가 받쳐 준 상승인가 — 가로 12개월 가격 변화(%), 세로 거래 배수(%).
+
+    가격 지표만 여섯 개를 보여 주고 있었는데, 그것들은 서로 거의 같은 말을 한다.
+    거래량은 **다른 말을 한다**: 거래 배수와 12개월 가격 변화의 Spearman 이 0.352 다.
+    (모델 괴리 차트는 0.882 였다 — 거기선 둘이 같아야 정상이고, 여기선 다른 것이
+    정상이다.)
+
+    재 보니 순서가 크게 엇갈렸다. 과천은 거래가 5년 평균의 **0.76배로 줄었는데**
+    가격은 +7.8% 였고, 기흥은 거래가 2.01배인데 +12.7% 였다. 같은 상승이 아니다.
+
+    주의: 거래가 적은데 오른 것이 곧 '거품' 이라는 뜻은 아니다. 매물이 안 나와서
+    거래가 없을 수도 있다. 이 그림은 **상승의 종류가 다르다**는 것까지만 말한다.
+    """
+    idx = _series_map(db, "sale_index")
+    vol = _series_map(db, "trade_volume")
+    items = []
+    for sgg, name in DISTRICTS.items():
+        vr = _volume_ratio(vol.get(sgg) or [])
+        si = idx.get(sgg) or []
+        if not vr or len(si) < 13:
+            continue
+        cur, base, ratio = vr
+        vs = vol[sgg]
+        items.append({
+            "sgg_cd": sgg,
+            "name": name,
+            "sale_12m": round(_pct(si[-13][1], si[-1][1]) or 0, 2),
+            "vol_12m": round(cur),
+            "vol_base": round(base),
+            # 배수를 '%' 로 적는다. 1.0 배가 0 이 되어 사분면 기준선이 0 으로 맞는다.
+            "vol_pct": round((ratio - 1) * 100, 1),
+            "vol_pm": round(cur / 12),
+            "latest_ym": vs[-1][0],
+        })
+    return {
+        "items": items,
+        "x_label": "12개월 매매가 변화 (%)",
+        "y_label": "거래량 — 5년 평균 대비 (%)",
+        "note": "세로 0 은 그 구의 직전 5년 연평균만큼 거래됐다는 뜻입니다. 위는 "
+                "평상시보다 활발하고 아래는 말랐습니다. 거래량은 절대값으로 지역끼리 "
+                "비교할 수 없어(과천 월 33건 ↔ 동탄 월 1,137건) 각자의 평상시와 "
+                "견줍니다. 비교할 과거 5년이 없는 화성시 분구는 뺐습니다.",
+        "excluded": [
+            DISTRICTS[s] for s in DISTRICTS
+            if not _volume_ratio(vol.get(s) or [])
+        ],
+    }
+
+
+def sample_depth(db: Session) -> dict:
+    """지수가 몇 건으로 만들어졌나 — 시군구별 월평균 거래 건수.
+
+    이 탭은 17개 구의 지수를 **같은 굵기의 선**으로 나란히 그린다. 그런데 과천은
+    월 33건, 동탄은 월 1,137건이다. 34배 차이다. 과천의 '전고점 대비 -5%' 와
+    동탄의 같은 숫자는 무게가 다른데, 화면에서는 구분되지 않았다.
+
+    이 저장소의 규칙("추정을 사실처럼 보여 주지 않는다")이 그대로 적용되는 자리다.
+    값을 고치지 않고 **표본이 얇다는 사실을 같이 보여 준다.**
+
+    배수와 달리 이것은 수준값이라 과거 비교가 필요 없다. 그래서 자료가 7개월뿐인
+    화성 분구도 들어간다 — 그 7개월의 월평균이다.
+    """
+    vol = _series_map(db, "trade_volume")
+    items = []
+    for sgg, name in DISTRICTS.items():
+        s = vol.get(sgg) or []
+        if not s:
+            continue
+        tail = s[-12:]
+        items.append({
+            "sgg_cd": sgg,
+            "name": name,
+            "per_month": round(sum(v for _, v in tail) / len(tail)),
+            "months": len(s),
+            "window": len(tail),
+            "latest_ym": s[-1][0],
+        })
+    items.sort(key=lambda r: r["per_month"])
+    med = items[len(items) // 2]["per_month"] if items else 0
+    # '얇다' 의 기준을 중위값의 절반으로 둔다. 절대 건수로 선을 그으면 지역 규모가
+    # 바뀔 때 거짓이 되고, 중위 대비는 17곳 안에서의 상대적 얇음을 가리킨다.
+    thin = max(1, round(med / 2))
+    for r in items:
+        r["thin"] = r["per_month"] < thin
+    return {
+        "items": items,
+        "median": med,
+        "thin_below": thin,
+        "note": "최근 12개월 월평균 매매 거래 건수입니다. 지수는 거래에서 나오므로 "
+                "건수가 적은 구의 지수는 그만큼 흔들립니다. 값이 틀렸다는 뜻은 "
+                "아니지만, 같은 '전고점 대비 -5%' 가 월 33건과 월 1,137건에서 나온 "
+                "것이라면 무게가 다릅니다.",
+    }
+
+
+def price_spread(db: Session) -> dict:
+    """구 안의 가격 편차 — 평균 ÷ 중위.
+
+    우리 모델은 `sgg_*` 구 계수를 쓴다. 그것이 뜻을 가지려면 **구가 어느 정도
+    균질해야** 한다. 공표되는 평균과 중위를 나누면 그 가정을 검산할 수 있다.
+
+    재 보니 갈렸다. 영통구는 평균이 중위보다 25% 높다 — 광교와 영통이 한 구에
+    섞여 있다는 뜻이다. 반대로 팔달구(0.957)와 화성 만세구(0.964)는 평균이 중위보다
+    **낮다**. 저가 쪽이 아니라 고가 쪽이 얇다는 말이다.
+
+    평균 평수(= 한 채 평균가 ÷ 평당가)도 같은 두 지표에서 공짜로 나온다. 평당가
+    순위와 한 채 가격 순위가 왜 다른지가 여기서 설명된다(팔달 21.5평 ↔ 수지 27.8평).
+
+    수준값이라 과거 비교가 필요 없다. 화성 분구 4곳도 들어가서 17곳 전부 나온다.
+    """
+    avg = _series_map(db, "avg_sale_price")
+    med = _series_map(db, "med_sale_price")
+    unit = _series_map(db, "avg_unit_price")
+    items = []
+    for sgg, name in DISTRICTS.items():
+        a, m, u = avg.get(sgg) or [], med.get(sgg) or [], unit.get(sgg) or []
+        if not a or not m:
+            continue
+        av, mv = a[-1][1], m[-1][1]
+        if not mv:
+            continue
+        items.append({
+            "sgg_cd": sgg,
+            "name": name,
+            "avg": round(av),
+            "med": round(mv),
+            "spread": round(av / mv, 3),
+            # 0 을 기준으로 놓으면 '평균이 중위보다 몇 % 높나' 로 읽힌다.
+            "spread_pct": round((av / mv - 1) * 100, 1),
+            # 만원 ÷ (만원/평) = 평. convert 가 이미 둘을 같은 단위로 맞춰 놨다.
+            "pyeong": round(av / u[-1][1], 1) if u and u[-1][1] else None,
+            "latest_ym": a[-1][0],
+        })
+    items.sort(key=lambda r: -r["spread"])
+    return {
+        "items": items,
+        "note": "평균을 중위로 나눈 값입니다. 0% 는 둘이 같다는 뜻이고, 플러스는 "
+                "고가 단지 몇 곳이 평균을 끌어올렸다는 뜻 — 그 구 안의 가격 편차가 "
+                "크다는 말입니다. 마이너스면 반대로 고가 쪽이 얇습니다. 편차가 큰 "
+                "구는 '구 계수' 하나로 묶기 어렵다는 신호이기도 합니다.",
     }
 
 

@@ -57,7 +57,8 @@ def insights(
     db: Session = Depends(get_db),
     months: int = Query(12, ge=6, le=120),
 ):
-    """읽을 거리 셋 — 국면 4분면 · 상승의 성격 · 모델과의 어긋남.
+    """읽을 거리 — 국면 · 상승의 성격 · 거래가 받쳐 줬나 · 표본 두께 · 가격 편차 ·
+    모델과의 어긋남.
 
     모델 대조는 적합이 **이미 있을 때만** 한다. 여기서 적합을 새로 돌리면 매크로
     탭을 여는 데 수십 초가 걸린다. 없으면 그 그림만 비우고 나머지는 보여 준다 —
@@ -80,6 +81,11 @@ def insights(
     return {
         "cycle": mc.cycle_phase(db),
         "rally": mc.rally_character(db),
+        # 거래량 세 가지는 가격 지표와 **다른 축**이다. 적재 전이면 빈 items 가
+        # 돌아오고, 화면은 그 카드만 비운다 — 하나 때문에 전부 막지 않는다.
+        "volume": mc.volume_support(db),
+        "depth": mc.sample_depth(db),
+        "spread": mc.price_spread(db),
         "model_gap": mc.model_gap(db, fit),
         "has_fit": fit is not None,
     }

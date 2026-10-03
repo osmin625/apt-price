@@ -4,6 +4,7 @@ import { api } from '../api'
 import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 import Loading from '../components/Loading'
 import Modal from '../components/Modal'
+import MacroBars from '../components/MacroBars'
 import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
@@ -121,6 +122,47 @@ export default function MacroView() {
         </MacroCard>
 
         <MacroCard
+          title="거래가 받쳐 준 상승인가"
+          sub={
+            ins?.volume?.items?.length
+              ? `시군구 ${ins.volume.items.length}곳 · 가격 × 거래량`
+              : '거래량 적재가 필요합니다'
+          }
+          onOpen={() => setOpen('volume')}
+          ready={!!ins?.volume?.items?.length}
+        >
+          {ins?.volume?.items?.length > 0 && <VolumeChart ins={ins} compact />}
+        </MacroCard>
+
+        <MacroCard
+          title="지수가 몇 건으로 만들어졌나"
+          sub={
+            ins?.depth?.items?.length
+              ? `중위 ${fmt(ins.depth.median, 0)}건/월 · 얇은 곳 ${
+                  ins.depth.items.filter((i) => i.thin).length
+                }곳`
+              : '거래량 적재가 필요합니다'
+          }
+          onOpen={() => setOpen('depth')}
+          ready={!!ins?.depth?.items?.length}
+        >
+          {ins?.depth?.items?.length > 0 && <DepthBars ins={ins} compact />}
+        </MacroCard>
+
+        <MacroCard
+          title="구 안의 가격 편차"
+          sub={
+            ins?.spread?.items?.length
+              ? `시군구 ${ins.spread.items.length}곳 · 평균 ÷ 중위`
+              : '불러오는 중'
+          }
+          onOpen={() => setOpen('spread')}
+          ready={!!ins?.spread?.items?.length}
+        >
+          {ins?.spread?.items?.length > 0 && <SpreadBars ins={ins} compact />}
+        </MacroCard>
+
+        <MacroCard
           title="모델과 어긋나는 곳"
           sub={
             ins?.model_gap?.spearman != null
@@ -212,6 +254,111 @@ export default function MacroView() {
             caveat="전세가율이 떨어진 것 자체가 고평가라는 뜻은 아니다. 상승의 성격이 다르다는 것까지만 말해 준다."
           />
           <RallyChart ins={ins} />
+        </Modal>
+      )}
+
+      {open === 'volume' && ins?.volume?.items?.length > 0 && (
+        <Modal title="거래가 받쳐 준 상승인가" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.volume.note}</p>
+          <ChartGuide
+            axes={[
+              ['가로 — 12개월 매매가 변화 (%)', '지난 1년 동안 얼마나 올랐나. 다른 차트와 같은 축이다.'],
+              ['세로 — 거래량, 5년 평균 대비 (%)', '그 구의 최근 12개월 거래 건수를 직전 5년 연평균과 비교한 값. 0 은 평상시만큼, 위는 평상시보다 활발, 아래는 말랐다는 뜻이다.'],
+            ]}
+            why="이 탭의 가격 지표 여섯 개는 서로 거의 같은 말을 한다. 거래량은 다른 말을 한다 — 거래 배수와 12개월 가격 변화의 순위상관이 0.352 밖에 안 된다(모델 괴리 차트는 0.882 였고, 거기선 둘이 같아야 정상이다). 가격만 봐서는 '거래가 받쳐 준 상승' 과 '거래 없이 호가만 오른 상승' 이 구분되지 않는다."
+            quadrants={[
+              ['오른쪽 위 · 거래가 받쳐 준 상승', '올랐고 거래도 평상시보다 많다. 값이 실제로 손바뀜되면서 올라갔다는 뜻이다.'],
+              ['오른쪽 아래 · 거래 없이 오른 상승', '올랐는데 거래는 평상시보다 적다. 과천이 여기다 — 거래가 5년 평균의 0.76배인데 가격은 +7.8% 다.'],
+              ['왼쪽 위 · 거래는 되는데 안 오름', '손바뀜은 활발한데 가격은 제자리다.'],
+              ['왼쪽 아래 · 거래도 가격도 조용함', '양쪽 다 움직이지 않는다.'],
+            ]}
+            tips={[
+              '세로축은 절대 건수가 아니라 그 구의 평상시 대비다. 과천은 월 33건, 동탄은 월 1,137건이라 건수로는 같은 축에 놓을 수 없다.',
+              '오른쪽 아래가 곧 거품이라는 뜻은 아니다. 매물이 안 나와서 거래가 없을 수도 있다. 이 그림은 상승의 종류가 다르다는 것까지만 말한다.',
+              '가로축 순서와 세로축 순서가 엇갈리는 것이 요점이다. 기흥은 거래 2배에 +12.7%, 수지는 거래 1.57배에 +19.5% — 같은 크기의 상승이 아니다.',
+            ]}
+            caveat="거래량의 마지막 달은 신고 지연으로 과소집계될 수 있다. 재 보니 13곳 중 4곳이 직전 평균의 0.8배 밑이었지만 12개월 합이라 묻힌다 — 마지막 달을 빼고 다시 재니 배수가 최대 0.11 바뀌고 순위는 인접 한 쌍만 뒤집혔다."
+          />
+          <VolumeChart ins={ins} />
+          {ins.volume.excluded.length > 0 && (
+            <p className="paste-warn" style={{ marginTop: 8 }}>
+              {ins.volume.excluded.join(' · ')}는 비교할 과거 5년이 없어 뺐습니다.
+              분구 시점(2026-02)부터 공표가 시작됐기 때문입니다.
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {open === 'depth' && ins?.depth?.items?.length > 0 && (
+        <Modal title="지수가 몇 건으로 만들어졌나" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.depth.note}</p>
+          <ChartGuide
+            axes={[
+              ['막대 길이 — 월평균 매매 거래 건수', '최근 12개월 평균. 지수가 몇 건의 거래에서 나왔는지를 뜻한다.'],
+            ]}
+            why="이 탭은 17개 구의 지수를 같은 굵기의 선으로 나란히 그린다. 그런데 과천은 월 33건, 화성 동탄구는 월 1,137건이다 — 34배 차이다. 과천의 '전고점 대비 -5%' 와 동탄의 같은 숫자는 무게가 다른데, 선만 봐서는 구분되지 않았다."
+            quadrants={null}
+            tips={[
+              '표본이 얇다고 값이 틀렸다는 뜻은 아니다. 다만 한두 건의 특이 거래에 지수가 더 흔들린다.',
+              "'얇다' 표시는 17곳 중위값의 절반 미만이다. 절대 건수로 선을 그으면 지역 규모가 바뀔 때 거짓이 된다.",
+              '국면 차트에서 점에 마우스를 올리면 그 구의 월 거래 건수가 같이 나온다 — 그 점의 무게를 그 자리에서 알 수 있다.',
+            ]}
+            caveat="한국부동산원 지수의 실제 표본 설계는 공표 거래 건수와 다르다. 이것은 '그 구에서 한 달에 몇 건이 거래되는가' 라는 대리지표이고, 지수 산정에 쓰인 표본 수 그 자체는 아니다."
+          />
+          <MacroBars
+            items={ins.depth.items}
+            value={(d) => d.per_month}
+            decimals={0}
+            suffix="건"
+            mark={(d) => d.thin}
+            markLabel="얇다"
+            tip={(d) => (
+              <>
+                <div className="t-title">{d.name}</div>
+                <div className="t-row">월평균 {fmt(d.per_month, 0)}건 (최근 {d.window}개월)</div>
+                <div className="t-row">공표 자료 {d.months}개월 · 최신 {d.latest_ym}</div>
+                {d.thin && <div className="t-row">중위 {fmt(ins.depth.median, 0)}건의 절반 미만 — 지수가 더 흔들립니다</div>}
+              </>
+            )}
+          />
+        </Modal>
+      )}
+
+      {open === 'spread' && ins?.spread?.items?.length > 0 && (
+        <Modal title="구 안의 가격 편차" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.spread.note}</p>
+          <ChartGuide
+            axes={[
+              ['막대 길이 — 평균 ÷ 중위 (%)', '0 은 평균과 중위가 같다는 뜻. 오른쪽(플러스)은 평균이 중위보다 높고, 왼쪽은 낮다.'],
+            ]}
+            why="우리 모델은 구마다 계수 하나(`sgg_*`)를 둔다. 그것이 뜻을 가지려면 구가 어느 정도 균질해야 한다. 공표되는 평균과 중위를 나누면 그 가정을 검산할 수 있다 — 편차가 큰 구는 계수 하나로 묶기 어렵다는 신호다."
+            quadrants={null}
+            tips={[
+              '영통구가 +25% 다. 평균이 중위보다 25% 높다는 것은 고가 단지 몇 곳이 평균을 끌어올렸다는 뜻 — 광교와 영통이 한 구에 섞여 있다.',
+              '팔달구(-4.3%)와 화성 만세구(-3.6%)는 평균이 중위보다 낮다. 저가 쪽이 아니라 고가 쪽이 얇다는 말이다.',
+              '마우스를 올리면 평균 평수(= 한 채 평균가 ÷ 평당가)가 같이 나온다. 평당가 순위와 한 채 가격 순위가 왜 다른지가 여기서 설명된다 — 팔달 21.5평, 수지 27.8평.',
+            ]}
+            caveat="편차가 크다는 것이 그 구가 비싸다·싸다는 뜻은 아니다. 구 평균값을 그 구의 대표값으로 쓸 때 조심하라는 뜻이다."
+          />
+          <MacroBars
+            items={ins.spread.items}
+            value={(d) => d.spread_pct}
+            diverging
+            suffix="%"
+            tip={(d) => (
+              <>
+                <div className="t-title">{d.name}</div>
+                <div className="t-row">
+                  평균 {fmt(d.avg, 0)}만원 · 중위 {fmt(d.med, 0)}만원
+                </div>
+                <div className="t-row">
+                  평균이 중위보다 {d.spread_pct > 0 ? '+' : ''}
+                  {fmt(d.spread_pct, 1)}%
+                </div>
+                {d.pyeong != null && <div className="t-row">평균 평수 {fmt(d.pyeong, 1)}평</div>}
+              </>
+            )}
+          />
         </Modal>
       )}
 
@@ -476,6 +623,10 @@ function CycleChart({ ins, compact }) {
               직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p
             </div>
           )}
+          {/* 이 점의 무게. 월 33건에서 나온 -5% 와 월 1,137건에서 나온 -5% 는 다르다. */}
+          {d.vol_pm != null && (
+            <div className="t-row">이 구의 거래 월평균 {fmt(d.vol_pm, 0)}건</div>
+          )}
         </>
       )}
     />
@@ -507,6 +658,71 @@ function RallyChart({ ins, compact }) {
           </div>
         </>
       )}
+    />
+  )
+}
+
+function VolumeChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.volume.items}
+      x={(d) => d.sale_12m}
+      y={(d) => d.vol_pct}
+      xLabel={ins.volume.x_label}
+      yLabel={ins.volume.y_label}
+      quadrants={[
+        '거래가 받쳐 준 상승',
+        '거래는 되는데 안 오름',
+        '거래도 가격도 조용함',
+        '거래 없이 오른 상승',
+      ]}
+      xDecimals={0}
+      yDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            12개월 매매 {d.sale_12m > 0 ? '+' : ''}
+            {fmt(d.sale_12m, 1)}%
+          </div>
+          <div className="t-row">
+            거래 {fmt(d.vol_12m, 0)}건 · 5년 평균 {fmt(d.vol_base, 0)}건 대비{' '}
+            {d.vol_pct > 0 ? '+' : ''}
+            {fmt(d.vol_pct, 0)}%
+          </div>
+          <div className="t-row">월평균 {fmt(d.vol_pm, 0)}건 · 최신 {d.latest_ym}</div>
+        </>
+      )}
+    />
+  )
+}
+
+/* 카드 축소판. 이름표가 없으면 '어디가 얇은가' 는 못 읽지만 **분포의 모양**은
+   읽힌다 — 맨 아래 한두 개가 유독 짧은 것이 과천이고, 그게 이 카드의 요점이다. */
+function DepthBars({ ins, compact }) {
+  return (
+    <MacroBars
+      items={ins.depth.items}
+      value={(d) => d.per_month}
+      decimals={0}
+      suffix="건"
+      mark={(d) => d.thin}
+      markLabel="얇다"
+      compact={compact}
+    />
+  )
+}
+
+function SpreadBars({ ins, compact }) {
+  return (
+    <MacroBars
+      items={ins.spread.items}
+      value={(d) => d.spread_pct}
+      diverging
+      suffix="%"
+      compact={compact}
     />
   )
 }

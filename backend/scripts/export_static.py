@@ -78,6 +78,10 @@ RANK_BASIS = ("market", "factor")
 MACRO_METRICS = (
     "sale_index", "jeonse_index", "jeonse_ratio",
     "avg_unit_price", "avg_sale_price", "med_sale_price",
+    # 지표 칩에 보이는 것은 전부 내보낸다. 하나 빠지면 그 칩만 404 가 나고, 그건
+    # 화면에서 '불러오는 중' 으로 멈춰 있어서 조용하다 — 인사이트 경로를 하나
+    # 빠뜨렸다가 4분면이 통째로 빈 채 배포된 적이 있다.
+    "trade_volume",
 )
 MACRO_SINCE = ("202401", "202001", "201201")
 

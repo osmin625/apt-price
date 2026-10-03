@@ -904,6 +904,38 @@ tr.is-deleting td { opacity: 0.4; }
 
 /* ── 그림 읽는 법 ─────────────────────────────────────────────────────
    접어 둔다. 늘 펼쳐 두면 정작 그림이 아래로 밀린다. */
+/* 매크로 막대 목록 — 값이 하나뿐인 지표(표본 두께·가격 편차)에 쓴다.
+   .pbar-* 를 재사용하지 않은 이유: 그쪽은 요인 패널의 격자 폭에 맞춰져 있고,
+   한쪽을 고치면 다른 쪽이 조용히 틀어진다. 규칙이 작아서 따로 두는 쪽이 싸다. */
+.mbars { margin-top: 4px; }
+.mbar-row {
+  /* 128px 은 '화성시 만세구'(가장 긴 이름) + '얇다' 배지가 들어가는 폭이다.
+     104px 로 뒀더니 배지가 막대 위로 겹쳐 흘렀다. */
+  display: grid; grid-template-columns: 128px 1fr 64px;
+  align-items: center; gap: 10px; padding: 2px 0; border-radius: 6px;
+}
+.mbar-row:hover { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
+.mbar-label { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+.mbar-flag {
+  margin-left: 5px; padding: 0 4px; border-radius: 4px; font-size: 10.5px;
+  font-style: normal; font-weight: 700;
+  color: var(--neg); background: color-mix(in srgb, var(--neg) 14%, transparent);
+}
+.mbar-track { position: relative; height: 16px; }
+.mbar-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
+.mbar-fill { position: absolute; top: 3px; height: 10px; min-width: 2px; }
+.mbar-fill.pos { background: var(--series-1); border-radius: 0 3px 3px 0; }
+.mbar-fill.neg { background: var(--neg); border-radius: 3px 0 0 3px; }
+.mbar-row.marked .mbar-fill.pos { background: var(--neg); }
+.mbar-value {
+  font-size: 12.5px; font-weight: 600; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+/* 축소판은 막대만. 300px 폭에 이름 17개를 적으면 글자가 겹쳐 아무것도 못 읽는다. */
+.mbars.compact .mbar-row { grid-template-columns: 1fr; gap: 0; padding: 1px 0; }
+.mbars.compact .mbar-track { height: 7px; }
+.mbars.compact .mbar-fill { top: 1px; height: 5px; }
+
 .chart-guide { margin: 8px 0 4px; }
 .guide-toggle { font-size: 12.5px; }
 .guide-body {
