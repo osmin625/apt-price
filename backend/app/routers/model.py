@@ -436,7 +436,17 @@ def _area_types(points) -> tuple[list[int], dict[int, float]]:
 
 
 class BulkRequest(BaseModel):
-    text: str = Field(max_length=200_000)
+    # 20만 자. 재 보니 북마클릿이 추려 낸 매물은 한 건당 92.5자(구분자 포함)라
+    # **약 2,100건**이고, 손으로 드래그 복사한 원문은 한 건당 129자라 약 1,550건이다.
+    # 실측: 1,058건(13.7만 자)이 4.0초. 이 정도면 한 번에 옮길 일이 거의 없는 양이다.
+    #
+    # 넘기면 422 가 나는데, 그 메시지가 화면에 닿는지가 더 중요하다. detail 이
+    # 배열이라 예전에는 `[object Object]` 만 떴다(api.js 의 detailText 로 고쳤다).
+    # 한계에 부딪히는 것은 괜찮다 — 왜 막혔는지 모르는 것이 문제다.
+    text: str = Field(
+        max_length=200_000,
+        description="매물 목록 텍스트. 20만 자(약 2,000건)까지.",
+    )
     months: int = Field(default=24, ge=6, le=120)
     basis: str = Field(default="market", pattern="^(market|factor)$")
 

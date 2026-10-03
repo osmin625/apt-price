@@ -150,9 +150,32 @@ async function request(path, options = {}) {
   }
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
-    throw new ApiError(detail.detail || `요청 실패 (${res.status})`, res.status)
+    throw new ApiError(detailText(detail, res.status), res.status)
   }
   return res.json()
+}
+
+/**
+ * FastAPI 의 `detail` 을 **읽을 수 있는 한 줄**로.
+ *
+ * 422(검증 실패)의 detail 은 문자열이 아니라 **배열**이다. 그대로 Error 에 넣으면
+ * `String([{...}])` 이 되어 화면에 `[object Object]` 만 뜬다. 실제로 그랬다 —
+ * 붙여넣기가 20만 자 한계를 넘기면 "String should have at most 200000 characters"
+ * 라는 쓸 만한 메시지가 서버에서 오는데, 화면에는 `[object Object]` 가 찍혔다.
+ *
+ * 한계에 부딪히는 것 자체는 괜찮다. **왜 막혔는지 모르는 것**이 문제다.
+ */
+function detailText(body, status) {
+  const d = body?.detail
+  if (typeof d === 'string' && d) return d
+  if (Array.isArray(d) && d.length) {
+    const msgs = d.map((e) => e?.msg).filter(Boolean)
+    if (msgs.length) {
+      // 같은 말이 여러 번 오는 경우가 있다(필드마다). 중복은 접는다.
+      return [...new Set(msgs)].join(' · ')
+    }
+  }
+  return `요청 실패 (${status})`
 }
 
 export const api = {
