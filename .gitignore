@@ -24,3 +24,6 @@ backend/data/fitcache/
 # 8MB 쯤 되고 내보낼 때마다 전부 달라지므로, 저장소에 넣으면 이력이 하루에
 # 8MB 씩 불어난다. 배포는 gh-pages 에 고아 커밋으로 올린다(publish_static.ps1).
 frontend/public/snapshot/
+
+# 수집 도구 결과물 — 개인용이고 저장소에 남길 것이 아니다
+out/
