@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import Hint from '../components/Hint'
 import RankTable from '../components/RankTable'
+import UnresolvedPicker from '../components/UnresolvedPicker'
 
 /**
  * 목록을 통째로 붙여넣어 **여러 매물을 한 번에** 줄 세운다.
@@ -27,6 +28,12 @@ export default function BulkPaste({ months, incoming }) {
    * 이고, 전체 목록은 어차피 매물 순위 탭에 늘 있다. 다만 **숨긴 건수는 적는다** —
    * 몇 건이 어디로 갔는지 안 보이면 읽다 만 줄 알게 된다. */
   const [onlyNew, setOnlyNew] = useState(true)
+
+  /* 사용자가 고른 '단지명 -> 단지 id'. 서버가 이름 매칭보다 우선으로 쓴다.
+   *
+   * 텍스트가 아니라 이 맵을 들고 있는 이유: 같은 목록을 다시 읽을 때마다 고른 것이
+   * 유지돼야 한다. 기준(실거래/요인)을 바꿔도 다시 고르게 하면 못 쓴다. */
+  const [nameMap, setNameMap] = useState({})
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
   const [basis, setBasis] = useState('market')
@@ -54,19 +61,38 @@ export default function BulkPaste({ months, incoming }) {
     }
   }
 
-  const run = async (value, nextBasis = basis) => {
+  const run = async (value, nextBasis = basis, nextMap = nameMap) => {
     const t = (value ?? text).trim()
     if (!t) return
     setBusy(true)
     setErr(null)
     try {
-      setRes(await api.parseBulk(t, { months, basis: nextBasis }))
+      setRes(await api.parseBulk(t, { months, basis: nextBasis, name_map: nextMap }))
     } catch (e) {
       setErr(e.message)
       setRes(null)
     } finally {
       setBusy(false)
     }
+  }
+
+  /* 단지를 고르면 **그 자리에서 다시 읽는다.** 고른 것만 반영된 목록을 보려고
+     사용자가 또 붙여넣게 하면 안 된다. 되돌리기(null)도 같은 길로 간다. */
+  const pick = (name, complexId) => {
+    const next = { ...nameMap }
+    if (complexId == null) delete next[name]
+    else next[name] = complexId
+    setNameMap(next)
+    /* **'전부' 로 바꾼다.**
+     *
+     * `is_new` 는 '이번 붙여넣기에서 처음' 이 아니라 '이번 **요청**에서 처음' 이다.
+     * 후보를 고를 때마다 같은 목록을 다시 보내므로, 앞 선택으로 풀린 매물은 두 번째
+     * 요청에서 이미 저장된 것(seen)이 되어 숨는다. 실측으로 봤다 — 현대·동산·성원을
+     * 차례로 고르자 7건이 다 풀렸는데 표에는 마지막 1건만 남았다.
+     *
+     * 고른 직후에 보고 싶은 것은 '방금 뭐가 풀렸나' 이므로 전부를 보여 준다. */
+    setOnlyNew(false)
+    run(undefined, basis, next)
   }
 
   /* `is_new` 가 없는 응답(저장이 실패한 줄, 또는 옛 백엔드)은 **숨기지 않는다.**
@@ -157,6 +183,7 @@ export default function BulkPaste({ months, incoming }) {
               onClick={() => {
                 setText('')
                 setRes(null)
+                setNameMap({})
               }}
             >
               지우기
@@ -166,6 +193,15 @@ export default function BulkPaste({ months, incoming }) {
       </div>
 
       {err && <p className="empty">{err}</p>}
+
+      {res?.skipped?.length > 0 && (
+        <UnresolvedPicker
+          skipped={res.skipped}
+          nameMap={nameMap}
+          busy={busy}
+          onPick={pick}
+        />
+      )}
 
       {res?.items?.length > 0 && (
         <div style={{ marginTop: 10 }}>
@@ -182,7 +218,8 @@ export default function BulkPaste({ months, incoming }) {
 
       {res?.skipped?.length > 0 && (
         <p className="paste-warn" style={{ marginTop: 8 }}>
-          {res.skipped.length}건은 읽지 못했습니다 — {res.skipped.slice(0, 3).map((s) => s.reason).join(', ')}
+          {res.skipped.length}건은 읽지 못했습니다 —{' '}
+          {[...new Set(res.skipped.map((s) => s.reason))].join(' · ')}
         </p>
       )}
     </div>

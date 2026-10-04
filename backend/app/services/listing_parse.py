@@ -337,6 +337,17 @@ def _head_name(text: str) -> str:
     return pricing.name_key(_HEAD_DONG.sub("", line.strip()))
 
 
+def head_name_text(text: str) -> str:
+    """첫 줄에서 동을 뗀 **원문 그대로의 단지명**. 정규화 키가 아니다.
+
+    사용자가 고른 것을 기억하는 열쇠다. 화면에 '현대' 라고 보이고 사용자가 그걸
+    보고 고르므로, 열쇠도 보이는 그대로여야 한다 — 정규화 키(`현대`)를 쓰면 같은
+    값이지만, '신나무실5단지주공' 처럼 공백·기호가 섞이면 화면과 열쇠가 달라진다.
+    """
+    line = next((ln for ln in text.splitlines() if ln.strip()), "")
+    return _HEAD_DONG.sub("", line.strip()).strip()
+
+
 def name_fragments(text: str) -> list[str]:
     """첫 줄의 단지명을 **조각으로** 나눈다. '신성,신안,쌍용,진흥' → [신성, 신안, 쌍용, 진흥]
 

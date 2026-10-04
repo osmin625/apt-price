@@ -297,10 +297,21 @@ def _resolve_by_dong(out: dict, text: str, db: Session, complexes: list) -> None
     if out.get("complex_id") or not dong:
         return
     frags = listing_parse.name_fragments(text)
-    if len(frags) < 2:
-        return  # 조각이 하나뿐이면 이름이 쪼개진 경우가 아니다
-
-    pool = [c for c in complexes if any(f in c.name for f in frags)]
+    if len(frags) >= 2:
+        # 이름이 쪼개진 경우 — 조각으로 후보를 만든다.
+        pool = [c for c in complexes if any(f in c.name for f in frags)]
+    else:
+        # 조각이 하나뿐일 때. 예전에는 여기서 그만뒀다 — '쌍용' 같은 흔한 이름을
+        # DB 전체에서 찾으면 엉뚱한 단지가 걸리기 때문이다.
+        #
+        # 그런데 **이미 추려 둔 후보 안에서만** 찾으면 그 위험이 없다. '현대 104동'
+        # 의 후보는 이름이 정확히 '현대' 인 곳들뿐이고, 그중 104동 거래가 있는 곳이
+        # 하나면 그게 답이다. 재 봤다 — 실제 붙여넣기 82건에서 41건이 이렇게 유일하게
+        # 정해졌다(성원 -> 수원 권선 세류동 성원, 신나무실5단지주공 ->
+        # 신나무실휴먼시아5단지). 24건은 동으로도 여럿이라 그대로 두고, 9건은 그 동의
+        # 거래가 없어 그대로 둔다.
+        ids = {c.get("id") for c in (out.get("candidates") or [])}
+        pool = [c for c in complexes if c.id in ids]
     if not pool:
         return
 
@@ -319,9 +330,17 @@ def _resolve_by_dong(out: dict, text: str, db: Session, complexes: list) -> None
     out["complex_name"] = cx.name
     out["warnings"] = [w for w in out.get("warnings", [])
                        if w.get("field") != "complex"]
+    # 추정이라는 것을 밝힌다. 이름만으로는 못 고른 것을 동 번호로 좁힌 것이고,
+    # 그 동의 거래가 우연히 한 단지에만 있었을 수도 있다.
+    if len(frags) >= 2:
+        why = (f"'{', '.join(frags)}' 는 시공사가 함께 지은 단지라 실거래에는 "
+               f"나뉘어 있습니다. ")
+    else:
+        why = (f"이름이 같은 단지가 {len(pool)}곳이라 이름만으로는 못 고릅니다. ")
     out["warnings"].append({"field": "complex", "text":
-        f"'{', '.join(frags)}' 는 시공사가 함께 지은 단지라 실거래에는 나뉘어 있습니다. "
-        f"{dong}동 거래가 있는 '{cx.name}' 으로 맞췄습니다."})
+        why + f"{dong}동 거래가 있는 곳이 '{cx.name}'"
+        + (f"({cx.umd_nm})" if getattr(cx, "umd_nm", None) else "")
+        + " 하나뿐이라 그것으로 맞췄습니다."})
 
 
 def _resolve_area(
@@ -421,6 +440,58 @@ def _fill_floor(out: dict) -> None:
         out["floor"] = hits[len(hits) // 2]
 
 
+def _candidate_info(db: Session, cands: list[dict]) -> list[dict]:
+    """후보에 **고를 수 있을 만큼**의 정보를 붙인다.
+
+    시군구만으로는 못 고른다 — '현대' 는 수원 장안구에만 세 곳이다(천천동·파장동·
+    정자동). 법정동·지번·준공년도·세대수와 **등록된 동 번호**를 같이 준다. 특히 동
+    번호가 결정적이다: 붙여넣은 매물이 101~104동이면 그 동이 있는 곳이 답이다.
+
+    거래 건수도 붙인다. 0건인 단지를 고르면 적정가를 못 내므로, 고르기 전에 보여
+    주는 쪽이 낫다 — 골랐는데 "비교 실거래 없음" 이 뜨면 왜인지 알 수 없다.
+    """
+    from sqlalchemy import func, select
+
+    from ..models import Complex, ComplexDong, Trade
+
+    ids = [c["id"] for c in cands]
+    if not ids:
+        return []
+
+    dongs: dict[int, list[str]] = {}
+    for d in db.execute(
+        select(ComplexDong).where(ComplexDong.complex_id.in_(ids))
+    ).scalars().all():
+        dongs.setdefault(d.complex_id, []).append(str(d.dong))
+
+    trades = dict(
+        db.execute(
+            select(Trade.complex_id, func.count())
+            .where(Trade.complex_id.in_(ids))
+            .group_by(Trade.complex_id)
+        ).all()
+    )
+
+    out = []
+    for c in cands:
+        cx = db.get(Complex, c["id"])
+        if not cx:
+            continue
+        out.append({
+            **c,
+            "sgg_name": cx.sgg_name,
+            "umd_nm": cx.umd_nm,
+            "jibun": cx.jibun,
+            "build_year": cx.build_year,
+            "household_count": cx.household_count,
+            "trade_count": trades.get(cx.id, 0),
+            "dongs": sorted(dongs.get(cx.id, []))[:8],
+        })
+    # 거래가 많은 쪽을 위로. 그쪽이 맞을 확률이 높고, 적정가도 낼 수 있다.
+    out.sort(key=lambda c: -c["trade_count"])
+    return out
+
+
 def _area_types(points) -> tuple[list[int], dict[int, float]]:
     """(타입 키 목록, 타입별 **실제 대표 면적**).
 
@@ -447,6 +518,12 @@ class BulkRequest(BaseModel):
         max_length=200_000,
         description="매물 목록 텍스트. 20만 자(약 2,000건)까지.",
     )
+    # 사용자가 직접 고른 '붙여넣은 단지명 -> 단지 id'.
+    #
+    # 고르는 단위가 **이름**인 이유: 같은 이름이 여럿이라 못 고른 것이므로, 한 번
+    # 고르면 그 이름의 매물이 **전부** 풀린다. 실제 붙여넣기에서 '현대' 20건이
+    # 한 덩어리였다 — 줄마다 고르게 하면 스무 번을 눌러야 한다.
+    name_map: dict[str, int] = Field(default_factory=dict)
     months: int = Field(default=24, ge=6, le=120)
     basis: str = Field(default="market", pattern="^(market|factor)$")
 
@@ -496,9 +573,26 @@ def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
         raw = block["text"]
         p = listing_parse.parse_listing(raw, cxs).as_dict()
         _resolve_by_dong(p, raw, db, cxs)
+        # 사용자가 고른 것이 있으면 그것이 **이름 매칭보다 우선**이다. 같은 이름이
+        # 여럿이라 못 고른 것을 사람이 가린 것이므로, 파서가 다시 뒤집으면 안 된다.
+        head_name = listing_parse.head_name_text(raw)
+        picked = req.name_map.get(head_name)
+        if picked:
+            cx = db.get(Complex, picked)
+            if cx:
+                p["complex_id"] = cx.id
+                p["complex_name"] = cx.name
+
         cid = p.get("complex_id")
         if not cid:
-            skipped.append({"text": raw.splitlines()[0][:40], "reason": "단지를 찾지 못했습니다"})
+            skipped.append({
+                "text": raw.splitlines()[0][:40],
+                "reason": "단지를 찾지 못했습니다",
+                # 고를 수 있게 후보를 같이 보낸다. 이름 단위로 묶어 한 번만 고르면
+                # 그 이름의 매물이 전부 풀린다.
+                "name": head_name,
+                "candidates": _candidate_info(db, p.get("candidates") or []),
+            })
             continue
 
         meta = complex_meta(cid)
