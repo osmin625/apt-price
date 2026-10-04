@@ -158,9 +158,6 @@ def build_plan(with_quotes: bool) -> list[Req]:
     for m in MONTHS:
         # 시장 분석 — 요인별 보정계수
         plan.append(Req("/api/model/factors", {"months": m}))
-        # 향에 따른 가격 — 미시 분석 카드. 빼면 그 카드만 404 가 나고, 화면은
-        # 아무 말 없이 비어 있다(카드가 null 을 돌려주므로). 조용하다.
-        plan.append(Req("/api/analysis/aspect", {"months": m}))
         # FitLoading 이 문구를 고르려고 부른다. 정적에서는 곧바로 오지만,
         # 없으면 404 가 콘솔에 남는다.
         plan.append(Req("/api/model/status", {"months": m}))

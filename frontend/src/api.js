@@ -182,7 +182,6 @@ export const api = {
   health: () => request('/health'),
   filters: () => request('/complexes/meta/filters'),
   market: (params) => request(`/analysis/market${qs(params)}`),
-  aspect: (params) => request(`/analysis/aspect${qs(params)}`),
   complexes: (params) => request(`/complexes${qs(params)}`),
   complex: (id, params) => request(`/complexes/${id}${qs(params)}`),
   areaTypes: (id) => request(`/complexes/${id}/area-types`),

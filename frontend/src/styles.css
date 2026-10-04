@@ -50,12 +50,14 @@ body {
   line-height: 1.5;
 }
 
-/* 1240px 였다. 분석 탭을 하나로 합치면서 넓혔다 — 격자가 minmax(300px, 1fr) 라
-   1240px(내용 1200px)에서는 **세 칸**이 한계였고, 넓은 화면에서 양옆이 통째로 비었다.
-   1560px 이면 네 칸이다(재 봤다: .factor-grid·.macro-grid 모두 4). 거시 카드 8장이
-   두 줄에 떨어진다.
+/* 1240 -> 1560 -> 지금. 분석 탭을 **좌우 2단**(거시|미시)으로 놓으면서 또 넓혔다.
+   한쪽 단이 격자를 품어야 하므로, 1560px 에서는 단마다 760px 밖에 안 돼 카드가 두 칸
+   들어가고 양옆은 여전히 비었다.
+
+   고정 상한 대신 화면을 따라가게 둔다. 2,200px 를 넘기면 글줄이 아니라 **눈이 좌우로
+   너무 멀리 간다** — 거기서 멈춘다.
    글줄은 따로 묶는다(.card 아래) — 폭을 늘린 만큼 문장이 길어지면 읽기 나빠진다. */
-.app { max-width: 1560px; margin: 0 auto; padding: 24px 20px 64px; }
+.app { max-width: min(100%, 2200px); margin: 0 auto; padding: 24px 20px 64px; }
 
 header.top { margin-bottom: 20px; }
 header.top h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
@@ -453,7 +455,11 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 
 /* ── 요인별 보정계수 ─────────────────────────────────── */
 
-.factor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 14px; }
+/* 300px 였다. 2단으로 놓으니 단마다 862px 인데 300px 로는 **두 칸**밖에 안 들어가
+   칸폭이 402px 로 벌어지고 오른쪽이 비었다(실측). 260px 부터 세 칸이 되고 칸폭은
+   262px 다 — 차트 축소판이 버티는 폭이다(카드 축소판은 원래 축 눈금 없이 구름 모양만
+   보여 준다). */
+.factor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
 .factor { border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px 11px; background: var(--surface-1); }
 .factor-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .factor-head strong { font-size: 13.5px; }
@@ -853,6 +859,30 @@ tr.is-deleting td { opacity: 0.4; }
 
 .analysis-section { scroll-margin-top: 56px; }
 .analysis-section + .analysis-section { margin-top: 26px; }
+
+/* 좌 거시 · 우 미시. 둘 다 한 화면에 두면 "무엇이 가격을 움직이나"(미시)와
+   "지역이 서로 어떻게 다른가"(거시)를 눈만 옮겨 견줄 수 있다 — 두 탭을 오가며
+   머릿속에서 이어 붙이던 것이 원래 문제였다.
+
+   DOM 순서는 미시가 먼저다. 좁은 화면에서는 단이 하나라 위에서부터 읽는데, 그때
+   먼저 와야 할 것은 이 서비스가 직접 낸 값이기 때문이다. 넓을 때만 order 로 자리를
+   바꾼다 — 마크업을 건드리지 않고 배치만 바뀐다.
+
+   1280px 미만에서는 단 하나. 단마다 600px 은 있어야 카드 격자가 두 칸이라도 들어간다. */
+@media (min-width: 1280px) {
+  .analysis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+  .analysis-section { min-width: 0; } /* 격자가 단을 밀어내지 않게 */
+  .analysis-section + .analysis-section { margin-top: 0; }
+  #macro { order: 1; }
+  #micro { order: 2; }
+  /* 둘 다 보이면 건너뛸 데가 없다. */
+  .section-nav { display: none; }
+}
 .section-title {
   display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
   margin: 0 0 10px; font-size: 17px;
@@ -865,8 +895,8 @@ tr.is-deleting td { opacity: 0.4; }
 }
 
 .macro-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 18px; margin-top: 14px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px; margin-top: 14px;
 }
 .macro-card { display: flex; flex-direction: column; }
 .macro-card .factor-head { margin-bottom: 4px; }
