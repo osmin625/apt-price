@@ -51,12 +51,47 @@ export function scopeClick(e, onScope, scope) {
   onScope(scope)
 }
 
+/* ── 향 ──────────────────────────────────────────────────────────────
+ *
+ * 향을 **네 무리(동·서·남·북)로** 묶는다. 쓰는 사람이 찾는 것은 '남서향 매물' 보다
+ * '서쪽으로 난 집' 이고, 다섯 가지를 따로 두면 같은 성격인데 칸이 갈린다.
+ *
+ * 두 글자면 **뒤 글자**가 무리다 — 남서향은 서향, 남동향은 동향. 앞 글자는 곁들이는
+ * 방향이고 창이 실제로 향하는 쪽은 뒤에 적힌다.
+ *
+ *   남향   -> 남      남서향 -> 서      남동향 -> 동
+ *   북향   -> 북      북서향 -> 서      북동향 -> 동
+ *
+ * 실제 붙여넣기 150건은 다섯 가지였다(남향 63·남서향 42·남동향 35·동향 8·서향 2).
+ * 북동/북서는 광고에 거의 안 적히지만 규칙에는 둔다 — 안 나온다고 빼면 나왔을 때
+ * 조용히 엉뚱한 무리로 간다.
+ */
+export function aspectGroup(a) {
+  if (!a) return null
+  const t = String(a).replace(/향$/, '')
+  if (!t) return null
+  // 두 글자면 뒤 글자, 한 글자면 그 글자.
+  const g = t.length >= 2 ? t.slice(-1) : t
+  return '동서남북'.includes(g) ? g : null
+}
+
+/** 한 줄이 가진 향 무리들. 접힌 줄은 여럿일 수 있다. */
+export function aspectGroupsOf(i) {
+  const list = i.aspects?.length ? i.aspects : i.aspect ? [i.aspect] : []
+  return [...new Set(list.map(aspectGroup).filter(Boolean))]
+}
+
+export const ASPECT_HINT = (g) => `Ctrl(⌘)+클릭: 여기에 ${g}향까지 걸기`
+
 /** 좁힌 범위에 들어가는 줄인가. `null` 이면 전부. */
 export function inScope(item, scope) {
   if (!scope) return true
   if (item.complex_id !== scope.complexId) return false
   if (scope.dong != null && String(item.dong ?? '') !== String(scope.dong)) return false
   if (scope.areaKey != null && areaKeyOf(item) !== scope.areaKey) return false
+  // 접힌 줄은 향이 여럿일 수 있다. **하나라도** 맞으면 남긴다 — 다 맞아야 한다고
+  // 하면 '남향·동향' 으로 접힌 줄이 어느 쪽으로 걸러도 사라진다.
+  if (scope.aspect != null && !aspectGroupsOf(item).includes(scope.aspect)) return false
   return true
 }
 
@@ -70,8 +105,43 @@ export function scopeLabel(scope, name) {
   const parts = [name || '단지']
   if (scope.dong != null) parts.push(`${scope.dong}동`)
   if (scope.areaKey != null) parts.push(`전용 ${scope.areaKey}㎡`)
+  if (scope.aspect != null) parts.push(`${scope.aspect}향`)
   return parts.join(' · ')
 }
+
+/* ── 좁히기를 겹치는 규칙 ───────────────────────────────────────────
+ *
+ * 쓰는 사람이 원하는 끝 모양은 **단지 and (동 or 면적) and 향** 이다.
+ *
+ *   - 동과 면적은 **서로를 지운다.** 둘 다 걸면 '130동의 84㎡' 가 되는데, 그건
+ *     대개 한 줄이라 좁히는 뜻이 없다. 하나를 고르는 것이 쓰임에 맞는다.
+ *   - 향은 **더해진다.** '130동 중에 남향만' 이 실제로 찾는 모양이다.
+ *   - 단지명을 누르면 **전부 푼다.** 제일 넓은 범위로 돌아가는 것이 그 버튼의 뜻이다.
+ *
+ * 다른 단지의 값을 누르면 그 단지로 갈아탄다 — 이전 단지의 동·면적을 들고 가면
+ * 아무것도 안 남는다.
+ */
+const sameComplex = (prev, complexId) => (prev && prev.complexId === complexId ? prev : null)
+
+export const dongPatch = (item) => (prev) => ({
+  ...(sameComplex(prev, item.complex_id) || {}),
+  complexId: item.complex_id,
+  dong: String(item.dong),
+  areaKey: undefined,
+})
+
+export const areaPatch = (item) => (prev) => ({
+  ...(sameComplex(prev, item.complex_id) || {}),
+  complexId: item.complex_id,
+  areaKey: areaKeyOf(item),
+  dong: undefined,
+})
+
+export const aspectPatch = (item, group) => (prev) => ({
+  ...(sameComplex(prev, item.complex_id) || {}),
+  complexId: item.complex_id,
+  aspect: group,
+})
 
 /* ── 정렬 ────────────────────────────────────────────────────────────
  *
@@ -87,6 +157,16 @@ export const SORT_COLS = {
   dong: { label: '동', get: (i) => (i.dong ? Number(i.dong) || i.dong : null), type: 'mixed' },
   exclusive_area: { label: '전용', get: (i) => i.exclusive_area, type: 'num' },
   floor: { label: '층', get: (i) => i.floor, type: 'num' },
+  // 무리(동서남북)로 묶어 정렬한다. '남서향' 과 '서향' 이 떨어져 있으면 같은 성격을
+  // 모아 보려고 정렬한 뜻이 없다. 같은 무리 안에서는 적힌 그대로 정렬된다.
+  aspect: {
+    label: '향',
+    get: (i) => {
+      const gs = aspectGroupsOf(i)
+      return gs.length ? `${gs.sort().join('')}|${i.aspect || ''}` : null
+    },
+    type: 'text',
+  },
   asking_price: { label: '호가', get: (i) => i.asking_price, type: 'num' },
   confirmed_on: { label: '확인', get: (i) => i.confirmed_on || null, type: 'text' },
   fair: { label: '적정', get: (i, f) => (f ? i.factor_price : i.fair_price), type: 'num' },

@@ -10,11 +10,15 @@ import NoteCell from './NoteCell'
 import { gapText, otherOf, toneOf, verdictOf } from './rankBasis'
 import {
   AREA_HINT,
+  ASPECT_HINT,
   DONG_HINT,
   ONLY_HINT,
   SORT_COLS,
   applySort,
-  areaKeyOf,
+  areaPatch,
+  aspectGroup,
+  aspectPatch,
+  dongPatch,
   nameClick,
   nextSort,
   scopeClick,
@@ -161,7 +165,9 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
               <th className="num">
                 <Sortable k="floor" sort={sort} onSort={setSort}>층</Sortable>
               </th>
-              <th>향</th>
+              <th>
+                <Sortable k="aspect" sort={sort} onSort={setSort}>향</Sortable>
+              </th>
               <th className="num">
                 <Sortable k="asking_price" sort={sort} onSort={setSort}>호가</Sortable>
               </th>
@@ -219,9 +225,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                     <span
                       className={onScope ? 'scopable' : undefined}
                       title={onScope ? DONG_HINT : undefined}
-                      onClick={(e) =>
-                        scopeClick(e, onScope, { complexId: i.complex_id, dong: String(i.dong) })
-                      }
+                      onClick={(e) => scopeClick(e, onScope, dongPatch(i))}
                     >
                       {i.dong}동
                     </span>
@@ -238,12 +242,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                   <span
                     className={onScope ? 'scopable' : undefined}
                     title={onScope ? AREA_HINT : undefined}
-                    onClick={(e) =>
-                      scopeClick(e, onScope, {
-                        complexId: i.complex_id,
-                        areaKey: areaKeyOf(i),
-                      })
-                    }
+                    onClick={(e) => scopeClick(e, onScope, areaPatch(i))}
                   >
                     {i.exclusive_area}㎡
                   </span>
@@ -256,7 +255,26 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                     평형이라도 남향과 북향은 값이 다르다. 모델에는 안 넣는다(실거래에
                     향이 없어 계수를 추정할 수 없다). 보여 주기만 한다. */}
                 <td className="aspect">
-                  {i.aspect || <span className="muted">—</span>}
+                  {/* 접힌 줄은 향이 여럿일 수 있다. **하나씩 따로** 누를 수 있게 한다 —
+                      '동향·남동향' 을 통째로 누르게 하면 어느 무리로 거는지 알 수 없다. */}
+                  {(i.aspects?.length ? i.aspects : i.aspect ? [i.aspect] : []).length > 0 ? (
+                    (i.aspects?.length ? i.aspects : [i.aspect]).map((a, k) => (
+                      <span key={a}>
+                        {k > 0 && <span className="muted">·</span>}
+                        <span
+                          className={onScope && aspectGroup(a) ? 'scopable' : undefined}
+                          title={
+                            onScope && aspectGroup(a) ? ASPECT_HINT(aspectGroup(a)) : undefined
+                          }
+                          onClick={(e) => scopeClick(e, onScope, aspectPatch(i, aspectGroup(a)))}
+                        >
+                          {a}
+                        </span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
                 </td>
                 <td className="num">
                   {eok(i.asking_price)}
