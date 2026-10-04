@@ -988,6 +988,34 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+.mt16 { margin-top: 16px; }
+.is-muted td { color: var(--text-muted); }
+
+/* 향 축소판 — 네 칸 십자. 300px 안에서 눈금 원·수염·다각형을 다 그리니 선이 너무
+   많아 "뭘 보라는 거지" 가 됐다. 카드가 답할 질문은 '어느 쪽이 비싼가' 하나다. */
+.aspect-grid { grid-template-columns: minmax(260px, 420px); }
+.ac-cross {
+  display: grid; width: 100%; max-width: 300px; margin: 0 auto;
+  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px;
+  aspect-ratio: 3 / 2.1;
+}
+.acx {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid var(--border); line-height: 1.35;
+}
+.acx b { font-size: 12.5px; color: var(--text-primary); }
+.acx span { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.acx.is-thin { border-style: dashed; }
+.acx.is-thin b, .acx.is-thin span { color: var(--text-muted); font-weight: 400; }
+.acx-북 { grid-area: 1 / 2; }
+.acx-서 { grid-area: 2 / 1; }
+.acx-동 { grid-area: 2 / 3; }
+.acx-남 { grid-area: 3 / 2; }
+/* 가운데는 기준점이라는 표시. 테두리 없이 글자만. */
+.acx-mid {
+  grid-area: 2 / 2; border: 0; font-size: 10.5px; color: var(--text-muted); text-align: center;
+}
+
 /* 향 나침반. 북이 위 — 지도와 같아야 번역 없이 읽힌다. */
 .aspect-compass { display: flex; flex-direction: column; align-items: center; margin-top: 12px; }
 .aspect-compass svg { width: 100%; max-width: 400px; height: auto; }

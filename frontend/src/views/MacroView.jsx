@@ -5,6 +5,7 @@ import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 import Loading from '../components/Loading'
 import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
+import PanelCard from '../components/PanelCard'
 import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
@@ -103,25 +104,25 @@ export default function MacroView() {
       </div>
 
       <div className="macro-grid">
-        <MacroCard
+        <PanelCard
           title="지금 어느 국면인가"
           sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월` : '불러오는 중'}
           onOpen={() => setOpen('cycle')}
           ready={!!ins}
         >
           {ins && <CycleChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="그 상승을 전세가 받쳐 줬나"
           sub="12개월 매매 × 전세가율 변화"
           onOpen={() => setOpen('rally')}
           ready={!!ins}
         >
           {ins && <RallyChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="거래가 받쳐 준 상승인가"
           sub={
             ins?.volume?.items?.length
@@ -132,9 +133,9 @@ export default function MacroView() {
           ready={!!ins?.volume?.items?.length}
         >
           {ins?.volume?.items?.length > 0 && <VolumeChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="지수가 몇 건으로 만들어졌나"
           sub={
             ins?.depth?.items?.length
@@ -147,9 +148,9 @@ export default function MacroView() {
           ready={!!ins?.depth?.items?.length}
         >
           {ins?.depth?.items?.length > 0 && <DepthBars ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="구 안의 가격 편차"
           sub={
             ins?.spread?.items?.length
@@ -160,9 +161,9 @@ export default function MacroView() {
           ready={!!ins?.spread?.items?.length}
         >
           {ins?.spread?.items?.length > 0 && <SpreadBars ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="모델과 어긋나는 곳"
           sub={
             ins?.model_gap?.spearman != null
@@ -173,9 +174,9 @@ export default function MacroView() {
           ready={!!ins && ins.has_fit}
         >
           {ins && ins.has_fit && <GapChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title={data ? data.label : '지표 추이'}
           sub={
             data
@@ -188,16 +189,16 @@ export default function MacroView() {
           ready={!!data}
         >
           {data && <MultiLine data={data} hidden={hidden} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="최신값"
           sub={data ? `${data.label} · ${data.items[0]?.latest_ym} 공표` : '불러오는 중'}
           onOpen={() => setOpen('table')}
           ready={!!data}
         >
           {data && <MiniTable data={data} />}
-        </MacroCard>
+        </PanelCard>
       </div>
 
       {open === 'cycle' && ins && (
@@ -567,30 +568,6 @@ function colorAt(i, n) {
 
    카드 안에는 **모양만** 둔다. 300px 폭에 이름표 17개를 적으면 읽을 수가 없고,
    읽히지도 않는 글자를 그려 놓는 것은 자리만 먹는다. 자세한 것은 눌러서 띄운다. */
-function MacroCard({ title, sub, onOpen, ready, children }) {
-  return (
-    <div className="factor macro-card">
-      <div className="factor-head">
-        <button
-          className="linklike factor-open"
-          onClick={onOpen}
-          disabled={!ready}
-          aria-haspopup="dialog"
-        >
-          <strong>{title}</strong>
-          <span className="factor-caret" aria-hidden="true">
-            &#10530;
-          </span>
-        </button>
-      </div>
-      <div className="muted small">{sub}</div>
-      <div className="macro-card-body">
-        {ready ? children : <div className="empty">준비 중</div>}
-      </div>
-    </div>
-  )
-}
-
 function CycleChart({ ins, compact }) {
   return (
     <QuadrantScatter

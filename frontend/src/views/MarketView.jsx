@@ -51,8 +51,17 @@ export default function MarketView({ filters, setFilters }) {
       <FactorPanel months={filters.months} />
 
       {/* 보정계수와 **따로** 둔다. 저 격자는 전부 실거래에서 추정한 값이고 향은
-          실거래에 없다 — 같은 격자에 넣으면 근거가 다른 숫자가 같은 무게로 읽힌다. */}
-      <AspectPanel months={filters.months} />
+          실거래에 없다 — 같은 격자에 넣으면 근거가 다른 숫자가 같은 무게로 읽힌다.
+          다만 **카드 모양은 같게** 한다. 한 화면에서 '누르면 커지는 카드' 가 두
+          가지 모양이면 어느 쪽이 눌리는지 매번 확인하게 된다. */}
+      <section className="card">
+        <h2>
+          향에 따른 가격<span className="muted small"> 호가 기준 · 실거래에는 향이 없습니다</span>
+        </h2>
+        <div className="factor-grid aspect-grid">
+          <AspectPanel months={filters.months} />
+        </div>
+      </section>
     </>
   )
 }
