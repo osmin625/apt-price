@@ -56,23 +56,39 @@ export function scopeClick(e, onScope, scope) {
  * 향을 **네 무리(동·서·남·북)로** 묶는다. 쓰는 사람이 찾는 것은 '남서향 매물' 보다
  * '서쪽으로 난 집' 이고, 다섯 가지를 따로 두면 같은 성격인데 칸이 갈린다.
  *
- * 두 글자면 **뒤 글자**가 무리다 — 남서향은 서향, 남동향은 동향. 앞 글자는 곁들이는
- * 방향이고 창이 실제로 향하는 쪽은 뒤에 적힌다.
+ * ## 두 글자면 **나쁜 쪽**을 남긴다
  *
- *   남향   -> 남      남서향 -> 서      남동향 -> 동
- *   북향   -> 북      북서향 -> 서      북동향 -> 동
+ * 향에는 좋고 나쁨의 순서가 있다.
+ *
+ *     남 > 동 > 서 > 북        (왼쪽이 좋다)
+ *
+ * 그런데 매물을 올리는 쪽은 조금이라도 걸치면 **좋은 쪽을 함께 적는 경향**이 있다.
+ * '남서향' 은 대개 서향에 남쪽이 조금 걸친 집이고, '북동향' 은 북향에 동쪽이 조금
+ * 걸친 집이다. 그래서 좋은 쪽을 떼고 **나쁜 쪽**을 그 집의 무리로 본다.
+ *
+ *     남서 -> 서      남동 -> 동
+ *     북서 -> 북      북동 -> 북
+ *
+ * 처음에는 '뒤 글자' 를 쓰려 했는데 그러면 북서가 서향, 북동이 동향이 된다 — 북향
+ * 집을 서향·동향으로 올려 주는 셈이라 반대로 틀린다. 순서를 명시해 고쳤다.
  *
  * 실제 붙여넣기 150건은 다섯 가지였다(남향 63·남서향 42·남동향 35·동향 8·서향 2).
- * 북동/북서는 광고에 거의 안 적히지만 규칙에는 둔다 — 안 나온다고 빼면 나왔을 때
- * 조용히 엉뚱한 무리로 간다.
+ * 북 계열은 광고에 거의 안 적히지만 — 바로 그래서 — 규칙에 둬야 한다. 안 나온다고
+ * 빼면 나왔을 때 조용히 좋은 쪽으로 올라간다.
  */
+
+// 좋은 쪽부터. 숫자가 클수록 나쁘고, 두 글자면 **큰 쪽**이 그 집의 무리다.
+export const ASPECT_ORDER = ['남', '동', '서', '북']
+
 export function aspectGroup(a) {
   if (!a) return null
   const t = String(a).replace(/향$/, '')
-  if (!t) return null
-  // 두 글자면 뒤 글자, 한 글자면 그 글자.
-  const g = t.length >= 2 ? t.slice(-1) : t
-  return '동서남북'.includes(g) ? g : null
+  const found = [...t].filter((ch) => ASPECT_ORDER.includes(ch))
+  if (!found.length) return null
+  // 나쁜 쪽(순서가 뒤인 것)을 남긴다.
+  return found.reduce((w, ch) =>
+    ASPECT_ORDER.indexOf(ch) > ASPECT_ORDER.indexOf(w) ? ch : w,
+  )
 }
 
 /** 한 줄이 가진 향 무리들. 접힌 줄은 여럿일 수 있다. */
@@ -159,11 +175,15 @@ export const SORT_COLS = {
   floor: { label: '층', get: (i) => i.floor, type: 'num' },
   // 무리(동서남북)로 묶어 정렬한다. '남서향' 과 '서향' 이 떨어져 있으면 같은 성격을
   // 모아 보려고 정렬한 뜻이 없다. 같은 무리 안에서는 적힌 그대로 정렬된다.
+  // 무리로 묶어 정렬하되 **좋은 쪽부터**다(남·동·서·북). 가나다순으로 하면
+  // 남·동·북·서가 되어 북향이 서향보다 앞에 온다 — 사람이 기대하는 순서가 아니다.
   aspect: {
     label: '향',
     get: (i) => {
       const gs = aspectGroupsOf(i)
-      return gs.length ? `${gs.sort().join('')}|${i.aspect || ''}` : null
+      if (!gs.length) return null
+      const best = Math.min(...gs.map((g) => ASPECT_ORDER.indexOf(g)))
+      return `${best}|${i.aspect || ''}`
     },
     type: 'text',
   },
