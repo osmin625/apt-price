@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
+import AspectCompass from './AspectCompass'
 import { fmt } from './Charts'
 import Hint from './Hint'
 
@@ -75,6 +76,10 @@ export default function AspectPanel({ months }) {
           {/* 검출되지 않았으면 **막대를 그리지 않는다.** 0 근처 막대 셋을 그리면
               '향은 가격과 무관' 으로 읽히는데, 실제로는 '이 표본으로는 잴 수 없다' 다.
               동 위치 카드를 뺀 이유와 같은 자리다. */}
+          {/* 그림을 먼저. 숫자와 경고보다 모양이 먼저 들어와야 '남쪽이 조금 볼록하다'
+              가 한눈에 읽힌다. */}
+          <AspectCompass groups={data.groups} />
+
           {!data.detected && (
             <p className="paste-warn">
               <b>아직 잡히지 않았습니다.</b>{' '}
@@ -166,6 +171,46 @@ export default function AspectPanel({ months }) {
                 </table>
               </div>
             )
+          )}
+
+          {/* 컴퍼스는 각 방향을 '칸 중위' 와 견준 그림이라 **두 방향끼리**는 못
+              견준다. 그 질문('남향이 서향보다 비싼가')에는 짝 비교가 답한다 —
+              두 향이 같은 칸에 함께 있을 때만 골라 뺀 값이다. */}
+          {data.pairs?.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>둘을 직접 견주면</th>
+                    <th className="num">차이</th>
+                    <th className="num">95% 구간</th>
+                    <th className="num">칸</th>
+                    <th>판정</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.pairs.map((p) => (
+                    <tr key={`${p.a}${p.b}`}>
+                      <td>{p.label}</td>
+                      <td className="num">
+                        {p.diff == null ? '—' : `${p.diff > 0 ? '+' : ''}${fmt(p.diff, 2)}%p`}
+                      </td>
+                      <td className="num muted">
+                        {p.lo == null
+                          ? '—'
+                          : `${p.lo > 0 ? '+' : ''}${fmt(p.lo, 2)} ~ ${p.hi > 0 ? '+' : ''}${fmt(p.hi, 2)}`}
+                      </td>
+                      <td className="num">{fmt(p.cells)}</td>
+                      <td>
+                        <span className="verdict" data-tone={p.sig ? 'good' : 'mid'}>
+                          {p.sig ? '가름' : '못 가름'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <p className="muted small" style={{ marginTop: 10 }}>

@@ -988,6 +988,26 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+/* 향 나침반. 북이 위 — 지도와 같아야 번역 없이 읽힌다. */
+.aspect-compass { display: flex; flex-direction: column; align-items: center; margin-top: 12px; }
+.aspect-compass svg { width: 100%; max-width: 400px; height: auto; }
+.ac-grid { fill: none; stroke: var(--grid); stroke-width: 1; }
+/* 0 원 = 그 단지·평형의 보통 호가. 그림의 기준선이라 눈에 띄어야 한다. */
+.ac-zero { fill: none; stroke: var(--axis); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.ac-axis { stroke: var(--grid); stroke-width: 1; }
+.ac-axis.is-thin { stroke-dasharray: 2 4; }
+.ac-area { fill: color-mix(in srgb, var(--series-1) 18%, transparent); stroke: var(--series-1); stroke-width: 1.5; }
+/* 95% 구간. 이 선이 0 원을 넘나들면 아직 못 가른다 — 그림의 핵심이라 굵게. */
+/* 0 원을 넘나드는지가 이 그림의 핵심이라 흐리면 안 된다. 0.45 로 뒀더니
+   면 위에서 거의 안 보였다. */
+.ac-whisker { stroke: var(--series-1); stroke-width: 3.5; stroke-linecap: round; opacity: 0.7; }
+.ac-dot { fill: var(--surface-1); stroke: var(--series-1); stroke-width: 2.5; }
+.ac-dot.is-sig { fill: var(--series-1); }
+.ac-name { font-size: 13px; font-weight: 700; fill: var(--text-primary); }
+.ac-val { font-size: 11.5px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.is-thin .ac-name, .is-thin .ac-val { fill: var(--text-muted); font-weight: 400; }
+.ac-legend { margin-top: 6px; text-align: center; max-width: 440px; line-height: 1.6; }
+
 /* 향 막대. 0 을 가운데 두고 좌우로 — 칸 중위 대비라 음수가 나온다. */
 .aspect-bars { margin-top: 12px; }
 .ab-row { display: grid; grid-template-columns: 48px 1fr 72px 96px; align-items: center; gap: 10px; padding: 3px 0; }

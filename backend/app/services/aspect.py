@@ -71,6 +71,17 @@ def group_of(aspect: str | None) -> str | None:
 # 의미를 잃는다. "몇 칸이면 충분한가" 는 **이 숫자가 아니라 구간이** 답한다.
 MIN_CELLS = 5
 
+# **무리마다도** 최소 칸이 필요하다. 안 두면 칸 1개짜리 무리의 구간이 **한 점으로
+# 무너진다** — 어느 부트스트랩 표본에서든 그 칸의 값 하나뿐이라 분산이 0이 된다.
+#
+# 실제로 당했다. 북향이 칸 1개·매물 1건이었는데 구간이 [+5.40, +5.40] 으로 나와
+# '유의' 판정을 받았다. 매물 한 건을 통계적 사실로 보고할 뻔했다. 구간이 좁다는 것이
+# 확실하다는 뜻이 아니라, **퍼질 거리가 없다**는 뜻이었다.
+#
+# 5칸 미만인 무리는 값은 보여 주되 구간과 판정을 내지 않는다. 숨기지 않는 이유:
+# 북향이 1건이라는 사실 자체가 정보다(광고에 북향을 안 적는다는 뜻이기도 하다).
+GROUP_MIN_CELLS = 5
+
 # 부트스트랩 반복. 2,000이면 95% 구간이 소수 둘째 자리에서 안정된다(재 봤다 —
 # 1,000 과 5,000 사이에서 구간 폭이 0.05%p 안에서만 움직였다).
 BOOTSTRAP = 2000
@@ -110,6 +121,46 @@ def _bootstrap(cell_devs: list[dict], groups: list[str]) -> dict[str, tuple[floa
             continue
         v.sort()
         out[g] = (v[int(len(v) * 0.025)], v[int(len(v) * 0.975)])
+    return out
+
+
+def _pairs(cells_by_group: dict, groups: list[str]) -> list[dict]:
+    """두 향을 **같은 칸에 함께 있을 때만** 짝지어 비교한다.
+
+    왜 '칸 중위 대비' 로는 모자란가. 그 값은 각 무리를 **칸 전체의 중위**와 견준
+    것이라, 두 무리를 서로 빼면 그 사이에 낀 다른 무리의 영향이 섞인다. 둘만 들어
+    있는 칸에서 직접 빼면 그게 없다. 같은 단지·같은 평형에서 남향과 서향을 나란히
+    놓고 부르는 값을 견주는 셈이라, 묻고 싶은 것에 바로 답한다.
+
+    짝이 3칸 미만이면 구간을 내지 않는다 — 부트스트랩이 퍼질 거리가 없어 구간이
+    한 점으로 무너진다(북향 1칸이 `[+5.40, +5.40]` 으로 '유의' 가 났던 것과 같은 함정).
+    """
+    rng = Random(SEED)
+    out = []
+    for i, a in enumerate(groups):
+        for b in groups[i + 1:]:
+            d = [
+                median(v[a]) - median(v[b])
+                for v in cells_by_group.values()
+                if a in v and b in v
+            ]
+            row = {"a": a, "b": b, "label": f"{a}향 − {b}향", "cells": len(d)}
+            if len(d) >= 3:
+                boots = sorted(
+                    median([d[rng.randrange(len(d))] for _ in d])
+                    for _ in range(BOOTSTRAP)
+                )
+                lo, hi = boots[int(BOOTSTRAP * 0.025)], boots[int(BOOTSTRAP * 0.975)]
+                row.update({
+                    "diff": round(median(d), 2),
+                    "lo": round(lo, 2),
+                    "hi": round(hi, 2),
+                    "sig": bool(lo > 0 or hi < 0),
+                })
+            else:
+                row.update({"diff": round(median(d), 2) if d else None,
+                            "lo": None, "hi": None, "sig": False})
+            out.append(row)
     return out
 
 
@@ -208,7 +259,8 @@ def by_aspect(db: Session, evaluate, months: int) -> dict:
     groups = []
     for g in present:
         vals = [c[g] for c in cell_devs if g in c]
-        lo, hi = ci.get(g, (None, None))
+        thin = counts[g] < GROUP_MIN_CELLS
+        lo, hi = (None, None) if thin else ci.get(g, (None, None))
         groups.append({
             "group": g,
             "label": f"{g}향",
@@ -220,13 +272,16 @@ def by_aspect(db: Session, evaluate, months: int) -> dict:
             "lo": round(lo, 2) if lo is not None else None,
             "hi": round(hi, 2) if hi is not None else None,
             # 구간이 0 을 건너지 않으면 '잡혔다'. 내가 정한 칸 수가 아니라 **데이터가**
-            # 정한다.
+            # 정한다 — 단, 칸이 너무 적은 무리는 구간 자체를 내지 않는다.
             "sig": bool(lo is not None and (lo > 0 or hi < 0)),
+            "thin": thin,
         })
 
     detected = any(x["sig"] for x in groups)
 
     # 검출 한계 — 지금 표본으로 잡을 수 있는 가장 작은 차이. 구간 반폭의 중위다.
+    # 칸이 적은 무리는 **뺀다**. 폭 0짜리 구간이 섞이면 한계가 거짓으로 작아진다
+    # (북향 1칸이 끼었을 때 ±0.6%p 로 나왔는데, 빼고 재니 ±0.78%p 였다).
     halves = [(x["hi"] - x["lo"]) / 2 for x in groups if x["lo"] is not None]
     floor = _median(halves)
 
@@ -248,8 +303,14 @@ def by_aspect(db: Session, evaluate, months: int) -> dict:
         int(need / per_complex) if (need and per_complex) else None
     )
 
+    # 짝 비교. 구간을 낼 수 있는 무리끼리만 — 칸이 1개인 무리를 짝에 넣으면
+    # 거기서도 구간이 한 점으로 무너진다.
+    solid = [g for g in present if counts[g] >= GROUP_MIN_CELLS]
+    pairs = _pairs(mixed, solid) if len(solid) >= 2 else []
+
     return {
         "groups": groups,
+        "pairs": pairs,
         "n_quotes": len(rows),
         "n_scored": scored,
         "n_complexes": len(cx_all),
