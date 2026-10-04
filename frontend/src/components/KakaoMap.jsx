@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { STATIC_MODE } from '../api'
 import { kakaoKeyMissing, loadKakaoMaps } from '../lib/kakaoMap'
 
 /**
@@ -20,8 +21,6 @@ export default function KakaoMap({
   selectedId = null,
   onHover,
   onSelect,
-  rings = [],
-  ringCenter = null,
   path = null,
   center = null,
   height = 560,
@@ -127,7 +126,7 @@ export default function KakaoMap({
       })
   }, [ready, stations])
 
-  // 등가격 링 + 도보 경로
+  // 도보 경로
   useEffect(() => {
     const maps = window.kakao?.maps
     const map = mapRef.current
@@ -135,38 +134,6 @@ export default function KakaoMap({
 
     shapesRef.current.forEach((s) => s.setMap(null))
     shapesRef.current = []
-
-    if (ringCenter?.lat != null) {
-      for (const r of rings) {
-        const circle = new maps.Circle({
-          center: new maps.LatLng(ringCenter.lat, ringCenter.lng),
-          radius: r.radius_m,
-          strokeWeight: 1,
-          strokeColor: '#6b7cff',
-          strokeOpacity: 0.85,
-          strokeStyle: 'shortdash',
-          fillColor: '#6b7cff',
-          fillOpacity: 0.04,
-        })
-        circle.setMap(map)
-        shapesRef.current.push(circle)
-
-        const label = document.createElement('div')
-        label.className = 'ring-label'
-        label.textContent = r.label
-        const ov = new maps.CustomOverlay({
-          position: new maps.LatLng(
-            ringCenter.lat + r.radius_m / 111000,
-            ringCenter.lng,
-          ),
-          content: label,
-          yAnchor: 0.5,
-          xAnchor: 0.5,
-        })
-        ov.setMap(map)
-        shapesRef.current.push(ov)
-      }
-    }
 
     if (path) {
       const coords = path.path?.coordinates
@@ -191,7 +158,7 @@ export default function KakaoMap({
         shapesRef.current.push(poly)
       }
     }
-  }, [ready, rings, ringCenter, path])
+  }, [ready, path])
 
   // 선택된 단지로 팬
   useEffect(() => {
@@ -203,6 +170,21 @@ export default function KakaoMap({
   }, [ready, selectedId, items])
 
   if (error || kakaoKeyMissing()) {
+    /*
+       안내는 **지금 보고 있는 주소**를 기준으로 적는다.
+
+       예전에는 `http://localhost:5173` 과 "dev 서버를 재시작합니다" 를 박아 두었다.
+       그런데 정적 사이트(4173 미리보기, github.io)에서 이 화면이 뜨면 그 안내는
+       전부 틀린 말이 된다 — 등록해야 하는 origin 도 다르고, 고쳐야 하는 파일도
+       다르고, 재시작할 dev 서버도 없다.
+
+       틀린 원인·틀린 처방을 단정하는 안내는 없는 안내보다 나쁘다. 어제 "pip
+       install 하세요" 가 멀쩡한 환경을 의심하게 만든 것과 같은 종류다.
+       origin 은 브라우저에서 읽고, 고칠 파일은 빌드 모드로 가른다.
+    */
+    const origin = typeof window === 'undefined' ? '' : window.location.origin
+    const envFile = STATIC_MODE ? 'frontend/.env.static.local' : 'frontend/.env.local'
+
     return (
       <div className="map-fallback" style={{ height }}>
         <strong>지도를 표시할 수 없습니다</strong>
@@ -215,16 +197,30 @@ export default function KakaoMap({
             에서 앱을 만들고 <b>JavaScript 키</b>를 발급받습니다.
           </li>
           <li>
-            플랫폼 &gt; Web 에 <code>http://localhost:5173</code> 과{' '}
-            <code>http://127.0.0.1:5173</code> 을 <b>둘 다</b> 등록합니다.
+            플랫폼 &gt; Web 에 <code>{origin}</code> 을 등록합니다. 카카오는 origin 을{' '}
+            <b>완전일치</b>로 검사하므로 포트까지 그대로여야 합니다.
+            {!STATIC_MODE && (
+              <>
+                {' '}
+                개발 중에는 <code>http://127.0.0.1:5173</code> 도 같이 등록하면
+                편합니다 — 같은 서버인데 카카오는 다른 origin 으로 봅니다.
+              </>
+            )}
           </li>
           <li>
-            <code>frontend/.env.local</code> 에{' '}
-            <code>VITE_KAKAO_JS_KEY=발급받은키</code> 를 넣고 dev 서버를 재시작합니다.
+            <code>{envFile}</code> 에 <code>VITE_KAKAO_JS_KEY=발급받은키</code> 를 넣고{' '}
+            {STATIC_MODE ? (
+              <>
+                <code>VITE_STATIC_MAP=1</code> 과 함께 다시 내보냅니다
+                (<code>sync_static.ps1</code>).
+              </>
+            ) : (
+              'dev 서버를 재시작합니다.'
+            )}
           </li>
         </ol>
         <p className="muted">
-          지도 없이도 <b>모델</b> 탭의 곡선·계수·잔차는 모두 정상 동작합니다.
+          지도만 카카오를 씁니다. 나머지 탭의 곡선·계수·순위는 모두 정상 동작합니다.
         </p>
       </div>
     )

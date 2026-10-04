@@ -1,13 +1,20 @@
 """헤도닉 적합 결과를 API 페이로드로 조립한다.
 
 hedonic.py 는 통계만 하고, 이 모듈이 화면이 필요로 하는 모양으로 바꾼다:
-지도 마커, 등가격 링 반경, 합성 데이터의 참값 곡선 오버레이.
+지도 마커와 합성 데이터의 참값 곡선 오버레이.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import math
+import os
+import pickle
+from collections import OrderedDict
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -17,9 +24,14 @@ from ..models import Complex, ComplexDong, ComplexStation, Station, Trade
 from . import fit_worker, hedonic
 
 TRUTH_PATH = BASE_DIR / "data" / "seed_truth.json"
-RING_LEVELS_PCT = (-5.0, -10.0, -15.0, -20.0)
 
-_cache: dict[tuple, dict] = {}
+# 적합 결과 캐시. **여러 칸이 필요하다** — 탭마다 요청하는 기간이 다르기 때문이다
+# (시장 분석 12개월, 매물 분석 24개월). 한 칸만 두면 탭을 오갈 때마다 캐시가 어긋나
+# 13초짜리 재적합이 매번 돈다. 간단한 LRU 로 둔다.
+log = logging.getLogger(__name__)
+
+CACHE_SIZE = 4
+_cache: "OrderedDict[tuple, dict]" = OrderedDict()
 
 
 def _cache_key(db, months: int, spec: str) -> tuple:
@@ -52,11 +64,98 @@ def _truth_curve(truth: dict, xs: list[float], x_ref: float) -> list[float]:
     return [round((math.exp(eff(x) - base) - 1) * 100, 3) for x in xs]
 
 
+# 적합 결과를 디스크에도 둔다.
+#
+# 메모리 캐시는 프로세스가 죽으면 같이 죽는다. `--reload` 는 파일을 저장할 때마다
+# 서버를 다시 띄우므로, 개발 중에는 거리 모델 탭을 열 때마다 처음부터 다시 적합했다.
+# 배포에서도 재시작·스케일아웃마다 첫 방문자가 그 값을 치른다.
+#
+# 적합은 **데이터와 코드만의 함수**다. 같은 거래에 같은 코드면 결과가 같으므로,
+# 그 둘을 키에 넣으면 디스크에 두고 재사용해도 안전하다.
+#
+#   - 데이터: 이미 메모리 캐시 키가 쓰는 (최대 거래 id, 거래 수)
+#   - 코드: 모델을 만드는 모듈들의 소스 해시. 버전 상수를 손으로 올리는 방식은
+#     언젠가 올리는 것을 잊는다. 소스가 바뀌면 자동으로 키가 달라지게 한다.
+FIT_CACHE_DIR = BASE_DIR / "data" / "fitcache"
+FIT_CACHE_KEEP = 8
+# 디스크 캐시를 끄는 탈출구. 모델을 고치며 결과를 계속 비교할 때 쓴다.
+FIT_CACHE_OFF = os.environ.get("FIT_CACHE", "1").strip() in {"0", "false", "no"}
+
+
+@lru_cache(maxsize=1)
+def _code_fingerprint() -> str:
+    """적합 결과를 좌우하는 모듈들의 소스 해시."""
+    h = hashlib.sha256()
+    here = Path(__file__).resolve().parent
+    for rel in ("hedonic.py", "model_view.py", "../pricing.py"):
+        try:
+            h.update((here / rel).resolve().read_bytes())
+        except OSError:
+            return "nofingerprint"
+    return h.hexdigest()[:16]
+
+
+def _disk_path(key: tuple) -> Path:
+    name = hashlib.sha256(
+        (repr(key) + "|" + _code_fingerprint()).encode()
+    ).hexdigest()[:32]
+    return FIT_CACHE_DIR / f"{name}.pkl"
+
+
+def _disk_load(key: tuple) -> dict | None:
+    if FIT_CACHE_OFF:
+        return None
+    p = _disk_path(key)
+    try:
+        if not p.exists():
+            return None
+        with p.open("rb") as f:
+            fit = pickle.load(f)
+    except Exception:
+        # 깨진 파일·다른 파이썬으로 만든 파일 등. 캐시 때문에 서비스가 죽으면 안 된다.
+        log.warning("적합 디스크 캐시를 읽지 못했습니다: %s", p.name, exc_info=True)
+        try:
+            p.unlink()
+        except OSError:
+            pass
+        return None
+    return fit if isinstance(fit, dict) and "alpha" in fit else None
+
+
+def _disk_store(key: tuple, fit: dict) -> None:
+    if FIT_CACHE_OFF:
+        return
+    try:
+        FIT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # 파생 조회표(`_index`)는 저장하지 않는다 — 읽은 쪽에서 다시 만들면 된다.
+        payload = {k: v for k, v in fit.items() if k != "_index"}
+        tmp = _disk_path(key).with_suffix(".tmp")
+        with tmp.open("wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(_disk_path(key))
+        # 오래된 것부터 정리. 거래가 늘거나 코드가 바뀌면 키가 달라져 쌓이기만 한다.
+        files = sorted(FIT_CACHE_DIR.glob("*.pkl"), key=lambda p: p.stat().st_mtime)
+        for old in files[:-FIT_CACHE_KEEP]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        log.warning("적합 디스크 캐시를 쓰지 못했습니다", exc_info=True)
+
+
 def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     """적합 결과(캐시). alpha DataFrame 을 포함하므로 API 직렬화 전에 걸러야 한다."""
     key = _cache_key(db, months, spec)
     if key in _cache:
+        _cache.move_to_end(key)
         return _cache[key]
+
+    # 프로세스가 다시 떠도 같은 적합을 두 번 계산하지 않는다.
+    cached = _disk_load(key)
+    if cached is not None:
+        _cache[key] = cached
+        _cache.move_to_end(key)
+        while len(_cache) > CACHE_SIZE:
+            _cache.popitem(last=False)
+        return cached
 
     # 적합은 별도 프로세스에서 돈다. 14초 동안 GIL 을 쥐고 있어서, 인프로세스로
     # 돌리면 그 사이 다른 요청이 전부 멈춘다(`fit_worker` 모듈 주석 참조).
@@ -87,8 +186,14 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
     else:
         fit["synthetic"] = False
 
-    _cache.clear()  # 스펙/기간별로 쌓이지 않게 최신 하나만 유지
+    # 어느 기간으로 적합했는지 결과에 박아 둔다. `peek_fit` 으로 집어 간 쪽이
+    # '이 값은 최근 N개월 적합에서 나왔다' 고 화면에 밝힐 수 있어야 한다.
+    fit["months"] = months
+    _disk_store(key, fit)
     _cache[key] = fit
+    _cache.move_to_end(key)
+    while len(_cache) > CACHE_SIZE:
+        _cache.popitem(last=False)  # 가장 오래 안 쓴 것부터 버린다
     return fit
 
 
@@ -96,73 +201,79 @@ def get_fit(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
 _NON_JSON = ("alpha", "residuals", "dong_effects")
 
 
-def peek_fit(db) -> dict | None:
+def peek_fit(
+    db, months: int | None = None, spec: str = hedonic.DEFAULT_SPEC
+) -> dict | None:
     """**이미 계산된** 적합만 돌려준다. 없으면 None — 새로 돌리지 않는다.
 
-    동 프리미엄처럼 '있으면 좋은' 정보를 붙이는 쪽에서 쓴다. 가벼운 엔드포인트가
-    14초짜리 적합을 기다리게 만들면 안 된다.
+    가벼운 엔드포인트가 십수 초짜리 적합을 기다리게 만들면 안 되므로, 캐시에 있는
+    것만 쓰고 없으면 그 정보를 빼고 응답한다.
+
+    ## months 를 주면 그것부터 찾는다
+
+    예전에는 인자 없이 **캐시의 가장 최근 것**을 그냥 돌려줬다. 동 프리미엄처럼
+    '있으면 좋은' 보조 정보에만 쓸 때는 기간이 좀 달라도 상관없었다.
+
+    그런데 지금은 여기서 나온 적합이 **요인 기준 적정가 전체**를 만든다. 그래서
+    같은 매물을 같은 조건으로 조회해도 캐시에 마지막으로 들어간 것이 무엇이냐에 따라
+    답이 달라졌다 — 실측으로 요인 적정가가 7.03억 ↔ 7.17억(2%)로 갈렸다. 시장 분석
+    탭에서 기간을 바꾸고 순위표로 돌아오면 숫자가 변하는 셈이다.
+
+    요청한 기간의 적합이 캐시에 있으면 그것을 쓴다. 없으면 종전처럼 가장 최근 것을
+    주되, 호출한 쪽이 **무엇을 썼는지 화면에 밝힐 수 있도록** `fit["months"]` 를
+    함께 읽어 가도록 한다. 기다리지 않는다는 성질은 그대로다.
     """
-    # 캐시는 최신 하나만 유지하므로(get_fit 의 _cache.clear) 기간을 따로 맞출 필요가
-    # 없다. 보고 있는 화면과 기간이 다를 수는 있는데, 동 프리미엄은 단지 내부 값이라
-    # 기간에 크게 흔들리지 않고 어차피 보조 정보다.
-    return next(iter(_cache.values()), None)
+    if not _cache:
+        return None
+    if months is not None:
+        for key, fit in _cache.items():
+            if key[0] == months and key[1] == spec:
+                return fit
+    return next(reversed(_cache.values()), None)
+
+
+def fit_status(db, months: int = 24, spec: str = hedonic.DEFAULT_SPEC) -> dict:
+    """적합이 **이미 있는지**만 본다. 계산하지 않는다.
+
+    화면이 "모델을 적합하는 중" 이라고 말할지 "불러오는 중" 이라고 말할지는 이 답에
+    달렸다. 둘은 걸리는 시간이 한 자릿수 다르고(수십 초 vs 2초 안팎) 사용자가 할
+    일도 다르다 — 앞은 기다려야 하고 뒤는 곧 끝난다.
+
+    경과 시간으로 짐작할 수도 있지만 그건 이미 기다린 뒤에야 아는 것이다. 12ms 면
+    물어볼 수 있는 것을 짐작할 이유가 없다.
+    """
+    key = _cache_key(db, months, spec)
+    if key in _cache:
+        source = "memory"
+    elif not FIT_CACHE_OFF and _disk_path(key).exists():
+        source = "disk"
+    else:
+        source = None
+    return {"months": months, "spec": spec, "cached": source is not None,
+            "source": source}
 
 
 def fit_payload(fit: dict) -> dict:
-    """API 응답 — DataFrame 과 내부 객체를 제외한 순수 JSON."""
-    return {k: v for k, v in fit.items() if k not in _NON_JSON}
+    """API 응답 — DataFrame 과 내부 객체를 제외한 순수 JSON.
 
+    ## 이름 목록만으로는 못 막는다
 
-def detour_stats(db) -> dict:
-    """관측된 우회율과 보행 속도. 도보 '분' 을 지도상 '반경' 으로 바꿀 때 쓴다."""
-    ratios, paces = [], []
-    for cs in db.execute(select(ComplexStation)).scalars().all():
-        if not cs.walk_distance_m or not cs.walk_seconds or not cs.straight_distance_m:
-            continue
-        if cs.straight_distance_m > 0:
-            ratios.append(cs.walk_distance_m / cs.straight_distance_m)
-        if cs.walk_seconds > 0:
-            paces.append(cs.walk_distance_m / (cs.walk_seconds / 60.0))
-    ratios.sort()
-    paces.sort()
-    return {
-        "detour_ratio": ratios[len(ratios) // 2] if ratios else pricing.WALK_DETOUR_FACTOR,
-        "meters_per_min": paces[len(paces) // 2] if paces else pricing.WALK_METERS_PER_MIN,
-        "n": len(ratios),
-    }
+    적합 dict 는 캐시에 오래 살아 있고, 계산하는 쪽이 파생값을 여기에 붙인다.
+    `fit_index` 가 붙이는 `_index` 가 그랬다. 이름 목록(`_NON_JSON`)에 없으니
+    그대로 응답에 실렸고, 그 안의 `log_households`·`dong_walk_mean` 은 세대수나 동
+    좌표가 없는 단지에서 NaN 이라 JSON 인코딩이 터졌다(500).
 
+    고약한 점은 **두 번째 요청부터** 터진다는 것이다. 거리 모델을 처음 열 때는
+    `_index` 가 아직 없어서 멀쩡하고, 매물 분석이나 순위가 같은 적합을 한 번 집어
+    가면 그때 붙는다. 그래서 '두 번째로 불러올 때 500' 이라는 모양이 된다.
 
-def rings(fit: dict, stats: dict) -> list[dict]:
-    """등가격 링 — 적합 곡선이 -5/-10/-15/-20% 를 지나는 지점의 지도 반경(m).
-
-    station_band 의 임의적인 400/800/1200m 링을 모델이 유도한 등고선으로 대체한다.
-    곡선은 도보 '분' 단위이므로 관측된 보행 속도와 우회율로 직선 반경으로 되돌린다.
+    이름을 하나 더 적는 것으로 끝낼 수도 있지만 다음에 또 붙으면 같은 일이 난다.
+    그래서 **규칙**으로 바꾼다 — `_` 로 시작하는 키는 내부용이라 내보내지 않는다.
     """
-    curve = fit["curves"]["walk_minutes"]
-    xs, ys = curve["x"], curve["fit_pct"]
-    pace = stats["meters_per_min"]
-    detour = max(stats["detour_ratio"], 1e-6)
-
-    out = []
-    for level in RING_LEVELS_PCT:
-        hit = None
-        for i in range(1, len(xs)):
-            y0, y1 = ys[i - 1], ys[i]
-            if (y0 - level) * (y1 - level) <= 0 and y0 != y1:
-                t = (level - y0) / (y1 - y0)
-                hit = xs[i - 1] + t * (xs[i] - xs[i - 1])
-                break
-        if hit is None:
-            continue
-        out.append(
-            {
-                "pct": level,
-                "walk_min": round(hit, 1),
-                "radius_m": round(hit * pace / detour, 0),
-                "label": f"{level:+.0f}% · 도보 {hit:.0f}분",
-            }
-        )
-    return out
+    return {
+        k: v for k, v in fit.items()
+        if k not in _NON_JSON and not k.startswith("_")
+    }
 
 
 def _curve_at(curve: dict, w: float) -> float:
@@ -327,6 +438,11 @@ _HH_POINTS = [(150, "150세대"), (300, "300세대"), (600, "600세대"),
 
 # 연속 요인은 대표 지점(막대)뿐 아니라 **조밀한 곡선**으로도 보낸다.
 # 막대만 보면 log·2차항·스플라인의 굽은 모양이 보이지 않는다.
+#
+# 아래는 **데이터가 없을 때의 대비책**이다. 실제 범위는 적합이 돌려준 관측 분포
+# (`fit["var_range"]`, p1~p99)에서 가져온다. 범위를 코드에 박아 두면 대상 지역을
+# 넓혔을 때 곡선이 어긋난다 — 수원만 볼 때 강남 소요시간은 30~65분이었지만 경기
+# 남부로 넓히면 23~78분이라, 박아 둔 (28, 68)은 양쪽 끝을 잘라 먹는다.
 _CURVE_RANGE = {
     "area": (30.0, 140.0),
     "walk": (1.0, 30.0),
@@ -334,11 +450,48 @@ _CURVE_RANGE = {
     "age": (0.0, 45.0),
     "households": (100.0, 3500.0),
 }
-_CURVE_N = 60
+# 요인 키 → 적합이 쓰는 분포 이름
+_RANGE_VAR = {
+    "area": "area_m2", "walk": "walk_min", "gangnam": "gangnam_min",
+    "age": "age", "households": "households",
+}
+_CURVE_N = 120
+
+
+def _ranges_from(fit: dict) -> dict[str, tuple[float, float]]:
+    """관측 분포로 곡선 범위를 정한다. 없으면 기존 상수를 쓴다."""
+    vr = fit.get("var_range") or {}
+    out = dict(_CURVE_RANGE)
+    for key, var in _RANGE_VAR.items():
+        d = vr.get(var)
+        if not d:
+            continue
+        lo, hi = float(d["lo"]), float(d["hi"])
+        if hi > lo:
+            out[key] = (lo, hi)
+    return out
+
+
+def _points_in(points, lo: float, hi: float, unit: str, vr: dict | None):
+    """막대로 찍을 대표 지점. 관측 범위 밖은 빼고, 모자라면 분위수로 채운다.
+
+    대표 지점을 코드에 박아 두면 두 방향으로 틀린다. 관측이 없는 지점(도보 2분짜리
+    단지가 없는 지역)에 막대가 서고, 관측이 있는 구간(도보 40분)은 통째로 빠진다.
+    """
+    kept = [(x, lbl) for x, lbl in points if lo <= x <= hi]
+    if vr:
+        # 사분위와 양 끝을 더해 실제 분포를 덮는다.
+        for q in ("lo", "q1", "median", "q3", "hi"):
+            x = float(vr[q])
+            if any(abs(x - px) < max(1.0, abs(x) * 0.04) for px, _ in kept):
+                continue
+            lbl = f"{x:,.0f}{unit}" if abs(x) >= 10 else f"{x:,.1f}{unit}"
+            kept.append((round(x, 1), lbl))
+    return sorted(kept, key=lambda p: p[0])
 
 
 def _curve(key: str, fn) -> dict:
-    """[lo, hi] 를 60점으로 훑어 기준 대비 %를 만든다."""
+    """[lo, hi] 를 촘촘히 훑어 기준 대비 %를 만든다."""
     lo, hi = _CURVE_RANGE[key]
     step = (hi - lo) / (_CURVE_N - 1)
     xs = [lo + step * i for i in range(_CURVE_N)]
@@ -376,7 +529,7 @@ def _eval_spline(coefs: list[float], knots, x: float) -> float:
 def _factor(
     key: str, label: str, unit: str, x_label: str, ref_x: float,
     to_model_x, coefs, knots, lin: dict | None, points, note: str,
-    per_unit: dict | None = None,
+    per_unit: dict | None = None, span: tuple[float, float] | None = None,
 ) -> dict:
     """연속 요인 하나를 곡선·점·선형비교선·판정으로 조립한다.
 
@@ -389,7 +542,8 @@ def _factor(
     def at(x: float) -> float:
         return _eval_spline(coefs, knots, to_model_x(x)) - base
 
-    lo, hi = _CURVE_RANGE[key]
+    # 범위는 호출자가 적합의 관측 분포에서 뽑아 넘긴다. 상수는 대비책일 뿐이다.
+    lo, hi = span or _CURVE_RANGE[key]
     step = (hi - lo) / (_CURVE_N - 1)
     xs = [lo + step * i for i in range(_CURVE_N)]
 
@@ -498,6 +652,8 @@ def factor_payload(fit: dict) -> dict:
     절반쯤 틀렸다 — 도보거리는 직선이었고 강남 접근성은 직선이 아니었다.
     """
     terms = {t["name"]: t for t in fit["terms"]}
+    spans = _ranges_from(fit)
+    vranges = fit.get("var_range") or {}
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
     lin = fit.get("linearity") or {}
@@ -526,11 +682,14 @@ def factor_payload(fit: dict) -> dict:
     al = fit["stage1"].get("area_linearity")
     if al and al.get("coefs"):
         ref = FACTOR_REF["area_m2"]
+        lo, hi = spans["area"]
         out.append(_factor(
             "area", "전용면적", "㎡", "전용면적(㎡)", ref,
-            lambda a: math.log(a / ref), al["coefs"], al.get("knots"), al, _AREA_POINTS,
+            lambda a: math.log(a / ref), al["coefs"], al.get("knots"), al,
+            _points_in(_AREA_POINTS, lo, hi, "㎡", vranges.get("area_m2")),
             "평당가 기준이므로 '면적이 클수록 비싸다'가 아니라 "
             "'작을수록 평당 단가가 높다'로 읽어야 한다.",
+            span=(lo, hi),
         ))
 
     # 3~6) Stage 2 연속 요인
@@ -563,8 +722,11 @@ def factor_payload(fit: dict) -> dict:
                 t["linear_coef"] * mult,
                 (t.get("linear_se") or 0) * mult or None,
             )
+        lo, hi = spans[key]
         out.append(_factor(
-            key, label, unit, xlab, ref, fx, cs, knots.get(var), t, points, note, pu
+            key, label, unit, xlab, ref, fx, cs, knots.get(var), t,
+            _points_in(points, lo, hi, unit, vranges.get(_RANGE_VAR[key])),
+            note, pu, span=(lo, hi),
         ))
 
     # 7) 동 위치 — 범주형. 동은 3,001개라 하나씩 낼 수 없으므로 **단지 안에서의
@@ -645,6 +807,43 @@ def factor_payload(fit: dict) -> dict:
     }
 
 
+def fit_index(fit: dict) -> dict:
+    """적합에서 **매번 다시 만들던 조회표**를 한 번만 만들어 들고 있는다.
+
+    ## 왜
+
+    `model_price` 는 매물 하나를 평가할 때마다 단지 전체를 훑어 조회표를 만들었다.
+
+        rows = {int(r["complex_id"]): r for _, r in fit["alpha"].iterrows()}
+
+    단지 하나를 꺼내려고 2,018곳을 도는 셈인데, `iterrows()` 는 행마다 Series 를
+    새로 만들기까지 한다. 매물 56건을 평가하면 113,008번이 돌고, 프로파일에서
+    순위 계산 16.7초 중 **12.8초**가 여기였다. 수원만 볼 때(497곳)는 4분의 1
+    규모라 눈에 띄지 않았는데, 대상을 넓히자 드러났다.
+
+    조회표는 적합이 바뀌지 않는 한 그대로다. 그래서 적합 dict 에 매달아 둔다 —
+    적합 캐시(`_cache`)가 살아 있는 동안 같이 산다.
+
+    `to_dict("records")` 로 만든 평범한 dict 를 돌려준다. 읽는 쪽은 `row["alpha"]`,
+    `"dong_walk_mean" in row`, NaN 자기비교를 쓰는데 전부 dict 에서도 같게 동작한다.
+    """
+    idx = fit.get("_index")
+    if idx is None:
+        alpha = fit["alpha"]
+        idx = {
+            "alpha_rows": {
+                int(r["complex_id"]): r for r in alpha.to_dict("records")
+            },
+            "resid": {r["complex_id"]: r for r in fit["residuals"]},
+            "terms": {t["name"]: t for t in fit["terms"]},
+            "floors": {
+                f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]
+            },
+        }
+        fit["_index"] = idx
+    return idx
+
+
 def model_price(db, fit: dict, side: dict) -> dict | None:
     """매물 하나의 **모델 기준 적정가**. 실거래 비교와는 다른 질문에 답한다.
 
@@ -665,17 +864,17 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
     두 값의 차이가 곧 **단지 프리미엄**이다. 갈리는 것 자체가 정보다 — 요인 대비
     비싸지만 시세 대비 적정이면, 그 단지에 값이 붙어 있다는 뜻이다.
     """
-    rows = {int(r["complex_id"]): r for _, r in fit["alpha"].iterrows()}
+    idx = fit_index(fit)
     cid = int(side["complex_id"])
-    row = rows.get(cid)
+    row = idx["alpha_rows"].get(cid)
     if row is None:
         return None
 
-    resid = {r["complex_id"]: r for r in fit["residuals"]}
-    terms = {t["name"]: t for t in fit["terms"]}
+    resid = idx["resid"]
+    terms = idx["terms"]
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
-    floors = {f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]}
+    floors = idx["floors"]
     area_lin = fit["stage1"].get("area_linearity") or {}
 
     cx = db.get(Complex, cid)
@@ -818,15 +1017,15 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
     둘은 다른 질문의 답이다. 요인 기준은 "펀더멘털 대비 싼가", 시장 기준은
     "그 단지 시세 대비 싼가"다. 재건축 기대가 붙은 단지는 두 값이 크게 갈린다.
     """
-    terms = {t["name"]: t for t in fit["terms"]}
+    idx = fit_index(fit)
+    terms = idx["terms"]
     knots = fit.get("knots") or {}
     sterms = fit.get("spline_terms") or {}
-    alpha = fit["alpha"]
-    resid = {r["complex_id"]: r for r in fit["residuals"]}
+    resid = idx["resid"]
     area_lin = fit["stage1"].get("area_linearity") or {}
-    floors = {f["band"]: f["coef"] for f in fit["stage1"]["floor_terms"]}
+    floors = idx["floors"]
 
-    rows = {int(r["complex_id"]): r for _, r in alpha.iterrows()}
+    rows = idx["alpha_rows"]
 
     def spline_val(var: str, x: float) -> float:
         names = sterms.get(var)

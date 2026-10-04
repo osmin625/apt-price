@@ -1,42 +1,83 @@
 import { useEffect, useState } from 'react'
 
-import { api } from './api'
-import MarketView from './views/MarketView'
-import ComplexesView from './views/ComplexesView'
+import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
+import AnalysisView from './views/AnalysisView'
 import ComplexDetail from './views/ComplexDetail'
 import MapView from './views/MapView'
 import ModelView from './views/ModelView'
 import CompareView from './views/CompareView'
+import RankingView from './views/RankingView'
 
+/**
+ * `static: true` 인 탭만 정적 사이트에 실린다.
+ *
+ * 나머지는 서버가 필요해서 빼는 것이 아니라, **서버 없이는 틀린 답을 내기 때문에**
+ * 뺀다. 매물 분석은 붙여넣은 텍스트를 파싱하고 그 자리에서 평가하므로 미리 파일로
+ * 만들어 둘 수가 없다. 분해 모델은 만들 수는 있지만 아직 안 넣었다 —
+ * export_static.py 의 목록에 넣고 여기 `static: true` 만 켜면 된다.
+ *
+ * 지도는 데이터가 아니라 **키 때문에** 조건부다. 응답은 늘 내보내지만, 카카오 JS
+ * 키가 공개 번들에 들어가야 하므로 켜는 것을 의도적인 행위로 만들었다
+ * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/deploy.md.
+ *
+ * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
+ */
 const TABS = [
-  { id: 'market', label: '시장 분석' },
-  { id: 'complexes', label: '단지 비교' },
-  { id: 'map', label: '지도' },
-  { id: 'model', label: '거리 모델' },
-  { id: 'compare', label: '매물 분석' },
+  // 시장 분석과 매크로를 합쳤다. 둘은 같은 질문의 두 축(미시·거시)이라 오가며
+  // 보던 것이고, 모델 괴리 차트처럼 **둘을 겹쳐야** 뜻이 생기는 그림도 있다.
+  // 한 탭 안에서 섹션으로 나눈다 — 자세한 것은 AnalysisView 주석.
+  { id: 'analysis', label: '분석', static: true },
+  { id: 'map', label: '지도', static: STATIC_MAP },
+  { id: 'model', label: '분해 모델' },
+  // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
+  // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
+  { id: 'compare', label: '매물 관리' },
+  { id: 'ranking', label: '매물 순위', static: true },
 ]
 
-const DEFAULT_FILTERS = {
-  months: 12,
-  sgg_cd: '',
-  area_band: '',
-  station_band: '',
-  age_band: '',
-  line: '',
-  station: '',
-  household_band: '',
-}
+const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
+
+// 단지 비교 탭을 없애면서 구·면적대·입지 같은 필터를 읽는 곳이 사라졌다.
+// 남은 화면은 전부 분석 기간만 쓴다.
+const DEFAULT_FILTERS = { months: 12 }
 
 export default function App() {
-  const [tab, setTab] = useState('market')
+  const [tab, setTab] = useState('analysis')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [meta, setMeta] = useState(null)
   const [health, setHealth] = useState(null)
   const [detailId, setDetailId] = useState(null)
+  const [snap, setSnap] = useState(null)
+  // 전역 Ctrl+V 로 들어온 매물 텍스트. `at` 이 바뀔 때마다 다시 읽는다.
+  const [pasted, setPasted] = useState(null)
 
   useEffect(() => {
     api.filters().then(setMeta).catch(() => setMeta(null))
     api.health().then(setHealth).catch(() => setHealth(null))
+    if (STATIC_MODE) snapshotMeta().then(setSnap)
+  }, [])
+
+  /* 대시보드 **아무 곳에서나** Ctrl+V 하면 매물로 읽는다.
+   *
+   * 북마클릿으로 담은 뒤 '매물 분석 탭으로 가서 입력칸을 누르고 붙여넣기' 를 거쳐야
+   * 했는데, 그 세 걸음이 전체 과정에서 제일 번거로웠다. 창을 바꾸고 Ctrl+V 하면 끝나게 한다.
+   *
+   * 입력칸 안에서 누른 붙여넣기는 건드리지 않는다 — 비고를 적다가 붙여넣는 것까지
+   * 가로채면 못 쓴다. 매물처럼 생긴 글(가격 줄이 있는)만 받는다. */
+  useEffect(() => {
+    if (STATIC_MODE) return // 정적 사이트에서는 쓰기가 안 된다
+    const onPaste = (e) => {
+      const el = e.target
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      const text = e.clipboardData?.getData('text') || ''
+      if (!/^\s*(매매|전세|월세)\s*[\d억]/m.test(text)) return
+      e.preventDefault()
+      setTab('compare')
+      setDetailId(null)
+      setPasted({ text, at: Date.now() })
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
   }, [])
 
   const openDetail = (id) => {
@@ -47,11 +88,44 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        <h1>수원시 아파트 적정 시세</h1>
-        <p>
-          국토교통부 실거래가 기반 · <strong>전용면적</strong> 평당가로 비교 (공급면적 아님)
-        </p>
+        <div className="top-main">
+          <h1>경기 남부 아파트 적정 시세</h1>
+          <p>
+            국토교통부 실거래가 기반 · <strong>전용면적</strong> 평당가로 비교 (공급면적 아님)
+          </p>
+        </div>
+        {/* 매물을 찾아오는 곳. 이 앱은 붙여넣은 텍스트만 읽으므로, 실제 매물은
+            여기서 보고 복사해 온다. rel 에 noopener 를 넣어 새 탭이 이 페이지의
+            window 를 건드리지 못하게 한다. */}
+        <a
+          className="ext-link"
+          href="https://fin.land.naver.com/map?center=3zicav-2Azj62&zoom=14.2696839630405&tradeTypes=A1&realEstateTypes=A01&dealPrice=0-510000000&activeDevelopments=RAIL&layer=NobwRAlgJmBcYAsD2BbApmANGAzmghgE4DGCACkfijnCAL50C6QA"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          네이버페이 부동산 <span aria-hidden="true">↗</span>
+        </a>
       </header>
+
+      {/* 정적 사이트는 **보고 있는 값이 언제 것인지 알 수 없다.** 로컬은 부를 때마다
+          최신이지만 여기는 마지막 내보내기 시점에 멈춰 있다. 적지 않으면 오래된
+          값을 최신으로 읽게 된다. */}
+      {STATIC_MODE && (
+        <div className="notice snapshot-note">
+          <strong>내보낸 스냅샷입니다.</strong>{' '}
+          {snap ? (
+            <>
+              {new Date(snap.generated_at).toLocaleString('ko-KR')} 기준 ·{' '}
+              실거래 {snap.data?.trades?.toLocaleString()}건
+              {snap.data?.latest_deal_date ? ` (최신 거래 ${snap.data.latest_deal_date})` : ''}
+              {snap.includes_quotes ? ` · 매물 ${snap.data?.quotes?.toLocaleString()}건` : ''}
+            </>
+          ) : (
+            '생성 시점을 읽지 못했습니다.'
+          )}{' '}
+          매물을 새로 넣거나 모델을 다시 돌리는 것은 로컬 대시보드에서 합니다.
+        </div>
+      )}
 
       {health && !health.molit_key_set && (
         <div className="notice">
@@ -62,7 +136,7 @@ export default function App() {
       )}
 
       <nav className="tabs">
-        {TABS.map((t) => (
+        {VISIBLE_TABS.map((t) => (
           <button
             key={t.id}
             role="tab"
@@ -83,162 +157,21 @@ export default function App() {
           months={filters.months}
           onClose={() => setDetailId(null)}
         />
-      ) : tab === 'market' ? (
-        <MarketView filters={filters} setFilters={setFilters} meta={meta} />
-      ) : tab === 'complexes' ? (
-        <ComplexesView
-          filters={filters}
-          setFilters={setFilters}
-          meta={meta}
-          onSelect={openDetail}
-        />
+      ) : tab === 'analysis' ? (
+        <AnalysisView filters={filters} setFilters={setFilters} meta={meta} />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (
         <ModelView months={Math.max(filters.months, 12)} onSelect={openDetail} />
+      ) : tab === 'ranking' ? (
+        <RankingView
+          months={Math.max(filters.months, 12)}
+          setMonths={(m) => setFilters({ ...filters, months: m })}
+          onSelect={openDetail}
+        />
       ) : (
-        <CompareView months={Math.max(filters.months, 12)} meta={meta} onSelect={openDetail} />
+        <CompareView months={Math.max(filters.months, 12)} incoming={pasted} />
       )}
-    </div>
-  )
-}
-
-export function FilterBar({ filters, setFilters, meta, extra }) {
-  const set = (key) => (e) => setFilters({ ...filters, [key]: e.target.value })
-
-  return (
-    <div className="filters">
-      <div className="field">
-        <label htmlFor="f-months">분석 기간</label>
-        <select
-          id="f-months"
-          value={filters.months}
-          onChange={(e) => setFilters({ ...filters, months: Number(e.target.value) })}
-        >
-          <option value={6}>최근 6개월</option>
-          <option value={12}>최근 12개월</option>
-          <option value={24}>최근 24개월</option>
-          <option value={36}>최근 36개월</option>
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-sgg">자치구</label>
-        <select id="f-sgg" value={filters.sgg_cd} onChange={set('sgg_cd')}>
-          <option value="">전체</option>
-          {meta?.districts.map((d) => (
-            <option key={d.code} value={d.code}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-area">전용 면적대</label>
-        <select id="f-area" value={filters.area_band} onChange={set('area_band')}>
-          <option value="">전체</option>
-          {meta?.area_bands.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-station">입지 (역까지 거리)</label>
-        <select id="f-station" value={filters.station_band} onChange={set('station_band')}>
-          <option value="">전체</option>
-          {meta?.station_bands.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-age">컨디션 (준공 연식)</label>
-        <select id="f-age" value={filters.age_band} onChange={set('age_band')}>
-          <option value="">전체</option>
-          {meta?.age_bands.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-line">지하철 노선</label>
-        <select
-          id="f-line"
-          value={filters.line}
-          onChange={(e) =>
-            // 노선을 바꾸면 이전 역 선택은 버린다. 다른 노선의 역이 남아 있으면
-            // 교집합이 비어 화면이 빈 채로 이유를 알 수 없게 된다.
-            setFilters({ ...filters, line: e.target.value, station: '' })
-          }
-        >
-          <option value="">전체</option>
-          {meta?.lines?.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        {/* id 는 f-zone — 기존 '입지(역까지 거리)' 필터가 이미 f-station 을 쓴다.
-            겹치면 label 이 엉뚱한 select 를 가리킨다. */}
-        <label htmlFor="f-zone">생활권 (최근접역)</label>
-        <select id="f-zone" value={filters.station} onChange={set('station')}>
-          <option value="">전체</option>
-          {(meta?.stations ?? [])
-            .filter((s) => !filters.line || s.line === filters.line)
-            .map((s) => (
-              <option key={`${s.line}-${s.name}`} value={s.name}>
-                {s.name}
-                {filters.line ? '' : ` (${s.line})`}
-                {s.minutes_to_gangnam ? ` · 강남 ${s.minutes_to_gangnam}분` : ''}
-              </option>
-            ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="f-households">단지 규모 (세대수)</label>
-        <select id="f-households" value={filters.household_band} onChange={set('household_band')}>
-          <option value="">전체</option>
-          {meta?.household_bands?.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {extra}
-
-      <button
-        className="ghost"
-        onClick={() =>
-          setFilters({
-            ...filters,
-            sgg_cd: '',
-            area_band: '',
-            station_band: '',
-            age_band: '',
-            line: '',
-            station: '',
-            household_band: '',
-          })
-        }
-      >
-        필터 초기화
-      </button>
     </div>
   )
 }

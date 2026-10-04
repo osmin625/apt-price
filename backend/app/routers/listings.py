@@ -66,7 +66,7 @@ def _evaluate(db: Session, payload: ListingInput, months: int) -> dict:
     # 가벼운 진단이 14초짜리 적합을 기다리게 만들 이유는 없다.
     from ..services import model_view as mv
 
-    cached = mv.peek_fit(db)
+    cached = mv.peek_fit(db, months=months)
     fair = analysis.estimate_fair_price(
         db,
         complex_id=payload.complex_id,
@@ -169,7 +169,11 @@ def create_listing(
 
 
 @router.get("")
-def list_listings(months: int = Query(12, ge=1, le=120), db: Session = Depends(get_db)):
+def list_listings(
+    months: int = Query(12, ge=1, le=120),
+    basis: str = Query("market", pattern="^(market|factor)$"),
+    db: Session = Depends(get_db),
+):
     rows = db.execute(select(Listing).order_by(Listing.created_at.desc())).scalars().all()
     out = []
     for row in rows:
@@ -177,6 +181,8 @@ def list_listings(months: int = Query(12, ge=1, le=120), db: Session = Depends(g
             complex_id=row.complex_id,
             exclusive_area=row.exclusive_area,
             floor=row.floor,
+            # 동을 빼먹으면 저장 시점과 다른 값이 나온다 — 동 보정이 빠지기 때문이다.
+            dong=row.dong,
             asking_price=row.asking_price,
             supply_area=row.supply_area,
             label=row.label,
@@ -185,8 +191,37 @@ def list_listings(months: int = Query(12, ge=1, le=120), db: Session = Depends(g
         item = _evaluate(db, payload, months)
         item["id"] = row.id
         item["memo"] = row.memo
+        item["created_at"] = row.created_at.isoformat() if row.created_at else None
         out.append(item)
-    return {"count": len(out), "items": out}
+
+    # ── 순위 ──────────────────────────────────────────────────────────────
+    # **더 저평가된 매물이 이긴다** — 괴리율이 작을수록(음수일수록) 위로 간다.
+    #
+    # 기준이 둘이라 하나로 줄 세울 수 없다. 둘은 다른 질문의 답이다.
+    #   market: 그 단지 같은 평형 시세 대비 싼가 (단지 프리미엄 포함)
+    #   factor: 펀더멘털 대비 싼가 (단지 프리미엄 제외)
+    # 단지를 넘나들며 고를 때는 factor 가 맞고, 같은 단지 안에서는 market 이 맞다.
+    # 그래서 고르게 두고, 표에는 **둘 다** 보여 준다 — 어긋나는 것 자체가 정보다.
+    key = (
+        (lambda i: (i.get("gap_factor") or {}).get("pct"))
+        if basis == "factor"
+        else (lambda i: (i.get("gap") or {}).get("pct"))
+    )
+    ranked = [i for i in out if key(i) is not None]
+    unranked = [i for i in out if key(i) is None]
+    ranked.sort(key=key)
+    for n, item in enumerate(ranked, 1):
+        item["rank"] = n
+    for item in unranked:
+        item["rank"] = None
+
+    return {
+        "count": len(out),
+        "basis": basis,
+        "basis_label": "요인 기준" if basis == "factor" else "실거래 기준",
+        "ranked_count": len(ranked),
+        "items": ranked + unranked,
+    }
 
 
 @router.delete("/{listing_id}")

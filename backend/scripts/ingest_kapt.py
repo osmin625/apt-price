@@ -32,7 +32,7 @@ from sqlalchemy import select  # noqa: E402
 
 from app import pricing  # noqa: E402
 from app.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
-from app.clients.molit import SUWON_DISTRICTS  # noqa: E402
+from app.clients.molit import DISTRICTS  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Complex  # noqa: E402
 
@@ -163,7 +163,7 @@ def run(districts: list[str], sleep: float) -> int:
                     matched += 1
 
                 db.commit()
-                print(f"  [{SUWON_DISTRICTS.get(sgg, sgg)} p{page}] {len(items)}곳 처리 "
+                print(f"  [{DISTRICTS.get(sgg, sgg)} p{page}] {len(items)}곳 처리 "
                       f"(누적 매칭 {matched})")
                 if last or not items:
                     break
@@ -191,4 +191,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.check:
         sys.exit(check())
-    sys.exit(run(args.district or list(SUWON_DISTRICTS), args.sleep))
+    sys.exit(run(args.district or list(DISTRICTS), args.sleep))

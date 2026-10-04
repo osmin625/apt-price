@@ -70,6 +70,22 @@ def compare(req: CompareRequest, db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/status")
+def status(
+    db: Session = Depends(get_db),
+    months: int = Query(24, ge=6, le=120),
+    spec: str = Query(hedonic.DEFAULT_SPEC),
+):
+    """적합이 이미 계산돼 있는지. **계산하지 않는다**(12ms).
+
+    화면이 로딩 문구를 고르는 데 쓴다 — 처음 계산하는 것과 이미 있는 것을 불러오는
+    것은 걸리는 시간이 한 자릿수 다르다.
+    """
+    if not hedonic.available():
+        return {"cached": False, "source": None, "available": False}
+    return {**mv.fit_status(db, months=months, spec=spec), "available": True}
+
+
 @router.get("/factors")
 def factors(
     db: Session = Depends(get_db),
@@ -157,6 +173,8 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
 
     cxs = db.execute(select(Complex)).scalars().all()
     out = listing_parse.parse_listing(req.text, cxs).as_dict()
+    # 시공사 합동 단지는 이름이 1:N 이라 못 고른다. 동 번호로 좁혀 본다.
+    _resolve_by_dong(out, req.text, db, cxs)
 
     if req.complex_id:
         picked = db.get(Complex, req.complex_id)
@@ -165,12 +183,12 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
         out["complex_id"] = picked.id
         out["complex_name"] = picked.name
         # 이름이 안 맞는다는 경고는 사용자가 직접 고른 순간 의미가 없다.
-        out["warnings"] = [w for w in out["warnings"] if "단지명" not in w]
+        out["warnings"] = [w for w in out["warnings"] if w.get("field") != "complex"]
 
     cid = out.get("complex_id")
     if cid:
         points = analysis.load_points(db, months=120, complex_id=cid)
-        keys = sorted({pricing.area_type_key(p.exclusive_area) for p in points})
+        keys, reps = _area_types(points)
         out["area_options"] = [
             {"exclusive_area": k, "pyeong": round(pricing.to_pyeong(k), 1)} for k in keys
         ]
@@ -186,14 +204,12 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
         center = pricing.walk_minutes_from_seconds(cs.walk_seconds) if cs else None
         out["complex_walk_min"] = round(center, 1) if center is not None else None
         if dong_walk is not None and center is not None and abs(dong_walk - center) >= 0.5:
-            out["warnings"].append(
+            out["warnings"].append({"field": "dong", "text":
                 f"{out['dong']}동 기준 역까지 도보 {dong_walk:.1f}분입니다"
-                f"(단지 중심점 {center:.1f}분). 이 동 좌표로 계산합니다."
-            )
+                f"(단지 중심점 {center:.1f}분). 이 동 좌표로 계산합니다."})
         elif out.get("dong") and dong_walk is None:
-            out["warnings"].append(
-                f"{out['dong']}동의 좌표가 없어 역거리는 단지 중심점 기준으로 계산합니다."
-            )
+            out["warnings"].append({"field": "dong", "text":
+                f"{out['dong']}동의 좌표가 없어 역거리는 단지 중심점 기준으로 계산합니다."})
 
         cx = db.get(Complex, cid)
         # '8/15층' 처럼 매물에 총 층수가 적혀 있으면 그쪽이 맞다. DB 의 max_floor 는
@@ -209,10 +225,9 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
             hits = [f for f in range(1, mf + 1) if pricing.floor_band(f, mf) == want]
             if hits:
                 out["floor"] = hits[len(hits) // 2]
-                out["warnings"].append(
+                out["warnings"].append({"field": "floor", "text":
                     f"'{want}' 표기를 {out['floor']}층으로 봤습니다"
-                    f"(총 {mf}층 기준 — 모델은 층 구간만 쓰므로 결과는 같습니다)."
-                )
+                    f"(총 {mf}층 기준 — 모델은 층 구간만 쓰므로 결과는 같습니다)."})
 
         area = out.get("exclusive_area")
         if area and keys:
@@ -220,7 +235,8 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
             for pt in points:
                 k = pricing.area_type_key(pt.exclusive_area)
                 counts[k] = counts.get(k, 0) + 1
-            _resolve_area(out, area, keys, counts, explicit=out.get("area_is_explicit"))
+            _resolve_area(out, area, keys, counts,
+                          explicit=out.get("area_is_explicit"), reps=reps)
     else:
         out["area_options"] = []
         out["max_floor"] = None
@@ -242,6 +258,8 @@ def parse_listing(req: ParseRequest, db: Session = Depends(get_db)):
                 floor=out.get("floor"),
                 floor_band=out.get("floor_band"),
                 asking_price=out["asking_price"],
+                # 단건도 확인일자가 붙어 있으면 읽는다 — 일괄 붙여넣기와 같은 기준.
+                confirmed_on=listing_parse.parse_confirmed_on(req.text),
             )
         except Exception:  # 호가 기록 실패가 파싱 결과를 날려선 안 된다
             db.rollback()
@@ -254,48 +272,399 @@ _RATIO_MIN, _RATIO_MAX = 0.60, 0.90
 _RATIO_TYPICAL = 0.75
 
 
+def _resolve_by_dong(out: dict, text: str, db: Session, complexes: list) -> None:
+    """단지명을 못 찾았을 때 **동 번호**로 좁힌다.
+
+    시공사 합동 단지는 네이버가 '신성,신안,쌍용,진흥' 으로 묶어 쓰고 국토부는
+    '신나무실신성'·'신나무실신안'·'신나무실쌍용'·'신나무실진흥' 으로 쪼개 기록한다.
+    이름으로는 1:N 이라 고를 수 없다.
+
+    그런데 **동 번호는 겹치지 않는다.** 실거래에 찍힌 동을 세어 보면 이렇다.
+
+        신나무실신안  531~534    신나무실신성  521~524
+        신나무실쌍용  541~544    신나무실진흥  551~554
+
+    그래서 543동은 쌍용, 534동은 신안으로 유일하게 정해진다. 이름 조각과 동 번호가
+    **둘 다** 맞을 때만 고르므로, '쌍용' 이 흔한 이름이어도 엉뚱한 단지가 걸리지 않는다.
+    둘 이상 남으면 고르지 않고 후보로만 둔다 — 찍는 것보다 낫다.
+    """
+    from sqlalchemy import select
+
+    from ..models import Trade
+    from ..services import listing_parse
+
+    dong = (out.get("dong") or "").strip()
+    if out.get("complex_id") or not dong:
+        return
+    frags = listing_parse.name_fragments(text)
+    if len(frags) >= 2:
+        # 이름이 쪼개진 경우 — 조각으로 후보를 만든다.
+        pool = [c for c in complexes if any(f in c.name for f in frags)]
+    else:
+        # 조각이 하나뿐일 때. 예전에는 여기서 그만뒀다 — '쌍용' 같은 흔한 이름을
+        # DB 전체에서 찾으면 엉뚱한 단지가 걸리기 때문이다.
+        #
+        # 그런데 **이미 추려 둔 후보 안에서만** 찾으면 그 위험이 없다. '현대 104동'
+        # 의 후보는 이름이 정확히 '현대' 인 곳들뿐이고, 그중 104동 거래가 있는 곳이
+        # 하나면 그게 답이다. 재 봤다 — 실제 붙여넣기 82건에서 41건이 이렇게 유일하게
+        # 정해졌다(성원 -> 수원 권선 세류동 성원, 신나무실5단지주공 ->
+        # 신나무실휴먼시아5단지). 24건은 동으로도 여럿이라 그대로 두고, 9건은 그 동의
+        # 거래가 없어 그대로 둔다.
+        ids = {c.get("id") for c in (out.get("candidates") or [])}
+        pool = [c for c in complexes if c.id in ids]
+    if not pool:
+        return
+
+    ids = [c.id for c in pool]
+    rows = db.execute(
+        select(Trade.complex_id)
+        .where(Trade.complex_id.in_(ids))
+        .where(Trade.apt_dong.in_([dong, dong + "동"]))
+        .distinct()
+    ).scalars().all()
+    if len(rows) != 1:
+        return
+
+    cx = next(c for c in pool if c.id == rows[0])
+    out["complex_id"] = cx.id
+    out["complex_name"] = cx.name
+    out["warnings"] = [w for w in out.get("warnings", [])
+                       if w.get("field") != "complex"]
+    # 추정이라는 것을 밝힌다. 이름만으로는 못 고른 것을 동 번호로 좁힌 것이고,
+    # 그 동의 거래가 우연히 한 단지에만 있었을 수도 있다.
+    if len(frags) >= 2:
+        why = (f"'{', '.join(frags)}' 는 시공사가 함께 지은 단지라 실거래에는 "
+               f"나뉘어 있습니다. ")
+    else:
+        why = (f"이름이 같은 단지가 {len(pool)}곳이라 이름만으로는 못 고릅니다. ")
+    out["warnings"].append({"field": "complex", "text":
+        why + f"{dong}동 거래가 있는 곳이 '{cx.name}'"
+        + (f"({cx.umd_nm})" if getattr(cx, "umd_nm", None) else "")
+        + " 하나뿐이라 그것으로 맞췄습니다."})
+
+
 def _resolve_area(
-    out: dict, area: float, keys: list[int], counts: dict[int, int], explicit: bool = False
+    out: dict, area: float, keys: list[int], counts: dict[int, int],
+    explicit: bool = False, reps: dict[int, float] | None = None,
 ) -> None:
     """붙여넣은 면적을 그 단지에 **실제로 거래된 전용 평형**에 맞춘다.
 
-    광고의 '34평'·'112㎡' 는 거의 항상 **공급면적**이다. 그대로 전용으로 넣으면
-    112㎡ 전용을 가진 단지가 아닌 한 "그런 평형 없음" 으로 비워지고, 사용자는
-    평 환산이 안 된 것처럼 본다. 실제로는 34평(=112.4㎡ 공급)의 전용이 85㎡ 다.
+    ## 세 가지를 순서대로 시도한다
 
-    그래서 두 해석을 **데이터에 물어본다**.
+    1. **정수 평 구간.** 네이버는 전용 평을 버림해서 쓴다 — 실제 49.58㎡ 는
+       14.998평이지만 화면에는 '전용14' 로 나온다. 그러니 그 표기는 점이 아니라
+       `[14, 15)평 = [46.3, 49.6)㎡` 구간이다. 하한을 점추정으로 쓰면 실제값과
+       3.3㎡ 벌어져 멀쩡한 매물이 버려진다.
+    2. **근접 매칭.** 구간 정보가 없으면 ±2㎡ 안에서 가장 가까운 타입.
+    3. **공급면적 재해석.** 광고의 `34평`·`112㎡` 는 대개 공급이다. 전용률
+       0.60~0.90 안에 드는 타입을 찾고, 여럿이면 거래가 많은 쪽을 고른다.
 
-    1. 숫자가 이 단지의 전용 평형과 바로 맞으면 → 전용으로 적힌 것.
-    2. 아니면 전용률 0.60~0.90 안에 드는 평형을 찾는다. 여럿이면 **거래가 많은 쪽**을
-       고른다. '34평' 이 가리키는 것은 그 단지의 주력 평형이기 때문이다.
-    3. 둘 다 아니면 비우고 직접 고르게 한다 — 찍는 것보다 낫다.
+    비교 대상은 **반올림한 타입 키가 아니라 실제 대표 면적**이다. 키 `50` 은
+    49.58㎡ 를 반올림한 값이라, 키로 비교하면 구간 판정이 어긋난다.
 
-    `explicit` 은 텍스트에 '전용' 이라고 적혀 있었다는 뜻이다. 그때는 2번을 건너뛴다.
+    3번은 예전에 `explicit`(전용이라고 적힘) 이면 건너뛰었는데, 그러면 1·2 가
+    모두 실패했을 때 통째로 버려진다. 마지막 수단으로는 써야 한다.
     """
-    near = min(keys, key=lambda k: abs(k - area))
-    if abs(near - area) <= 2.0:
+    reps = reps or {k: float(k) for k in keys}
+
+    def rep(k: int) -> float:
+        return reps.get(k, float(k))
+
+    # 1) 정수 평 구간
+    py = out.get("area_pyeong")
+    if py:
+        lo, hi = py * pricing.PYEONG_M2, (py + 1) * pricing.PYEONG_M2
+        band = [k for k in keys if lo <= rep(k) <= hi]
+        if band:
+            best = max(band, key=lambda k: counts.get(k, 0))
+            if abs(rep(best) - area) > 0.05:
+                out["warnings"].append({"field": "area", "text":
+                    f"'전용 {py}평' 은 네이버가 버림해 쓴 값이라 "
+                    f"{lo:.1f}~{hi:.1f}㎡ 를 뜻합니다. 이 단지의 실제 타입 "
+                    f"{rep(best):.2f}㎡({pricing.to_pyeong(rep(best)):.2f}평)로 맞췄습니다."})
+            out["exclusive_area"] = float(best)
+            return
+
+    # 2) 근접 매칭
+    near = min(keys, key=lambda k: abs(rep(k) - area))
+    if abs(rep(near) - area) <= 2.0:
         if pricing.area_type_key(area) != near:
-            out["warnings"].append(
-                f"전용 {area:g}㎡ 를 이 단지의 실제 타입 {near}㎡ 로 맞췄습니다."
-            )
+            out["warnings"].append({"field": "area", "text":
+                f"전용 {area:g}㎡ 를 이 단지의 실제 타입 {near}㎡ 로 맞췄습니다."})
         out["exclusive_area"] = float(near)
         return
 
-    if not explicit:
-        cands = [k for k in keys if _RATIO_MIN <= k / area <= _RATIO_MAX]
-        if cands:
-            # 거래 건수 우선, 같으면 전용률이 통상값에 가까운 쪽.
-            best = max(cands, key=lambda k: (counts.get(k, 0), -abs(k / area - _RATIO_TYPICAL)))
-            out["supply_area"] = out.get("supply_area") or area
-            out["exclusive_area"] = float(best)
-            out["warnings"].append(
-                f"{area:g}㎡({pricing.to_pyeong(area):.1f}평)는 공급면적으로 보입니다 — "
-                f"이 단지의 전용 {best}㎡({pricing.to_pyeong(best):.1f}평, 전용률 "
-                f"{best / area * 100:.0f}%)로 맞췄습니다. 이 서비스의 평당가는 전용 기준입니다."
-            )
-            return
+    # 3) 공급면적 재해석 — 마지막 수단
+    cands = [k for k in keys if _RATIO_MIN <= rep(k) / area <= _RATIO_MAX]
+    if cands:
+        best = max(cands, key=lambda k: (counts.get(k, 0), -abs(rep(k) / area - _RATIO_TYPICAL)))
+        out["supply_area"] = out.get("supply_area") or area
+        out["exclusive_area"] = float(best)
+        out["warnings"].append({"field": "area", "text":
+            f"{area:g}㎡({pricing.to_pyeong(area):.1f}평)는 공급면적으로 보입니다 — "
+            f"이 단지의 전용 {best}㎡({pricing.to_pyeong(best):.1f}평, 전용률 "
+            f"{rep(best) / area * 100:.0f}%)로 맞췄습니다. 이 서비스의 평당가는 전용 기준입니다."})
+        return
 
-    out["warnings"].append(
-        f"{area:g}㎡ 와 맞는 평형이 이 단지 거래에 없습니다. 목록에서 직접 고르세요."
-    )
+    # 여기까지 왔다는 것은 이 단지의 거래에 맞는 평형이 없다는 뜻이다.
+    # 그런데 그것이 **면적을 잘못 읽었다는 뜻은 아니다.**
+    #
+    # 매물에 `전용75.97` 이라고 적혀 있으면 그 값은 확실하다. 맞는 평형이 없는 것은
+    # 그 평형이 아직 거래되지 않았기 때문이다(수원성중흥S-클래스는 실거래가 1건뿐이고
+    # 그마저 84.66㎡였다). 그런데도 면적을 지워 버리면 화면에는 "전용면적 또는 가격을
+    # 읽지 못했습니다" 라고 뜬다 — 멀쩡히 읽은 값을 못 읽었다고 말하는 셈이고,
+    # 사용자는 붙여넣기가 깨진 줄 알게 된다.
+    #
+    # 그래서 **명시된 값은 살린다.** 비교할 거래가 없다는 사실은 평가 단계가
+    # '비교 실거래 없음' 으로 따로 알려 준다. 반대로 평 표기처럼 값 자체가 추정인
+    # 경우에는 지운다 — 그때는 정말 잘못 읽었을 수 있다.
+    if explicit:
+        out["warnings"].append({"field": "area", "text":
+            f"전용 {area:g}㎡ 는 이 단지에서 아직 거래된 적이 없는 평형입니다. "
+            f"적힌 값을 그대로 씁니다 — 비교할 실거래가 없어 적정가는 못 낼 수 있습니다."})
+        return
+
+    out["warnings"].append({"field": "area", "text":
+        f"{area:g}㎡ 와 맞는 평형이 이 단지 거래에 없습니다. 목록에서 직접 고르세요."})
     out["exclusive_area"] = None
+
+
+def _fill_floor(out: dict) -> None:
+    """'고층' 같은 표기를 그 구간의 대표 층으로 바꾼다(단건 파싱과 같은 규칙)."""
+    if out.get("floor") is not None or not out.get("floor_band") or not out.get("max_floor"):
+        return
+    mf = int(out["max_floor"])
+    want = out["floor_band"]
+    hits = [f for f in range(1, mf + 1) if pricing.floor_band(f, mf) == want]
+    if hits:
+        out["floor"] = hits[len(hits) // 2]
+
+
+def _candidate_info(db: Session, cands: list[dict]) -> list[dict]:
+    """후보에 **고를 수 있을 만큼**의 정보를 붙인다.
+
+    시군구만으로는 못 고른다 — '현대' 는 수원 장안구에만 세 곳이다(천천동·파장동·
+    정자동). 법정동·지번·준공년도·세대수와 **등록된 동 번호**를 같이 준다. 특히 동
+    번호가 결정적이다: 붙여넣은 매물이 101~104동이면 그 동이 있는 곳이 답이다.
+
+    거래 건수도 붙인다. 0건인 단지를 고르면 적정가를 못 내므로, 고르기 전에 보여
+    주는 쪽이 낫다 — 골랐는데 "비교 실거래 없음" 이 뜨면 왜인지 알 수 없다.
+    """
+    from sqlalchemy import func, select
+
+    from ..models import Complex, ComplexDong, Trade
+
+    ids = [c["id"] for c in cands]
+    if not ids:
+        return []
+
+    dongs: dict[int, list[str]] = {}
+    for d in db.execute(
+        select(ComplexDong).where(ComplexDong.complex_id.in_(ids))
+    ).scalars().all():
+        dongs.setdefault(d.complex_id, []).append(str(d.dong))
+
+    trades = dict(
+        db.execute(
+            select(Trade.complex_id, func.count())
+            .where(Trade.complex_id.in_(ids))
+            .group_by(Trade.complex_id)
+        ).all()
+    )
+
+    out = []
+    for c in cands:
+        cx = db.get(Complex, c["id"])
+        if not cx:
+            continue
+        out.append({
+            **c,
+            "sgg_name": cx.sgg_name,
+            "umd_nm": cx.umd_nm,
+            "jibun": cx.jibun,
+            "build_year": cx.build_year,
+            "household_count": cx.household_count,
+            "trade_count": trades.get(cx.id, 0),
+            "dongs": sorted(dongs.get(cx.id, []))[:8],
+        })
+    # 거래가 많은 쪽을 위로. 그쪽이 맞을 확률이 높고, 적정가도 낼 수 있다.
+    out.sort(key=lambda c: -c["trade_count"])
+    return out
+
+
+def _area_types(points) -> tuple[list[int], dict[int, float]]:
+    """(타입 키 목록, 타입별 **실제 대표 면적**).
+
+    키는 반올림값이라 `50` 이 실제로는 49.58㎡ 일 수 있다. 평 구간 판정처럼
+    소수점이 결과를 가르는 곳에서는 실제 값을 써야 한다.
+    """
+    from statistics import median
+
+    grouped: dict[int, list[float]] = {}
+    for p in points:
+        grouped.setdefault(pricing.area_type_key(p.exclusive_area), []).append(p.exclusive_area)
+    return sorted(grouped), {k: float(median(v)) for k, v in grouped.items()}
+
+
+class BulkRequest(BaseModel):
+    # 20만 자. 재 보니 북마클릿이 추려 낸 매물은 한 건당 92.5자(구분자 포함)라
+    # **약 2,100건**이고, 손으로 드래그 복사한 원문은 한 건당 129자라 약 1,550건이다.
+    # 실측: 1,058건(13.7만 자)이 4.0초. 이 정도면 한 번에 옮길 일이 거의 없는 양이다.
+    #
+    # 넘기면 422 가 나는데, 그 메시지가 화면에 닿는지가 더 중요하다. detail 이
+    # 배열이라 예전에는 `[object Object]` 만 떴다(api.js 의 detailText 로 고쳤다).
+    # 한계에 부딪히는 것은 괜찮다 — 왜 막혔는지 모르는 것이 문제다.
+    text: str = Field(
+        max_length=200_000,
+        description="매물 목록 텍스트. 20만 자(약 2,000건)까지.",
+    )
+    # 사용자가 직접 고른 '붙여넣은 단지명 -> 단지 id'.
+    #
+    # 고르는 단위가 **이름**인 이유: 같은 이름이 여럿이라 못 고른 것이므로, 한 번
+    # 고르면 그 이름의 매물이 **전부** 풀린다. 실제 붙여넣기에서 '현대' 20건이
+    # 한 덩어리였다 — 줄마다 고르게 하면 스무 번을 눌러야 한다.
+    name_map: dict[str, int] = Field(default_factory=dict)
+    months: int = Field(default=24, ge=6, le=120)
+    basis: str = Field(default="market", pattern="^(market|factor)$")
+
+
+@router.post("/parse-bulk")
+def parse_bulk(req: BulkRequest, db: Session = Depends(get_db)):
+    """목록을 통째로 붙여넣어 **여러 매물을 한 번에** 읽고 줄 세운다.
+
+    네이버 부동산은 공개 API 가 없고 자동 수집은 이용약관 문제가 있어 이 프로젝트가
+    처음부터 제외했다. 하지만 사용자가 **보고 있는 목록을 복사해 붙여넣는 것**은
+    자동 수집이 아니다. 필터를 건 목록 화면을 그대로 복사하면 스크리닝이 된다.
+
+    읽은 매물은 `Quote` 로 남는다. 그래서 `/api/quotes/ranking` 에서 지금까지 본
+    모든 매물의 순위를 언제든 다시 볼 수 있다.
+    """
+    from sqlalchemy import select
+
+    from ..models import Complex
+    from ..services import analysis, listing_parse, quotes, ranking
+
+    blocks = listing_parse.split_listings(req.text)
+    if not blocks:
+        raise HTTPException(422, "매물을 찾지 못했습니다. 목록 화면의 텍스트를 붙여넣어 주세요.")
+
+    cxs = db.execute(select(Complex)).scalars().all()
+    meta_cache: dict[int, dict] = {}
+
+    def complex_meta(cid: int) -> dict:
+        if cid not in meta_cache:
+            pts = analysis.load_points(db, months=120, complex_id=cid)
+            keys, reps = _area_types(pts)
+            counts: dict[int, int] = {}
+            for p in pts:
+                k = pricing.area_type_key(p.exclusive_area)
+                counts[k] = counts.get(k, 0) + 1
+            cx = db.get(Complex, cid)
+            meta_cache[cid] = {
+                "keys": keys,
+                "reps": reps,
+                "counts": counts,
+                "max_floor": cx.max_floor if cx else None,
+            }
+        return meta_cache[cid]
+
+    rows, skipped = [], []
+    for block in blocks:
+        raw = block["text"]
+        p = listing_parse.parse_listing(raw, cxs).as_dict()
+        _resolve_by_dong(p, raw, db, cxs)
+        # 사용자가 고른 것이 있으면 그것이 **이름 매칭보다 우선**이다. 같은 이름이
+        # 여럿이라 못 고른 것을 사람이 가린 것이므로, 파서가 다시 뒤집으면 안 된다.
+        head_name = listing_parse.head_name_text(raw)
+        picked = req.name_map.get(head_name)
+        if picked:
+            cx = db.get(Complex, picked)
+            if cx:
+                p["complex_id"] = cx.id
+                p["complex_name"] = cx.name
+
+        cid = p.get("complex_id")
+        if not cid:
+            skipped.append({
+                "text": raw.splitlines()[0][:40],
+                "reason": "단지를 찾지 못했습니다",
+                # 고를 수 있게 후보를 같이 보낸다. 이름 단위로 묶어 한 번만 고르면
+                # 그 이름의 매물이 전부 풀린다.
+                "name": head_name,
+                "candidates": _candidate_info(db, p.get("candidates") or []),
+            })
+            continue
+
+        meta = complex_meta(cid)
+        p["max_floor"] = p.get("total_floor") or meta["max_floor"]
+        _fill_floor(p)
+        if p.get("exclusive_area") and meta["keys"]:
+            _resolve_area(p, p["exclusive_area"], meta["keys"], meta["counts"],
+                          explicit=p.get("area_is_explicit"), reps=meta["reps"])
+        if not p.get("exclusive_area") or not p.get("asking_price"):
+            skipped.append({
+                "text": raw.splitlines()[0][:40],
+                "reason": "전용면적 또는 가격을 읽지 못했습니다",
+            })
+            continue
+
+        rows.append({
+            "complex_id": cid,
+            "complex_name": p.get("complex_name"),
+            "dong": p.get("dong"),
+            "exclusive_area": p["exclusive_area"],
+            "floor": p.get("floor"),
+            "asking_price": p["asking_price"],
+            "price_is_range": p.get("price_is_range", False),
+            "confirmed_on": block["confirmed_on"],
+            "memo": block["memo"],
+        })
+
+    out = ranking.evaluate_many(db, rows, months=req.months, basis=req.basis)
+    merged, away = ranking.merge_duplicates(out["items"])
+    # 합친 뒤에는 순위를 다시 매겨야 번호가 연속된다.
+    key = "gap_factor_pct" if req.basis == "factor" else "gap_pct"
+    ok = [i for i in merged if i.get(key) is not None]
+    rest = [i for i in merged if i.get(key) is None]
+    ok.sort(key=lambda i: i[key])
+    for n, i in enumerate(ok, 1):
+        i["rank"] = n
+    for i in rest:
+        i["rank"] = None
+
+    # DB 에 남긴다 — 같은 호가는 중복으로 쌓이지 않고, 값이 바뀌면 새 기록이 된다.
+    #
+    # 줄마다 **이번에 처음 들어온 것인지**를 같이 돌려준다.
+    #
+    # 북마클릿은 누를 때마다 '지금까지 담은 전부' 를 클립보드에 넣는다(여러 단지를
+    # 돌고 마지막에 한 번만 붙여넣게 하려는 것이다). 그래서 두 번째 붙여넣기부터는
+    # 결과에 **이미 본 매물이 섞인다** — 새로 뭐가 들어왔는지 눈으로 골라야 했다.
+    #
+    # `record()` 가 이미 'created' / 'seen' 을 가린다. 그 값을 버리지 않고 줄에 붙이면
+    # 화면에서 새 것만 추릴 수 있다. 실패한 줄은 None 으로 둔다 — 저장이 안 된 것을
+    # '새 것' 이라고 말하면 거짓이고, '있던 것' 이라고 말해도 거짓이다.
+    saved = 0
+    for i in ok + rest:
+        try:
+            got = quotes.record(
+                db, complex_id=i["complex_id"], dong=i.get("dong"),
+                exclusive_area=i["exclusive_area"], floor=i.get("floor"),
+                floor_band=i.get("floor_band"), asking_price=i["asking_price"],
+                confirmed_on=i.get("confirmed_on"), memo=i.get("memo"),
+            )
+            i["is_new"] = got == "created"
+            if got == "created":
+                saved += 1
+        except Exception:
+            db.rollback()
+            i["is_new"] = None
+
+    return {
+        "count": len(merged),
+        "found": len(blocks),
+        "merged_away": away,
+        "new_saved": saved,
+        "basis": req.basis,
+        "items": ok + rest,
+        "skipped": skipped + out["skipped"],
+    }
