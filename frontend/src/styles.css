@@ -965,6 +965,14 @@ tr.is-deleting td { opacity: 0.4; }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
 .mt16 { margin-top: 16px; }
+
+/* 더 보기. 표 아래 가운데에 둔다 — 스크롤 끝에서 손이 가는 자리다. */
+.rank-more {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  flex-wrap: wrap; margin-top: 10px; padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.rank-more .ghost { padding: 6px 14px; }
 .is-muted td { color: var(--text-muted); }
 
 /* 향 축소판 — 네 칸 십자. 300px 안에서 눈금 원·수염·다각형을 다 그리니 선이 너무

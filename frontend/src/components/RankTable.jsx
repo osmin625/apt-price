@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { eok, fmt } from './Charts'
 import FactorHint from './FactorHint'
@@ -23,6 +23,10 @@ import {
   nextSort,
   scopeClick,
 } from './rankSelect'
+
+/* 한 번에 그리는 줄 수. 100 이면 첫 화면에 다 안 들어가고도 스크롤 한두 번이면
+   끝까지 간다 — 더 적으면 '더 보기' 를 자주 누르고, 더 많으면 그리기가 다시 무거워진다. */
+const PAGE = 100
 
 const TONE = {
   저평가: 'good',
@@ -105,11 +109,38 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
      공짜로 같은 동작을 얻는다. 거르기(어떤 줄을 볼까)는 바깥(RankingView)에 있고
      정렬(어떤 순서로 볼까)은 여기 있다 — 바깥은 번호를 매기고 여기는 늘어놓는다. */
   const [sort, setSort] = useState(null)
+
+  /* 한 번에 **100줄**만 그린다.
+   *
+   * 재 봤다 — 매물 1,026건이 903줄이 되면서 탭을 누르고 표가 뜨기까지 3.4초가 걸렸다.
+   * 그중 서버가 적정가를 매기는 데 ~2초, 나머지가 그리기다. 903줄이면 칸이 12,642개에
+   * 비고 입력칸이 903개다. 100줄로 자르면 그리기 몫이 거의 사라진다.
+   *
+   * **서버 몫은 안 줄어든다.** 순위를 매기려면 전부 평가해야 하기 때문이다 — 100줄만
+   * 평가하면 그 100줄이 전체에서 몇 위인지 알 수 없다. 자르는 것은 그리기뿐이다.
+   *
+   * **거를 때만** 처음 100줄로 돌아간다. 안 그러면 '더 보기' 로 펼친 뒤 키워드를 빼도
+   * 그만큼을 그대로 그려 줄인 보람이 없다.
+   *
+   * 반대로 **정렬로는 되돌리지 않는다.** 일부러 '전부 보기' 를 누른 사람이 열을 눌러
+   * 정렬했다고 다시 접히면 눌러 놓은 것이 사라진 것처럼 보인다. 903줄을 다시 정렬하는
+   * 데 246ms 였다(100줄은 53ms) — 접을 만큼 무겁지 않다. */
+  const [limit, setLimit] = useState(PAGE)
+  const key = `${items.length}|${basis}|${items[0]?.quote_id ?? ''}`
+  const lastKey = useRef(key)
+  useEffect(() => {
+    if (lastKey.current !== key) {
+      lastKey.current = key
+      setLimit(PAGE)
+    }
+  }, [key])
   if (!items?.length) return null
 
   // 카드에도 같은 순서를 먹인다. 머리말이 없어 카드에서는 바꿀 수 없지만, 표에서
   // 정렬해 두고 창을 줄였을 때 순서가 뒤바뀌면 같은 화면이 아닌 것처럼 보인다.
-  const rows = applySort(items, sort, isFactor)
+  const sorted = applySort(items, sort, isFactor)
+  const rows = sorted.slice(0, limit)
+  const more = sorted.length - rows.length
 
   const byMarket = [...items].sort((a, b) => (a.gap_pct ?? 9e9) - (b.gap_pct ?? 9e9))
   const byFactor = [...items].sort(
@@ -341,6 +372,23 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* 몇 줄 중 몇 줄을 보고 있는지 **항상** 적는다. 안 적으면 903줄짜리 목록이
+          100줄로 보이는 것이 거른 결과인지 전부인지 알 수 없다 — 조용히 줄어든
+          목록만큼 나쁜 것이 없다. */}
+      {more > 0 && (
+        <div className="rank-more">
+          <span className="muted small">
+            {fmt(rows.length)} / {fmt(sorted.length)}건 보는 중
+          </span>
+          <button className="ghost" onClick={() => setLimit((n) => n + PAGE)}>
+            {fmt(Math.min(PAGE, more))}건 더 보기
+          </button>
+          <button className="linklike" onClick={() => setLimit(sorted.length)}>
+            전부 보기 ({fmt(more)}건 남음)
+          </button>
+        </div>
       )}
 
       {sameOrder && (
