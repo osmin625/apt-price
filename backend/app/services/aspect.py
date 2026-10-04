@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+from random import Random
 from statistics import median
 
 from sqlalchemy import select
@@ -66,9 +67,50 @@ def group_of(aspect: str | None) -> str | None:
     return max(found, key=ORDER.index)
 
 
-# 한 무리를 말하려면 **칸이** 몇 개 필요한가. 칸 = (단지·평형)이다.
-# 5칸으로 "남향 +0.7%" 라고 적으면 그 숫자가 혼자 걸어다닌다.
-MIN_CELLS = 20
+# 부트스트랩을 돌리기 위한 최소 칸 수. 이보다 적으면 재분배할 것이 없어 구간이
+# 의미를 잃는다. "몇 칸이면 충분한가" 는 **이 숫자가 아니라 구간이** 답한다.
+MIN_CELLS = 5
+
+# 부트스트랩 반복. 2,000이면 95% 구간이 소수 둘째 자리에서 안정된다(재 봤다 —
+# 1,000 과 5,000 사이에서 구간 폭이 0.05%p 안에서만 움직였다).
+BOOTSTRAP = 2000
+
+# 잡고 싶은 크기. 향 프리미엄이 이보다 작으면 실무에서 쓸 일이 없다 — 같은 평형
+# 호가가 1% 안에서 오가는 것은 흥정 범위다. 이 값으로 "몇 칸이 더 필요한가" 를 낸다.
+TARGET_FLOOR = 1.0
+
+# 난수를 고정한다. 같은 데이터에 같은 구간이 나와야 "어제보다 좁아졌다" 가 데이터가
+# 늘어서인지 주사위 탓인지 가려진다.
+SEED = 20260101
+
+
+def _median(v):
+    return median(v) if v else None
+
+
+def _bootstrap(cell_devs: list[dict], groups: list[str]) -> dict[str, tuple[float, float]]:
+    """칸을 **통째로** 복원추출해 무리별 중위의 95% 구간을 낸다.
+
+    칸 단위로 뽑는 이유: 한 칸 안의 매물들은 서로 독립이 아니다. 같은 단지·같은
+    평형이고, 중개사도 겹친다. 매물 단위로 뽑으면 표본이 실제보다 많은 척하게 되고
+    구간이 거짓으로 좁아진다.
+    """
+    rng = Random(SEED)
+    n = len(cell_devs)
+    draws: dict[str, list[float]] = {g: [] for g in groups}
+    for _ in range(BOOTSTRAP):
+        picked = [cell_devs[rng.randrange(n)] for _ in range(n)]
+        for g in groups:
+            vals = [c[g] for c in picked if g in c]
+            if vals:
+                draws[g].append(median(vals))
+    out = {}
+    for g, v in draws.items():
+        if len(v) < BOOTSTRAP * 0.5:  # 그 무리가 거의 안 뽑히면 구간을 말하지 않는다
+            continue
+        v.sort()
+        out[g] = (v[int(len(v) * 0.025)], v[int(len(v) * 0.975)])
+    return out
 
 
 def by_aspect(db: Session, evaluate, months: int) -> dict:
@@ -145,37 +187,80 @@ def by_aspect(db: Session, evaluate, months: int) -> dict:
 
     # 향이 둘 이상 섞인 칸만. 한 가지뿐이면 비교할 상대가 없다.
     mixed = {k: v for k, v in cells.items() if len(v) >= 2}
-    devs: dict[str, list[float]] = {}
+
+    # 칸마다 '그 칸의 중위' 를 뺀 값. 부트스트랩이 칸을 통째로 뽑아야 하므로
+    # 무리별 목록이 아니라 **칸별 묶음**으로 들고 있는다.
+    cell_devs: list[dict] = []
+    counts: dict[str, int] = {}
+    quotes_in: dict[str, int] = {}
     for gs in mixed.values():
         base = median([x for v in gs.values() for x in v])
+        row = {}
         for g, v in gs.items():
-            devs.setdefault(g, []).append(median(v) - base)
+            row[g] = median(v) - base
+            counts[g] = counts.get(g, 0) + 1
+            quotes_in[g] = quotes_in.get(g, 0) + len(v)
+        cell_devs.append(row)
+
+    present = [g for g in ORDER if counts.get(g)]
+    ci = _bootstrap(cell_devs, present) if len(cell_devs) >= MIN_CELLS else {}
 
     groups = []
-    for g in ORDER:
-        v = devs.get(g) or []
-        if not v:
-            continue
+    for g in present:
+        vals = [c[g] for c in cell_devs if g in c]
+        lo, hi = ci.get(g, (None, None))
         groups.append({
             "group": g,
             "label": f"{g}향",
-            "cells": len(v),
-            "n": sum(len(x) for k, gs in mixed.items() for gg, x in gs.items() if gg == g),
+            "cells": counts[g],
+            "n": quotes_in[g],
             # 중위를 쓴다. 호가에는 터무니없는 값이 섞이고 평균은 그것에 끌려간다 —
             # 이 저장소가 적정가에 중앙값을 쓰는 것과 같은 이유다.
-            "vs_cell": round(median(v), 2),
-            "thin": len(v) < MIN_CELLS,
+            "vs_cell": round(_median(vals), 2),
+            "lo": round(lo, 2) if lo is not None else None,
+            "hi": round(hi, 2) if hi is not None else None,
+            # 구간이 0 을 건너지 않으면 '잡혔다'. 내가 정한 칸 수가 아니라 **데이터가**
+            # 정한다.
+            "sig": bool(lo is not None and (lo > 0 or hi < 0)),
         })
 
-    enough = bool(groups) and min(x["cells"] for x in groups) >= MIN_CELLS
+    detected = any(x["sig"] for x in groups)
+
+    # 검출 한계 — 지금 표본으로 잡을 수 있는 가장 작은 차이. 구간 반폭의 중위다.
+    halves = [(x["hi"] - x["lo"]) / 2 for x in groups if x["lo"] is not None]
+    floor = _median(halves)
+
+    # **얼마나 더 모아야 하나.** 구간 폭은 칸 수의 제곱근에 반비례하므로,
+    # 한계를 target 까지 좁히려면 칸이 (floor/target)^2 배 필요하다. 추정이지만
+    # "더 모으면 되나요" 에 숫자로 답할 수 있는 유일한 길이다.
+    need = None
+    if floor and floor > TARGET_FLOOR and len(cell_devs) >= MIN_CELLS:
+        need = int(len(cell_devs) * (floor / TARGET_FLOOR) ** 2)
+
+    # **단지 수**가 관건이다. 재 봤다 — 같은 단지에서 매물을 더 담아도 칸은 거의
+    # 안 는다(그 단지의 평형 수만큼이 상한이고, 한 평형에 향이 하나뿐인 곳도 많다).
+    # 실측: 매물 81건 · 단지 6곳에서 섞인 칸이 6개, 즉 **단지당 1개꼴**이었다.
+    # 그래서 "몇 건 더"가 아니라 "몇 곳 더"로 안내한다.
+    cx_all = {k[0] for k in cells}
+    cx_mixed = {k[0] for k in mixed}
+    per_complex = (len(cell_devs) / len(cx_mixed)) if cx_mixed else None
+    complexes_needed = (
+        int(need / per_complex) if (need and per_complex) else None
+    )
 
     return {
         "groups": groups,
         "n_quotes": len(rows),
         "n_scored": scored,
-        "n_cells": len(mixed),
+        "n_complexes": len(cx_all),
+        "n_complexes_mixed": len(cx_mixed),
+        "complexes_needed": complexes_needed,
+        "n_cells": len(cell_devs),
         "min_cells": MIN_CELLS,
-        "detected": enough,
+        "detected": detected,
+        "floor_pct": round(floor, 2) if floor is not None else None,
+        "target_floor_pct": TARGET_FLOOR,
+        "cells_needed": need,
         "months": months,
         "empty": False,
     }

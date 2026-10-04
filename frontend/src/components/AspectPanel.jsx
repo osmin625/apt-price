@@ -75,23 +75,39 @@ export default function AspectPanel({ months }) {
           {/* 검출되지 않았으면 **막대를 그리지 않는다.** 0 근처 막대 셋을 그리면
               '향은 가격과 무관' 으로 읽히는데, 실제로는 '이 표본으로는 잴 수 없다' 다.
               동 위치 카드를 뺀 이유와 같은 자리다. */}
-          {!data.detected ? (
+          {!data.detected && (
             <p className="paste-warn">
-              <b>아직 잴 수 없습니다.</b> 향이 둘 이상 섞인 (단지·평형) 칸이{' '}
-              <b>{fmt(data.n_cells)}개</b>뿐입니다(최소 {fmt(data.min_cells)}개 필요).
-              매물이 더 쌓이면 채워집니다.
-              {data.groups.length > 0 && (
+              <b>아직 잡히지 않았습니다.</b>{' '}
+              {data.floor_pct != null ? (
+                <>
+                  지금 표본으로 잡을 수 있는 가장 작은 차이가 <b>±{fmt(data.floor_pct, 2)}%p</b>{' '}
+                  인데, 아래 값들이 전부 그 안에 있습니다. 향 차이가 없다는 뜻이 아니라{' '}
+                  <b>이 표본으로는 잡음과 구분되지 않는다</b>는 뜻입니다.
+                </>
+              ) : (
+                <>
+                  향이 둘 이상 섞인 (단지·평형) 칸이 {fmt(data.n_cells)}개뿐이라 구간을
+                  낼 수 없습니다.
+                </>
+              )}
+              {data.complexes_needed > 0 && (
                 <>
                   {' '}
-                  지금 값은 참고로만 —{' '}
-                  {data.groups
-                    .map((g) => `${g.label} ${g.vs_cell > 0 ? '+' : ''}${fmt(g.vs_cell, 2)}%p`)
-                    .join(' · ')}
-                  .
+                  ±{fmt(data.target_floor_pct, 0)}%p 까지 좁히려면 칸이 약{' '}
+                  <b>{fmt(data.cells_needed)}개</b> 필요하고, 그건{' '}
+                  <b>단지 약 {fmt(data.complexes_needed)}곳</b>에 해당합니다 — 지금은{' '}
+                  {fmt(data.n_complexes_mixed)}곳입니다.{' '}
+                  <b>같은 단지에서 더 담는 것보다 단지를 더 도는 쪽</b>이 빠릅니다
+                  (한 단지가 칸 하나쯤을 보탭니다).
                 </>
               )}
             </p>
-          ) : (
+          )}
+
+          {/* 막대는 **잡혔을 때만** 그린다. 0 근처 막대 셋을 그리면 '향은 가격과
+              무관' 으로 읽히는데, 실제로는 '이 표본으로는 잴 수 없다' 다. 대신
+              아래 표로 지금 값과 구간을 같이 보여 준다 — 숨기지는 않는다. */}
+          {data.detected ? (
             <div className="aspect-bars">
               {data.groups.map((g) => (
                 <div className="ab-row" key={g.group}>
@@ -116,6 +132,40 @@ export default function AspectPanel({ months }) {
                 </div>
               ))}
             </div>
+          ) : (
+            data.groups.length > 0 && (
+              <div className="table-wrap" style={{ marginTop: 10 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>향</th>
+                      <th className="num">칸 중위 대비</th>
+                      <th className="num">95% 구간</th>
+                      <th className="num">칸</th>
+                      <th className="num">매물</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.groups.map((g) => (
+                      <tr key={g.group}>
+                        <td>{g.label}</td>
+                        <td className="num">
+                          {g.vs_cell > 0 ? '+' : ''}
+                          {fmt(g.vs_cell, 2)}%p
+                        </td>
+                        <td className="num muted">
+                          {g.lo == null
+                            ? '—'
+                            : `${g.lo > 0 ? '+' : ''}${fmt(g.lo, 2)} ~ ${g.hi > 0 ? '+' : ''}${fmt(g.hi, 2)}`}
+                        </td>
+                        <td className="num">{fmt(g.cells)}</td>
+                        <td className="num">{fmt(g.n)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           )}
 
           <p className="muted small" style={{ marginTop: 10 }}>
