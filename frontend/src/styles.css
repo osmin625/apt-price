@@ -988,6 +988,31 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+/* ── 메모 키워드로 빼기 ──────────────────────────────────────────────
+   누르면 **숨긴다**. 그래서 켜진 모양이 아니라 '지워진' 모양(취소선)이다 —
+   칩이 밝아지면 '이것만 보기' 로 읽히는데 하는 일은 정반대다. */
+.tag-filter {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.tf-label { flex: none; margin-right: 2px; }
+.tf-chip { display: inline-flex; align-items: center; gap: 5px; }
+.tf-chip.off {
+  text-decoration: line-through;
+  opacity: 0.5;
+  border-color: var(--neg);
+  color: var(--text-muted);
+}
+.tf-n {
+  font-size: 10.5px; font-style: normal; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text-muted);
+  padding: 0 4px; border-radius: 4px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+}
+.tf-clear { margin-left: 4px; font-size: 12px; }
+/* 번호를 다시 매겼다는 표시. 숫자를 바꿔 놓고 아무 말이 없으면 전체 순위로 읽힌다. */
+.rank-was { font-style: normal; color: var(--text-muted); font-size: 10px; vertical-align: super; }
+
 /* ── 단지 고르기 ──────────────────────────────────────────────────────
    같은 이름이 여럿이라 자동으로 못 고른 매물. 버리지 않고 고르게 한다.
    칩이 아니라 **카드**인 이유: 시군구만으로는 못 고르고(현대는 수원 장안구에만

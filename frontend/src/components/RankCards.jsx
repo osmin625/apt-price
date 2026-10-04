@@ -49,7 +49,12 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
             className={`rank-card${deleting === i.quote_id ? ' is-deleting' : ''}`}
           >
             <div className="rc-head">
-              <span className="rc-rank">{i.rank ?? '—'}</span>
+              <span
+                className="rc-rank"
+                title={i.rank_all != null ? `거르기 전 ${i.rank_all}위` : undefined}
+              >
+                {i.rank ?? '—'}
+              </span>
               {onSelect ? (
                 <button className="rc-name linklike" onClick={() => onSelect(i.complex_id)}>
                   {i.complex_name}

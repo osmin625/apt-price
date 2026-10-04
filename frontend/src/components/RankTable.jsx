@@ -122,7 +122,15 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                   deleting === i.quote_id ? ' is-deleting' : ''
                 }`}
               >
-                <td className="num rank-no">{i.rank ?? '—'}</td>
+                {/* 필터를 걸면 번호를 다시 매긴다. 그때 원래 순위를 호버에 남긴다 —
+                    다시 매긴 번호를 전체 순위로 읽으면 안 된다. */}
+                <td
+                  className="num rank-no"
+                  title={i.rank_all != null ? `거르기 전 ${i.rank_all}위` : undefined}
+                >
+                  {i.rank ?? '—'}
+                  {i.rank_all != null && i.rank_all !== i.rank && <i className="rank-was">*</i>}
+                </td>
                 <td>
                   {onSelect ? (
                     <button className="linklike" onClick={() => onSelect(i.complex_id)}>

@@ -4,6 +4,7 @@ import { api, STATIC_MODE } from '../api'
 import Hint from '../components/Hint'
 import Loading from '../components/Loading'
 import RankTable from '../components/RankTable'
+import TagFilter from '../components/TagFilter'
 
 /**
  * 지금까지 붙여넣은 **모든 매물**의 순위.
@@ -18,6 +19,23 @@ export default function RankingView({ months, setMonths, onSelect }) {
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(null)
   const [err, setErr] = useState(null)
+
+  /* 빼 둔 메모 키워드.
+   *
+   * **서버에 묻지 않고 화면에서 거른다.** `note_tags` 는 이미 응답에 들어 있어서
+   * 왕복할 이유가 없고, 무엇보다 매물 순위는 정적 사이트에도 실리는데 거기서는
+   * 서버가 없다. 거르는 일은 가볍다 — 수백 줄짜리 배열 필터다.
+   *
+   * Set 을 state 에 넣을 때는 **새 Set 을 만들어** 넣는다. 같은 Set 을 고쳐서
+   * 넣으면 참조가 같아 React 가 안 다시 그린다. */
+  const [excluded, setExcluded] = useState(() => new Set())
+
+  const toggleTag = (t) =>
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      next.has(t) ? next.delete(t) : next.add(t)
+      return next
+    })
 
   /**
    * 삭제는 **화면에서 먼저 지우고** 서버를 부른다.
@@ -76,6 +94,19 @@ export default function RankingView({ months, setMonths, onSelect }) {
   }
 
   useEffect(load, [months, basis, days])
+
+  /* 뺀 키워드가 붙은 줄을 걸러 내고 **번호를 다시 매긴다.**
+   *
+   * 번호를 그대로 두면 1·4·7 처럼 구멍이 난다. 구멍이 '걸렀다' 는 것을 말해 주긴
+   * 하지만, 필터를 건 뒤에 보고 싶은 것은 '내가 살 만한 것들 중 몇 번째냐' 다.
+   * 그래서 다시 매기고, **원래 순위는 호버에 남긴다**(`rank_all`) — 다시 매긴
+   * 번호를 전체 순위로 읽으면 안 되기 때문이다. 순서 자체는 바뀌지 않는다.
+   *
+   * 키워드가 아예 없는 매물(메모가 없는 것)은 어떤 키워드로도 안 걸린다. 빼기
+   * 필터라서 그렇다 — 포함 필터였다면 그것들이 통째로 사라졌을 것이다. */
+  const shown = (data?.items || [])
+    .filter((i) => !(i.note_tags || []).some((t) => excluded.has(t)))
+    .map((i, n) => (excluded.size ? { ...i, rank: i.rank == null ? null : n + 1, rank_all: i.rank } : i))
 
   return (
     <div className="card">
@@ -172,13 +203,25 @@ export default function RankingView({ months, setMonths, onSelect }) {
 
       {data?.count > 0 && (
         <>
+          <TagFilter
+            items={data.items}
+            excluded={excluded}
+            onToggle={toggleTag}
+            onClear={() => setExcluded(new Set())}
+            hidden={data.items.length - shown.length}
+          />
           {deleting != null && (
             <p className="muted small live" style={{ margin: '0 0 6px' }}>
               삭제 후 남은 매물로 순위를 다시 매기는 중입니다…
             </p>
           )}
+          {shown.length === 0 ? (
+            <p className="empty">
+              뺀 키워드에 전부 걸려 남은 매물이 없습니다. 위에서 되돌려 주세요.
+            </p>
+          ) : (
           <RankTable
-            items={data.items}
+            items={shown}
             basis={basis}
             /* 정적에서는 지울 수 없다. 눌리는데 실패하는 버튼을 두지 않는다. */
             onDelete={STATIC_MODE ? null : remove}
@@ -186,6 +229,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
             onSelect={onSelect}
             onNoteSaved={noteSaved}
           />
+          )}
           {data.skipped?.length > 0 && (
             <p className="paste-warn" style={{ marginTop: 8 }}>
               {data.skipped.length}건은 평가하지 못했습니다 —{' '}
