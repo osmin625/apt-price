@@ -269,6 +269,17 @@ class Quote(Base):
     # 같은 (단지·동·평형·층·호가)를 중개사 여러 곳이 올리면 메모도 여럿이다.
     # 덮어쓰지 않고 줄바꿈으로 **덧붙인다** — 한 곳만 '급매' 라고 적었어도 그건 사실이고,
     # 덮어쓰면 나중에 들어온 것이 앞의 것을 조용히 지운다.
+    # 향. 매물에 적혀 있는데 지금까지 버리고 있었다 — 같은 단지·같은 평형이라도
+    # 남향과 북향은 값이 다르다.
+    #
+    # **모델에는 안 넣는다.** 국토부 실거래에 향이 없어 계수를 추정할 길이 없다.
+    # 추정할 수 없는 것을 요인으로 넣으면 다른 계수가 그 자리를 대신 먹는다.
+    # 보여 주기만 한다.
+    #
+    # 빈 문자열이 '모름' 이다. NULL 을 쓰면 유니크 키가 걸린 다른 컬럼들과 규칙이
+    # 달라져 헷갈린다(이 표의 dong·floor 가 같은 이유로 ""·0 을 쓴다).
+    aspect: Mapped[str] = mapped_column(String(10), default="")
+
     memo: Mapped[str] = mapped_column(Text, default="")
 
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

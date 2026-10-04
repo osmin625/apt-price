@@ -44,7 +44,8 @@ def add_memo(old: str | None, new: str | None) -> str:
 
 def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: float,
            floor: int | None, floor_band: str | None, asking_price: int,
-           confirmed_on=None, memo: str | None = None) -> str:
+           confirmed_on=None, memo: str | None = None,
+           aspect: str | None = None) -> str:
     """호가 하나를 기록한다. 반환값은 'created' | 'seen' — 화면에 알려 주려고 구분한다.
 
     같은 (단지·동·평형·층·호가) 면 새로 쌓지 않고 마지막 목격 시각만 올린다.
@@ -71,6 +72,10 @@ def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: fl
         if confirmed_on and (row.confirmed_on is None or confirmed_on > row.confirmed_on):
             row.confirmed_on = confirmed_on
         row.memo = add_memo(row.memo, memo)
+        # 향은 **비어 있을 때만** 채운다. 같은 집을 두 번 붙여넣었는데 한 번은
+        # 향이 안 적혀 있으면, 덮어쓰기로 두면 있던 값이 지워진다.
+        if aspect and not row.aspect:
+            row.aspect = aspect
         db.commit()
         return "seen"
 
@@ -81,6 +86,7 @@ def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: fl
         asking_price=int(asking_price),
         confirmed_on=confirmed_on,
         memo=(memo or "").strip()[:1000],
+        aspect=(aspect or "")[:10],
     ))
     db.commit()
     return "created"
@@ -358,6 +364,17 @@ def display_units(rows: list[Quote]) -> list[dict]:
                     if t and t not in memos:
                         memos.append(t)
         item["memos"] = memos
+
+        # 향. 한 줄에 접힌 매물들이 서로 다른 향일 수 있다(같은 층대의 다른 라인).
+        # 그때는 **대표 것만** 쓰지 않고 여럿임을 밝힌다 — 하나를 찍으면 나머지
+        # 매물의 향이 조용히 사라진다.
+        asp = []
+        for c in chains:
+            for q in c.rows:
+                if q.aspect and q.aspect not in asp:
+                    asp.append(q.aspect)
+        item["aspect"] = asp[0] if len(asp) == 1 else ("·".join(asp) if asp else None)
+        item["aspects"] = asp
 
         # 비고를 붙일 키. unit_key 와 **같아야** 한다 — 어긋나면 메모가 엉뚱한 줄에 간다.
         k = unit_key(rep.latest)
