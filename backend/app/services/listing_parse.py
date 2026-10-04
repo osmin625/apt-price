@@ -313,6 +313,20 @@ def parse_stated_ppp(text: str) -> int | None:
 _HEAD_DONG = re.compile(r"\s*(?:\d{1,4}|[가-힣])\s*동\s*$")
 
 
+def _strip_head_dong(text: str) -> str:
+    """첫 줄에서만 동 표기를 뗀 **원문**. 나머지 줄은 그대로 둔다.
+
+    동을 떼는 것은 단지명 줄에서만이다. 면적·층 줄("...11/12층")에도 숫자가 있지만
+    거기는 `_HEAD_DONG`('...동' 으로 끝남)에 걸리지 않으므로 손대지 않는다.
+    """
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.strip():
+            lines[i] = _HEAD_DONG.sub("", ln.strip())
+            break
+    return "\n".join(lines)
+
+
 def _head_name(text: str) -> str:
     """첫 줄에서 동 표기를 뗀 **단지명 부분**의 정규화 키.
 
@@ -346,8 +360,28 @@ def _name_candidates(text: str, complexes: list) -> list[dict]:
     정규화 키(`pricing.name_key`)로 비교하므로 공백·'아파트' 접미 차이를 흡수한다.
     **가장 긴 이름을 우선**한다 — '자연앤자이2단지' 가 있는데 '자연앤자이' 로
     끊어 버리면 엉뚱한 단지가 된다.
+
+    ## 동 번호를 먼저 뗀다 — 떼지 않으면 남의 단지에 붙는다
+
+    첫 줄은 '성원 102동' 처럼 **단지명 + 동**이다. 정규화하면 `성원102동` 이 되는데,
+    여기서 DB 이름을 부분일치로 찾으면 **동 번호가 이름의 일부로 먹힌다.**
+
+        성원 102동        -> 성원102동        ⊃ `성원1`(안양 만안구)   ← 남의 시다
+        신나무실5단지주공 514동 -> ...주공514동    ⊃ `주공5`(과천시)       ← 남의 시다
+
+    실제로 겪었다. 수원 매교역 근처 매물 11건이 **안양 성원1** 에 붙어 저장됐고
+    (메모에 '매교역세권' 이 적혀 있었다), 영통 신나무실 34건은 **과천 주공5** 로
+    가서 "비교 실거래 없음" 으로 버려졌다. 버려진 쪽은 시끄럽기라도 했지만, 붙은
+    쪽은 **조용히 틀렸다** — 남의 동네 거래가 시세 계산에 섞인다.
+
+    이름이 숫자로 끝나는 단지가 2,469곳 중 187곳이다. 동 번호는 거의 항상 숫자로
+    시작하므로, 안 떼면 이 187곳이 전부 덫이 된다.
+
+    떼도 멀쩡한 매칭은 안 깨진다. `청구2 201동` 은 동을 떼면 `청구2` 라 그대로
+    맞고, `주공그린빌5 505동` 도 `주공그린빌5` 로 맞는다 — 둘 다 실제 데이터로
+    대조했다(`scripts/verify_name_match.py`).
     """
-    key = pricing.name_key(text)
+    key = pricing.name_key(_strip_head_dong(text))
     hits = []
     for cx in complexes:
         nk = cx.name_key or pricing.name_key(cx.name)
