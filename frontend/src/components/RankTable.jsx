@@ -8,7 +8,17 @@ import PriceTrail from './PriceTrail'
 import RankCards from './RankCards'
 import NoteCell from './NoteCell'
 import { gapText, otherOf, toneOf, verdictOf } from './rankBasis'
-import { ONLY_HINT, nameClick } from './rankSelect'
+import {
+  AREA_HINT,
+  DONG_HINT,
+  ONLY_HINT,
+  SORT_COLS,
+  applySort,
+  areaKeyOf,
+  nameClick,
+  nextSort,
+  scopeClick,
+} from './rankSelect'
 
 const TONE = {
   저평가: 'good',
@@ -59,10 +69,43 @@ function useNarrow(query = '(max-width: 720px)') {
   return narrow
 }
 
-export default function RankTable({ items, basis, onDelete, deleting, onSelect, onOnlyComplex, onNoteSaved }) {
+/* 정렬 가능한 머리말.
+ *
+ * 누르면 그 열로 오름차순, 다시 누르면 내림차순, 한 번 더 누르면 **기본(순위)으로**
+ * 돌아온다. 세 번째 누름을 둔 이유: 안 두면 한 번 정렬한 뒤 원래 순서로 돌아갈 길이
+ * 없어 새로고침을 하게 된다. `#` 머리말을 누르면 바로 기본으로 간다.
+ *
+ * 화살표는 **지금 정렬 중인 열에만** 띄운다. 모든 머리말에 흐린 화살표를 깔아 두는
+ * 방식도 있는데, 그러면 표가 온통 화살표가 되고 정작 어디로 정렬됐는지가 안 보인다.
+ * 대신 머리말에 밑줄점선을 둬서 누를 수 있다는 것만 알린다.
+ */
+function Sortable({ k, sort, onSort, children, title }) {
+  const on = k != null && sort?.key === k
+  return (
+    <button
+      type="button"
+      className={`th-sort${on ? ' on' : ''}`}
+      title={title || (k == null ? '기본 순서로' : `${SORT_COLS[k]?.label || ''} 기준 정렬`)}
+      onClick={() => onSort(k == null ? null : (cur) => nextSort(cur, k))}
+    >
+      {children}
+      {on && <i className="th-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</i>}
+    </button>
+  )
+}
+
+export default function RankTable({ items, basis, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
   const narrow = useNarrow()
   const isFactor = basis === 'factor'
+  /* 정렬은 **표 안에 둔다.** 매물 순위와 붙여넣기 결과가 같은 표를 쓰므로 양쪽이
+     공짜로 같은 동작을 얻는다. 거르기(어떤 줄을 볼까)는 바깥(RankingView)에 있고
+     정렬(어떤 순서로 볼까)은 여기 있다 — 바깥은 번호를 매기고 여기는 늘어놓는다. */
+  const [sort, setSort] = useState(null)
   if (!items?.length) return null
+
+  // 카드에도 같은 순서를 먹인다. 머리말이 없어 카드에서는 바꿀 수 없지만, 표에서
+  // 정렬해 두고 창을 줄였을 때 순서가 뒤바뀌면 같은 화면이 아닌 것처럼 보인다.
+  const rows = applySort(items, sort, isFactor)
 
   const byMarket = [...items].sort((a, b) => (a.gap_pct ?? 9e9) - (b.gap_pct ?? 9e9))
   const byFactor = [...items].sort(
@@ -88,12 +131,12 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
       )}
       {narrow ? (
         <RankCards
-          items={items}
+          items={rows}
           basis={basis}
           onDelete={onDelete}
           deleting={deleting}
           onSelect={onSelect}
-          onOnlyComplex={onOnlyComplex}
+          onScope={onScope}
           onNoteSaved={onNoteSaved}
         />
       ) : (
@@ -101,23 +144,48 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
         <table>
           <thead>
             <tr>
-              <th className="num">#</th>
-              <th>단지</th>
-              <th>동</th>
-              <th className="num">전용</th>
-              <th className="num">층</th>
-              <th className="num">호가</th>
-              <th className="num">확인</th>
-              <th className="num is-sort">{isFactor ? '요인 적정' : '실거래 적정'}</th>
-              <th className="num is-sort">대비</th>
+              <th className="num">
+                <Sortable k={null} sort={sort} onSort={setSort} title="기본 순서 — 괴리율 순">
+                  #
+                </Sortable>
+              </th>
+              <th>
+                <Sortable k="complex_name" sort={sort} onSort={setSort}>단지</Sortable>
+              </th>
+              <th>
+                <Sortable k="dong" sort={sort} onSort={setSort}>동</Sortable>
+              </th>
+              <th className="num">
+                <Sortable k="exclusive_area" sort={sort} onSort={setSort}>전용</Sortable>
+              </th>
+              <th className="num">
+                <Sortable k="floor" sort={sort} onSort={setSort}>층</Sortable>
+              </th>
+              <th>향</th>
+              <th className="num">
+                <Sortable k="asking_price" sort={sort} onSort={setSort}>호가</Sortable>
+              </th>
+              <th className="num">
+                <Sortable k="confirmed_on" sort={sort} onSort={setSort}>확인</Sortable>
+              </th>
+              <th className="num is-sort">
+                <Sortable k="fair" sort={sort} onSort={setSort}>
+                  {isFactor ? '요인 적정' : '실거래 적정'}
+                </Sortable>
+              </th>
+              <th className="num is-sort">
+                <Sortable k="gap" sort={sort} onSort={setSort}>대비</Sortable>
+              </th>
               <th>판정</th>
-              <th className="num">추가</th>
+              <th className="num">
+                <Sortable k="added_on" sort={sort} onSort={setSort}>추가</Sortable>
+              </th>
               <th className="col-note">비고</th>
               {onDelete && <th />}
             </tr>
           </thead>
           <tbody>
-            {items.map((i, n) => (
+            {rows.map((i, n) => (
               <tr
                 key={i.quote_id ?? n}
                 className={`${i.rank === 1 ? 'is-top' : ''}${
@@ -137,7 +205,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                   {onSelect ? (
                     <button
                       className="linklike"
-                      onClick={(e) => nameClick(e, i.complex_id, onSelect, onOnlyComplex)}
+                      onClick={(e) => nameClick(e, i, onSelect, onScope)}
                       title={ONLY_HINT}
                     >
                       {i.complex_name}
@@ -147,17 +215,48 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                   )}
                 </td>
                 <td>
-                  {i.dong ? `${i.dong}동` : <span className="muted">—</span>}
+                  {i.dong ? (
+                    <span
+                      className={onScope ? 'scopable' : undefined}
+                      title={onScope ? DONG_HINT : undefined}
+                      onClick={(e) =>
+                        scopeClick(e, onScope, { complexId: i.complex_id, dong: String(i.dong) })
+                      }
+                    >
+                      {i.dong}동
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
                   {i.listing_count > 1 && !i.group_count && (
                     <span className="badge" title={`중개사 ${i.listing_count}곳에 올라온 같은 매물`}>
                       x{i.listing_count}
                     </span>
                   )}
                 </td>
-                <td className="num">{i.exclusive_area}㎡</td>
+                <td className="num">
+                  <span
+                    className={onScope ? 'scopable' : undefined}
+                    title={onScope ? AREA_HINT : undefined}
+                    onClick={(e) =>
+                      scopeClick(e, onScope, {
+                        complexId: i.complex_id,
+                        areaKey: areaKeyOf(i),
+                      })
+                    }
+                  >
+                    {i.exclusive_area}㎡
+                  </span>
+                </td>
                 <td className="num">
                   {i.floor ?? '—'}
                   {i.floor_band && <span className="muted small"> {i.floor_band}</span>}
+                </td>
+                {/* 향. 매물에 적혀 있는데 지금까지 버리고 있었다 — 같은 단지·같은
+                    평형이라도 남향과 북향은 값이 다르다. 모델에는 안 넣는다(실거래에
+                    향이 없어 계수를 추정할 수 없다). 보여 주기만 한다. */}
+                <td className="aspect">
+                  {i.aspect || <span className="muted">—</span>}
                 </td>
                 <td className="num">
                   {eok(i.asking_price)}

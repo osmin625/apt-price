@@ -310,6 +310,23 @@ def parse_stated_ppp(text: str) -> int | None:
     return int(m.group(1).replace(",", "")) if m else None
 
 
+# 향. 면적·층 줄 끝에 붙는다 — '아파트107㎡ (전용84.78)11/12층동향'.
+#
+# 실제 붙여넣기에서 150건을 세어 보니 다섯 가지뿐이었다(남향 63·남서향 42·남동향 35·
+# 동향 8·서향 2). 북향 계열은 광고에 거의 안 적히지만 규칙에는 넣어 둔다 — 안 나온다고
+# 빼 두면 나왔을 때 조용히 버린다.
+#
+# **'층' 바로 뒤**만 본다. 메모에도 '정남향' 같은 말이 흔한데(실측 메모 50건 중 여럿),
+# 그것은 중개사의 말이지 매물 정보가 아니다. 둘을 섞으면 어느 쪽이 근거인지 알 수 없다.
+_ASPECT = re.compile(r"층\s*(북동|북서|남동|남서|동|서|남|북)향")
+
+
+def parse_aspect(text: str) -> str | None:
+    """매물의 향. 못 읽으면 None — 지어내지 않는다."""
+    m = _ASPECT.search(text or "")
+    return f"{m.group(1)}향" if m else None
+
+
 _HEAD_DONG = re.compile(r"\s*(?:\d{1,4}|[가-힣])\s*동\s*$")
 
 

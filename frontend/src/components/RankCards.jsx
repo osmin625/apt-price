@@ -1,6 +1,6 @@
 import { eok, fmt } from './Charts'
 import { gapText, otherOf, verdictOf } from './rankBasis'
-import { ONLY_HINT, nameClick } from './rankSelect'
+import { AREA_HINT, DONG_HINT, ONLY_HINT, areaKeyOf, nameClick, scopeClick } from './rankSelect'
 import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
@@ -35,7 +35,7 @@ const TONE = {
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
-export default function RankCards({ items, basis, onDelete, deleting, onSelect, onOnlyComplex, onNoteSaved }) {
+export default function RankCards({ items, basis, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
   /* 표와 **같은 규칙**을 쓴다. 각자 고르면 같은 매물이 표와 카드에서 다른 판정을
      달게 된다 — 화면 폭에 따라 답이 달라지는 셈이다. */
   const isFactor = basis === 'factor'
@@ -59,7 +59,7 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
               {onSelect ? (
                 <button
                   className="rc-name linklike"
-                  onClick={(e) => nameClick(e, i.complex_id, onSelect, onOnlyComplex)}
+                  onClick={(e) => nameClick(e, i, onSelect, onScope)}
                   title={ONLY_HINT}
                 >
                   {i.complex_name}
@@ -73,8 +73,33 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
             </div>
 
             <div className="rc-spec">
-              {i.dong ? `${i.dong}동` : '동 미상'} · {i.exclusive_area}㎡ ·{' '}
+              {/* 동·면적은 Ctrl(⌘)+클릭으로 좁힌다. 표와 같은 동작이어야 창 폭에
+                  따라 다른 앱처럼 보이지 않는다. */}
+              {i.dong ? (
+                <span
+                  className={onScope ? 'scopable' : undefined}
+                  title={onScope ? DONG_HINT : undefined}
+                  onClick={(e) =>
+                    scopeClick(e, onScope, { complexId: i.complex_id, dong: String(i.dong) })
+                  }
+                >
+                  {i.dong}동
+                </span>
+              ) : (
+                '동 미상'
+              )}{' · '}
+              <span
+                className={onScope ? 'scopable' : undefined}
+                title={onScope ? AREA_HINT : undefined}
+                onClick={(e) =>
+                  scopeClick(e, onScope, { complexId: i.complex_id, areaKey: areaKeyOf(i) })
+                }
+              >
+                {i.exclusive_area}㎡
+              </span>
+              {' · '}
               {i.floor ?? '—'}층{i.floor_band ? ` (${i.floor_band})` : ''}
+              {i.aspect ? ` · ${i.aspect}` : ''}
             </div>
 
             <div className="rc-answer">

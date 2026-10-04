@@ -988,6 +988,26 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+/* 정렬 가능한 머리말. 모든 머리말에 흐린 화살표를 깔면 표가 온통 화살표가 되고
+   정작 어디로 정렬됐는지가 안 보인다 — 점선 밑줄로 '누를 수 있다' 만 알리고 화살표는
+   지금 정렬 중인 열에만 띄운다. */
+.th-sort {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
+  border-bottom: 1px dotted var(--axis);
+}
+.th-sort:hover { color: var(--text-primary); border-bottom-color: var(--series-1); }
+.th-sort.on { color: var(--text-primary); font-weight: 700; border-bottom-color: transparent; }
+.th-arrow { font-style: normal; font-size: 9px; color: var(--series-1); }
+.num .th-sort { justify-content: flex-end; }
+
+/* Ctrl(⌘)+클릭으로 좁힐 수 있는 값. 평소에는 표시하지 않는다 — 수식키를 눌러야
+   동작하는 것에 늘 밑줄을 그으면 그냥 눌러도 되는 줄 안다. 호버에서만 알린다. */
+.scopable { cursor: pointer; }
+.scopable:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+.aspect { white-space: nowrap; font-size: 12.5px; color: var(--text-secondary); }
+
 /* 한 단지만 보는 중. 좁혀 놓은 것을 모르면 '매물이 왜 이것뿐이지' 가 된다 —
    해제하는 길을 같은 줄에 둔다. */
 .only-complex {

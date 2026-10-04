@@ -5,6 +5,7 @@ import Hint from '../components/Hint'
 import Loading from '../components/Loading'
 import RankTable from '../components/RankTable'
 import TagFilter from '../components/TagFilter'
+import { inScope, scopeLabel } from '../components/rankSelect'
 
 /**
  * 지금까지 붙여넣은 **모든 매물**의 순위.
@@ -30,12 +31,14 @@ export default function RankingView({ months, setMonths, onSelect }) {
    * 넣으면 참조가 같아 React 가 안 다시 그린다. */
   const [excluded, setExcluded] = useState(() => new Set())
 
-  /* 한 단지만 보기. 순위표에서 단지명을 **Ctrl(⌘)+클릭**하면 켜진다.
+  /* 좁혀 놓은 범위. 순위표에서 **Ctrl(⌘)+클릭**하면 켜진다.
+   *
+   *   단지명 -> {단지}      동 -> {단지, 동}      전용 -> {단지, 면적}
    *
    * 키워드 빼기와 따로 둔다 — 하나는 '빼는' 것이고 이것은 '좁히는' 것이라 섞으면
-   * 무엇이 왜 안 보이는지 알 수 없다. 둘 다 켜져 있으면 그 단지 안에서 다시 키워드를
+   * 무엇이 왜 안 보이는지 알 수 없다. 둘 다 켜져 있으면 그 범위 안에서 다시 키워드를
    * 뺀 결과가 되고, 그건 화면에 그대로 적는다. */
-  const [onlyComplex, setOnlyComplex] = useState(null)
+  const [scope, setScope] = useState(null)
 
   const toggleTag = (t) =>
     setExcluded((prev) => {
@@ -111,10 +114,10 @@ export default function RankingView({ months, setMonths, onSelect }) {
    *
    * 키워드가 아예 없는 매물(메모가 없는 것)은 어떤 키워드로도 안 걸린다. 빼기
    * 필터라서 그렇다 — 포함 필터였다면 그것들이 통째로 사라졌을 것이다. */
-  const onlyName =
-    onlyComplex == null
+  const scopeName =
+    scope == null
       ? null
-      : (data?.items || []).find((i) => i.complex_id === onlyComplex)?.complex_name || '단지'
+      : (data?.items || []).find((i) => i.complex_id === scope.complexId)?.complex_name
 
   /* 좁히기(단지)와 빼기(키워드)를 **단계로 나눈다.**
    *
@@ -125,9 +128,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
    *
    * 키워드 칩의 건수도 `scoped` 로 센다. 좁혀 놓고 보는 중이면 그 단지 안에서
    * 몇 건인지가 궁금한 것이지 전체에서 몇 건인지가 아니다. */
-  const scoped = (data?.items || []).filter(
-    (i) => onlyComplex == null || i.complex_id === onlyComplex,
-  )
+  const scoped = (data?.items || []).filter((i) => inScope(i, scope))
 
   const shown = scoped
     .filter(
@@ -137,7 +138,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
         ![...(i.note_tags || []), ...(i.note_auto || [])].some((t) => excluded.has(t)),
     )
     .map((i, n) =>
-      excluded.size || onlyComplex != null
+      excluded.size || scope != null
         ? { ...i, rank: i.rank == null ? null : n + 1, rank_all: i.rank }
         : i,
     )
@@ -237,10 +238,10 @@ export default function RankingView({ months, setMonths, onSelect }) {
 
       {data?.count > 0 && (
         <>
-          {onlyComplex != null && (
+          {scope != null && (
             <p className="only-complex">
-              <b>{onlyName}</b> 만 보는 중입니다 · {shown.length}건
-              <button className="linklike" onClick={() => setOnlyComplex(null)}>
+              <b>{scopeLabel(scope, scopeName)}</b> 만 보는 중입니다 · {shown.length}건
+              <button className="linklike" onClick={() => setScope(null)}>
                 전체 보기
               </button>
             </p>
@@ -259,8 +260,8 @@ export default function RankingView({ months, setMonths, onSelect }) {
           )}
           {shown.length === 0 ? (
             <p className="empty">
-              {onlyComplex != null
-                ? `${onlyName} 에서 뺀 키워드에 전부 걸려 남은 매물이 없습니다.`
+              {scope != null
+                ? `${scopeLabel(scope, scopeName)} 에서 뺀 키워드에 전부 걸려 남은 매물이 없습니다.`
                 : '뺀 키워드에 전부 걸려 남은 매물이 없습니다.'}{' '}
               위에서 되돌려 주세요.
             </p>
@@ -272,7 +273,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
             onDelete={STATIC_MODE ? null : remove}
             deleting={deleting}
             onSelect={onSelect}
-            onOnlyComplex={setOnlyComplex}
+            onScope={setScope}
             onNoteSaved={noteSaved}
           />
           )}
