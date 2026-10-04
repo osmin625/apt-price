@@ -12,6 +12,17 @@ import { fmt } from './Charts'
  * 그래서 **누르면 숨긴다.** 누른 칩은 지워진 모양(취소선)이 되어 지금 무엇을 빼고
  * 있는지 한눈에 보인다.
  *
+ * ## 두 종류를 같이 세되 모양은 가른다
+ *
+ * 빼고 싶은 것이 중개사 메모 키워드만은 아니다. **민간임대**는 사용자가 단지 상세에서
+ * 직접 표시한 것(`note_auto`)이고, 분양 물건과 성격이 달라 아예 빼고 보고 싶은
+ * 경우가 많다. 그래서 같은 줄에 둔다 — '빼고 싶은 것' 이라는 쓰임이 같은데 두 군데서
+ * 따로 빼게 하면 하나를 빠뜨린다.
+ *
+ * 다만 **근거가 다르다.** 민간임대는 사용자가 확인해 표시한 사실이고, 메모 키워드는
+ * 올린 사람이 그렇게 적었다는 뜻이다. 비고 배지에서 쓰는 구분(채운 노랑 ↔ 테두리)을
+ * 칩에도 그대로 쓴다.
+ *
  * ## 지금 목록에 있는 키워드만 띄운다
  *
  * 사전에는 18개가 있지만 쌓인 매물에 안 나오는 것도 있다. 0건짜리 칩을 눌러 봐야
@@ -34,16 +45,28 @@ import { fmt } from './Charts'
  */
 export default function TagFilter({ items, excluded, onToggle, onClear, hidden }) {
   const counts = new Map()
+  // 사용자가 표시한 사실(note_auto)인지 중개사의 말(note_tags)인지. 이름이 겹칠 일은
+  // 없다 — 사전(RULES)에 '민간임대' 가 없다.
+  const facts = new Set()
   for (const i of items || []) {
     for (const t of i.note_tags || []) counts.set(t, (counts.get(t) || 0) + 1)
+    for (const t of i.note_auto || []) {
+      counts.set(t, (counts.get(t) || 0) + 1)
+      facts.add(t)
+    }
   }
   // 빼 둔 키워드는 지금 목록에 안 보이므로 counts 에 없다. 그래도 칩은 남겨야
   // 다시 켤 수 있다 — 사라지면 되돌릴 길이 없다.
   for (const t of excluded) if (!counts.has(t)) counts.set(t, 0)
   if (!counts.size) return null
 
+  // 사용자가 표시한 사실을 앞에 둔다. 근거가 분명한 쪽이고, 실제로 제일 먼저
+  // 빼고 보게 되는 것이다.
   const tags = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'),
+    (a, b) =>
+      Number(facts.has(b[0])) - Number(facts.has(a[0])) ||
+      b[1] - a[1] ||
+      a[0].localeCompare(b[0], 'ko'),
   )
 
   return (
@@ -52,11 +75,15 @@ export default function TagFilter({ items, excluded, onToggle, onClear, hidden }
       {tags.map(([t, n]) => (
         <button
           key={t}
-          className={`chip tf-chip${excluded.has(t) ? ' off' : ''}`}
+          className={`chip tf-chip${facts.has(t) ? ' is-fact' : ''}${
+            excluded.has(t) ? ' off' : ''
+          }`}
           aria-pressed={excluded.has(t)}
           onClick={() => onToggle(t)}
           title={
-            `'${t}' 가 붙은 매물 ${fmt(n)}건` +
+            (facts.has(t)
+              ? `단지 상세에서 표시한 '${t}' 동의 매물 ${fmt(n)}건`
+              : `'${t}' 가 붙은 매물 ${fmt(n)}건`) +
             (excluded.has(t)
               ? ' — 지금 숨기고 있습니다. 누르면 다시 보입니다.'
               : ' — 누르면 순위에서 뺍니다. 키워드가 여럿 붙은 매물이 있어' +

@@ -997,6 +997,12 @@ tr.is-deleting td { opacity: 0.4; }
 }
 .tf-label { flex: none; margin-right: 2px; }
 .tf-chip { display: inline-flex; align-items: center; gap: 5px; }
+/* 사용자가 표시한 사실(민간임대). 비고 배지의 노랑과 같은 뜻이다 — 중개사의 말이
+   아니라 확인해서 표시한 것이라는 표시. 모양이 같아야 두 화면이 같은 말을 한다. */
+.tf-chip.is-fact {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
 .tf-chip.off {
   text-decoration: line-through;
   opacity: 0.5;

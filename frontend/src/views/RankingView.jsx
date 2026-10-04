@@ -105,7 +105,12 @@ export default function RankingView({ months, setMonths, onSelect }) {
    * 키워드가 아예 없는 매물(메모가 없는 것)은 어떤 키워드로도 안 걸린다. 빼기
    * 필터라서 그렇다 — 포함 필터였다면 그것들이 통째로 사라졌을 것이다. */
   const shown = (data?.items || [])
-    .filter((i) => !(i.note_tags || []).some((t) => excluded.has(t)))
+    .filter(
+      (i) =>
+        // 중개사 메모 키워드와 **사용자가 표시한 것**(민간임대)을 같이 본다.
+        // 빼고 싶다는 쓰임이 같은데 한쪽만 거르면 하나를 빠뜨린다.
+        ![...(i.note_tags || []), ...(i.note_auto || [])].some((t) => excluded.has(t)),
+    )
     .map((i, n) => (excluded.size ? { ...i, rank: i.rank == null ? null : n + 1, rank_all: i.rank } : i))
 
   return (
