@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
+import AspectPanel from '../components/AspectPanel'
 import FitLoading from '../components/FitLoading'
 import { PremiumBars, fmt } from '../components/Charts'
 import FactorCurve from '../components/FactorCurve'
@@ -48,6 +49,10 @@ export default function MarketView({ filters, setFilters }) {
       </div>
 
       <FactorPanel months={filters.months} />
+
+      {/* 보정계수와 **따로** 둔다. 저 격자는 전부 실거래에서 추정한 값이고 향은
+          실거래에 없다 — 같은 격자에 넣으면 근거가 다른 숫자가 같은 무게로 읽힌다. */}
+      <AspectPanel months={filters.months} />
     </>
   )
 }

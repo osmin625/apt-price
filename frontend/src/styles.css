@@ -988,6 +988,18 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+/* 향 막대. 0 을 가운데 두고 좌우로 — 칸 중위 대비라 음수가 나온다. */
+.aspect-bars { margin-top: 12px; }
+.ab-row { display: grid; grid-template-columns: 48px 1fr 72px 96px; align-items: center; gap: 10px; padding: 3px 0; }
+.ab-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ab-track { position: relative; height: 16px; }
+.ab-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
+.ab-fill { position: absolute; top: 3px; height: 10px; min-width: 2px; }
+.ab-fill.pos { background: var(--series-1); border-radius: 0 3px 3px 0; }
+.ab-fill.neg { background: var(--neg); border-radius: 3px 0 0 3px; }
+.ab-value { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.ab-n { text-align: right; }
+
 /* 정렬 가능한 머리말. 모든 머리말에 흐린 화살표를 깔면 표가 온통 화살표가 되고
    정작 어디로 정렬됐는지가 안 보인다 — 점선 밑줄로 '누를 수 있다' 만 알리고 화살표는
    지금 정렬 중인 열에만 띄운다. */
