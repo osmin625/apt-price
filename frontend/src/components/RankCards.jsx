@@ -1,5 +1,6 @@
 import { eok, fmt } from './Charts'
 import { gapText, otherOf, verdictOf } from './rankBasis'
+import { ONLY_HINT, nameClick } from './rankSelect'
 import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
@@ -34,7 +35,7 @@ const TONE = {
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
-export default function RankCards({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
+export default function RankCards({ items, basis, onDelete, deleting, onSelect, onOnlyComplex, onNoteSaved }) {
   /* 표와 **같은 규칙**을 쓴다. 각자 고르면 같은 매물이 표와 카드에서 다른 판정을
      달게 된다 — 화면 폭에 따라 답이 달라지는 셈이다. */
   const isFactor = basis === 'factor'
@@ -56,7 +57,11 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
                 {i.rank ?? '—'}
               </span>
               {onSelect ? (
-                <button className="rc-name linklike" onClick={() => onSelect(i.complex_id)}>
+                <button
+                  className="rc-name linklike"
+                  onClick={(e) => nameClick(e, i.complex_id, onSelect, onOnlyComplex)}
+                  title={ONLY_HINT}
+                >
                   {i.complex_name}
                 </button>
               ) : (

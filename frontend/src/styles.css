@@ -988,6 +988,15 @@ tr.is-deleting td { opacity: 0.4; }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
 
+/* 한 단지만 보는 중. 좁혀 놓은 것을 모르면 '매물이 왜 이것뿐이지' 가 된다 —
+   해제하는 길을 같은 줄에 둔다. */
+.only-complex {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px;
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-1) 30%, var(--border));
+}
+
 /* ── 메모 키워드로 빼기 ──────────────────────────────────────────────
    누르면 **숨긴다**. 그래서 켜진 모양이 아니라 '지워진' 모양(취소선)이다 —
    칩이 밝아지면 '이것만 보기' 로 읽히는데 하는 일은 정반대다. */

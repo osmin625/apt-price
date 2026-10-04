@@ -8,6 +8,7 @@ import PriceTrail from './PriceTrail'
 import RankCards from './RankCards'
 import NoteCell from './NoteCell'
 import { gapText, otherOf, toneOf, verdictOf } from './rankBasis'
+import { ONLY_HINT, nameClick } from './rankSelect'
 
 const TONE = {
   저평가: 'good',
@@ -58,7 +59,7 @@ function useNarrow(query = '(max-width: 720px)') {
   return narrow
 }
 
-export default function RankTable({ items, basis, onDelete, deleting, onSelect, onNoteSaved }) {
+export default function RankTable({ items, basis, onDelete, deleting, onSelect, onOnlyComplex, onNoteSaved }) {
   const narrow = useNarrow()
   const isFactor = basis === 'factor'
   if (!items?.length) return null
@@ -92,6 +93,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
           onDelete={onDelete}
           deleting={deleting}
           onSelect={onSelect}
+          onOnlyComplex={onOnlyComplex}
           onNoteSaved={onNoteSaved}
         />
       ) : (
@@ -133,7 +135,11 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                 </td>
                 <td>
                   {onSelect ? (
-                    <button className="linklike" onClick={() => onSelect(i.complex_id)}>
+                    <button
+                      className="linklike"
+                      onClick={(e) => nameClick(e, i.complex_id, onSelect, onOnlyComplex)}
+                      title={ONLY_HINT}
+                    >
                       {i.complex_name}
                     </button>
                   ) : (

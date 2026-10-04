@@ -30,6 +30,13 @@ export default function RankingView({ months, setMonths, onSelect }) {
    * 넣으면 참조가 같아 React 가 안 다시 그린다. */
   const [excluded, setExcluded] = useState(() => new Set())
 
+  /* 한 단지만 보기. 순위표에서 단지명을 **Ctrl(⌘)+클릭**하면 켜진다.
+   *
+   * 키워드 빼기와 따로 둔다 — 하나는 '빼는' 것이고 이것은 '좁히는' 것이라 섞으면
+   * 무엇이 왜 안 보이는지 알 수 없다. 둘 다 켜져 있으면 그 단지 안에서 다시 키워드를
+   * 뺀 결과가 되고, 그건 화면에 그대로 적는다. */
+  const [onlyComplex, setOnlyComplex] = useState(null)
+
   const toggleTag = (t) =>
     setExcluded((prev) => {
       const next = new Set(prev)
@@ -104,14 +111,36 @@ export default function RankingView({ months, setMonths, onSelect }) {
    *
    * 키워드가 아예 없는 매물(메모가 없는 것)은 어떤 키워드로도 안 걸린다. 빼기
    * 필터라서 그렇다 — 포함 필터였다면 그것들이 통째로 사라졌을 것이다. */
-  const shown = (data?.items || [])
+  const onlyName =
+    onlyComplex == null
+      ? null
+      : (data?.items || []).find((i) => i.complex_id === onlyComplex)?.complex_name || '단지'
+
+  /* 좁히기(단지)와 빼기(키워드)를 **단계로 나눈다.**
+   *
+   * `scoped` 는 단지까지만 좁힌 것이고 `shown` 은 거기서 키워드까지 뺀 것이다.
+   * 나눠 두는 이유는 숫자 때문이다 — 'N건 숨김' 은 **키워드로 숨긴 수**여야 하는데,
+   * 전체에서 빼면 단지로 좁힌 것까지 더해진다. 실제로 한 단지(25건)로 좁힌 뒤
+   * 민간임대를 빼니 "247건 숨김" 이 떴다. 맞는 값은 12다.
+   *
+   * 키워드 칩의 건수도 `scoped` 로 센다. 좁혀 놓고 보는 중이면 그 단지 안에서
+   * 몇 건인지가 궁금한 것이지 전체에서 몇 건인지가 아니다. */
+  const scoped = (data?.items || []).filter(
+    (i) => onlyComplex == null || i.complex_id === onlyComplex,
+  )
+
+  const shown = scoped
     .filter(
       (i) =>
         // 중개사 메모 키워드와 **사용자가 표시한 것**(민간임대)을 같이 본다.
         // 빼고 싶다는 쓰임이 같은데 한쪽만 거르면 하나를 빠뜨린다.
         ![...(i.note_tags || []), ...(i.note_auto || [])].some((t) => excluded.has(t)),
     )
-    .map((i, n) => (excluded.size ? { ...i, rank: i.rank == null ? null : n + 1, rank_all: i.rank } : i))
+    .map((i, n) =>
+      excluded.size || onlyComplex != null
+        ? { ...i, rank: i.rank == null ? null : n + 1, rank_all: i.rank }
+        : i,
+    )
 
   return (
     <div className="card">
@@ -208,12 +237,20 @@ export default function RankingView({ months, setMonths, onSelect }) {
 
       {data?.count > 0 && (
         <>
+          {onlyComplex != null && (
+            <p className="only-complex">
+              <b>{onlyName}</b> 만 보는 중입니다 · {shown.length}건
+              <button className="linklike" onClick={() => setOnlyComplex(null)}>
+                전체 보기
+              </button>
+            </p>
+          )}
           <TagFilter
-            items={data.items}
+            items={scoped}
             excluded={excluded}
             onToggle={toggleTag}
             onClear={() => setExcluded(new Set())}
-            hidden={data.items.length - shown.length}
+            hidden={scoped.length - shown.length}
           />
           {deleting != null && (
             <p className="muted small live" style={{ margin: '0 0 6px' }}>
@@ -222,7 +259,10 @@ export default function RankingView({ months, setMonths, onSelect }) {
           )}
           {shown.length === 0 ? (
             <p className="empty">
-              뺀 키워드에 전부 걸려 남은 매물이 없습니다. 위에서 되돌려 주세요.
+              {onlyComplex != null
+                ? `${onlyName} 에서 뺀 키워드에 전부 걸려 남은 매물이 없습니다.`
+                : '뺀 키워드에 전부 걸려 남은 매물이 없습니다.'}{' '}
+              위에서 되돌려 주세요.
             </p>
           ) : (
           <RankTable
@@ -232,6 +272,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
             onDelete={STATIC_MODE ? null : remove}
             deleting={deleting}
             onSelect={onSelect}
+            onOnlyComplex={setOnlyComplex}
             onNoteSaved={noteSaved}
           />
           )}
