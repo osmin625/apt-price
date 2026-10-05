@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
-import AnalysisView from './views/AnalysisView'
+import MacroView from './views/MacroView'
+import MarketView from './views/MarketView'
 import ComplexDetail from './views/ComplexDetail'
 import MapView from './views/MapView'
 import ModelView from './views/ModelView'
@@ -23,10 +24,11 @@ import RankingView from './views/RankingView'
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
  */
 const TABS = [
-  // 시장 분석과 매크로를 합쳤다. 둘은 같은 질문의 두 축(미시·거시)이라 오가며
-  // 보던 것이고, 모델 괴리 차트처럼 **둘을 겹쳐야** 뜻이 생기는 그림도 있다.
-  // 한 탭 안에서 섹션으로 나눈다 — 자세한 것은 AnalysisView 주석.
-  { id: 'analysis', label: '분석', static: true },
+  // 한 탭 안에 섹션으로 합쳐 봤다가 **되돌렸다.** 둘은 같은 질문의 두 축이지만,
+  // 각자 카드가 예닐곱 장이라 한 화면에 올리면 좌우 2단으로 쪼개도 빽빽했다.
+  // 겹쳐 봐야 하는 것은 '모델과 어긋나는 곳' 한 장뿐이고, 그건 거시 쪽에 이미 있다.
+  { id: 'micro', label: '미시 분석', static: true },
+  { id: 'macro', label: '거시 분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
@@ -42,7 +44,7 @@ const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
 const DEFAULT_FILTERS = { months: 12 }
 
 export default function App() {
-  const [tab, setTab] = useState('analysis')
+  const [tab, setTab] = useState('micro')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [meta, setMeta] = useState(null)
   const [health, setHealth] = useState(null)
@@ -157,8 +159,10 @@ export default function App() {
           months={filters.months}
           onClose={() => setDetailId(null)}
         />
-      ) : tab === 'analysis' ? (
-        <AnalysisView filters={filters} setFilters={setFilters} meta={meta} />
+      ) : tab === 'micro' ? (
+        <MarketView filters={filters} setFilters={setFilters} meta={meta} />
+      ) : tab === 'macro' ? (
+        <MacroView />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (

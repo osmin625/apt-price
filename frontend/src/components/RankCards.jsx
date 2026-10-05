@@ -1,6 +1,17 @@
 import { eok, fmt } from './Charts'
 import { gapText, otherOf, verdictOf } from './rankBasis'
-import { AREA_HINT, DONG_HINT, ONLY_HINT, areaKeyOf, nameClick, scopeClick } from './rankSelect'
+import {
+  AREA_HINT,
+  ASPECT_HINT,
+  DONG_HINT,
+  ONLY_HINT,
+  areaPatch,
+  aspectGroup,
+  aspectPatch,
+  dongPatch,
+  nameClick,
+  scopeClick,
+} from './rankSelect'
 import FactorHint from './FactorHint'
 import GroupHint from './GroupHint'
 import Hint from './Hint'
@@ -79,9 +90,7 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
                 <span
                   className={onScope ? 'scopable' : undefined}
                   title={onScope ? DONG_HINT : undefined}
-                  onClick={(e) =>
-                    scopeClick(e, onScope, { complexId: i.complex_id, dong: String(i.dong) })
-                  }
+                  onClick={(e) => scopeClick(e, onScope, dongPatch(i))}
                 >
                   {i.dong}동
                 </span>
@@ -91,15 +100,30 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
               <span
                 className={onScope ? 'scopable' : undefined}
                 title={onScope ? AREA_HINT : undefined}
-                onClick={(e) =>
-                  scopeClick(e, onScope, { complexId: i.complex_id, areaKey: areaKeyOf(i) })
-                }
+                onClick={(e) => scopeClick(e, onScope, areaPatch(i))}
               >
                 {i.exclusive_area}㎡
               </span>
               {' · '}
               {i.floor ?? '—'}층{i.floor_band ? ` (${i.floor_band})` : ''}
-              {i.aspect ? ` · ${i.aspect}` : ''}
+              {i.aspect && (
+                <>
+                  {' · '}
+                  <span
+                    className={onScope && aspectGroup(i.aspects?.[0] || i.aspect) ? 'scopable' : undefined}
+                    title={
+                      onScope && aspectGroup(i.aspects?.[0] || i.aspect)
+                        ? ASPECT_HINT(aspectGroup(i.aspects?.[0] || i.aspect))
+                        : undefined
+                    }
+                    onClick={(e) =>
+                      scopeClick(e, onScope, aspectPatch(i, aspectGroup(i.aspects?.[0] || i.aspect)))
+                    }
+                  >
+                    {i.aspect}
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="rc-answer">

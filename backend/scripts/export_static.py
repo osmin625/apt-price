@@ -337,7 +337,8 @@ def main() -> int:
         "git_head": git_head(),
         "months": list(MONTHS),
         # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
-        "tabs": ["market", "macro", "map"] + (["ranking"] if with_quotes else []),
+        # 프론트의 탭 id 와 같아야 한다. 합쳤다가 다시 나누면서 market -> micro 가 됐다.
+        "tabs": ["micro", "macro", "map"] + (["ranking"] if with_quotes else []),
         "includes_quotes": with_quotes,
         "data": data_counts(),
         "files": ok,

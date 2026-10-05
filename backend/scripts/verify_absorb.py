@@ -124,7 +124,11 @@ def fit_absorbed(df, Z):
 
 def stage2_from(alpha_tbl, spec_key="M2"):
     knots = {}
-    for var in ("walk_min", "gangnam_min", "age", "log_households"):
+    # 연속 요인이 늘면 여기에도 넣어야 한다. `hedonic.fit` 의 매듭 루프와 **같은**
+    # 목록이어야 하는데, 한 번 어긋나서 top_floor 가 빠졌고 Stage 2 가 KeyError 로
+    # 죽었다. 4·5번 검사가 통째로 돌지 않았는데 `| tail` 이 종료 코드를 가려
+    # '통과' 처럼 보였다.
+    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor"):
         if var in alpha_tbl.columns and alpha_tbl[var].notna().any():
             knots[var] = _knots(alpha_tbl[var].dropna().astype(float).to_numpy())
     return hedonic._fit_stage2(alpha_tbl, hedonic.SPECS[spec_key], knots)
@@ -183,6 +187,7 @@ def main() -> int:
         gangnam_min=("gangnam_min", "first"), age=("age", "first"),
         log_households=("log_households", "first"), lat=("lat", "first"),
         lng=("lng", "first"), ppp_median=("log_ppp", "median"),
+        top_floor=("top_floor", "first"), brand=("brand", "first"),
     ).reset_index()
     base["ppp_median"] = np.exp(base["ppp_median"])
 

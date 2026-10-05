@@ -5,6 +5,7 @@ import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 import Loading from '../components/Loading'
 import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
+import PanelCard from '../components/PanelCard'
 import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
@@ -26,9 +27,13 @@ import QuadrantScatter from '../components/QuadrantScatter'
  */
 export default function MacroView() {
   const [meta, setMeta] = useState(null)
-  const [metric, setMetric] = useState('avg_unit_price')
   const [since, setSince] = useState('202001')
-  const [data, setData] = useState(null)
+  /* 지표를 **칩으로 고르게 하지 않는다.** 일곱 개뿐이고 카드 축소판은 한 장이
+     작으므로, 고르는 수고를 시키느니 전부 깔고 눈으로 훑게 하는 쪽이 빠르다.
+     선택식일 때는 '전세가율이 어떻더라' 를 보려면 칩을 누르고 기다려야 했다.
+
+     `series` 는 지표 키 -> 응답. 기간을 바꾸면 일곱 개를 한꺼번에 다시 받는다. */
+  const [series, setSeries] = useState({})
   const [error, setError] = useState(null)
   const [hidden, setHidden] = useState(() => new Set())
 
@@ -41,18 +46,28 @@ export default function MacroView() {
     api.macroInsights().then(setIns).catch(() => setIns(null))
   }, [])
 
+  const metrics = meta?.metrics || []
+
   useEffect(() => {
+    if (!metrics.length) return
     let alive = true
     setError(null)
-    setData(null)
-    api
-      .macroSeries({ metric, since })
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(e.message))
+    setSeries({})
+    /* 지표마다 따로 받고 **오는 대로 그린다.** 일곱 개를 Promise.all 로 묶으면 제일
+       느린 하나가 전부를 잡는데, 정적 사이트에서는 파일 일곱 개라 그럴 이유가 없다.
+       하나가 실패해도 나머지는 그려야 한다 — 그래서 실패를 모아 오류로 올리지 않고
+       그 카드만 비운다. */
+    for (const m of metrics) {
+      api
+        .macroSeries({ metric: m.key, since })
+        .then((d) => alive && setSeries((prev) => ({ ...prev, [m.key]: d })))
+        .catch(() => {})
+    }
     return () => {
       alive = false
     }
-  }, [metric, since])
+    // metrics 는 meta 에서 한 번 오고 바뀌지 않는다. 길이로만 의존한다.
+  }, [metrics.length, since])
 
   const toggle = (sgg) =>
     setHidden((h) => {
@@ -82,14 +97,6 @@ export default function MacroView() {
 
         <div className="filters">
           <div className="field">
-            <label>지표</label>
-            <MetricChips
-              metrics={meta?.metrics || []}
-              value={metric}
-              onChange={setMetric}
-            />
-          </div>
-          <div className="field">
             <label htmlFor="mc-since">기간</label>
             <select id="mc-since" value={since} onChange={(e) => setSince(e.target.value)}>
               <option value="202401">최근 3년</option>
@@ -99,29 +106,28 @@ export default function MacroView() {
           </div>
         </div>
 
-        <MetricNote m={(meta?.metrics || []).find((x) => x.key === metric)} />
       </div>
 
       <div className="macro-grid">
-        <MacroCard
+        <PanelCard
           title="지금 어느 국면인가"
           sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월` : '불러오는 중'}
           onOpen={() => setOpen('cycle')}
           ready={!!ins}
         >
           {ins && <CycleChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="그 상승을 전세가 받쳐 줬나"
           sub="12개월 매매 × 전세가율 변화"
           onOpen={() => setOpen('rally')}
           ready={!!ins}
         >
           {ins && <RallyChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="거래가 받쳐 준 상승인가"
           sub={
             ins?.volume?.items?.length
@@ -132,9 +138,9 @@ export default function MacroView() {
           ready={!!ins?.volume?.items?.length}
         >
           {ins?.volume?.items?.length > 0 && <VolumeChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="지수가 몇 건으로 만들어졌나"
           sub={
             ins?.depth?.items?.length
@@ -147,9 +153,9 @@ export default function MacroView() {
           ready={!!ins?.depth?.items?.length}
         >
           {ins?.depth?.items?.length > 0 && <DepthBars ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="구 안의 가격 편차"
           sub={
             ins?.spread?.items?.length
@@ -160,9 +166,9 @@ export default function MacroView() {
           ready={!!ins?.spread?.items?.length}
         >
           {ins?.spread?.items?.length > 0 && <SpreadBars ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
+        <PanelCard
           title="모델과 어긋나는 곳"
           sub={
             ins?.model_gap?.spearman != null
@@ -173,31 +179,28 @@ export default function MacroView() {
           ready={!!ins && ins.has_fit}
         >
           {ins && ins.has_fit && <GapChart ins={ins} compact />}
-        </MacroCard>
+        </PanelCard>
 
-        <MacroCard
-          title={data ? data.label : '지표 추이'}
-          sub={
-            data
-              ? `${data.unit} · 시군구 ${data.n_districts}곳 · ${data.months[0]}~${
-                  data.months[data.months.length - 1]
-                }`
-              : '불러오는 중'
-          }
-          onOpen={() => setOpen('series')}
-          ready={!!data}
-        >
-          {data && <MultiLine data={data} hidden={hidden} compact />}
-        </MacroCard>
-
-        <MacroCard
-          title="최신값"
-          sub={data ? `${data.label} · ${data.items[0]?.latest_ym} 공표` : '불러오는 중'}
-          onOpen={() => setOpen('table')}
-          ready={!!data}
-        >
-          {data && <MiniTable data={data} />}
-        </MacroCard>
+        {/* 지표마다 한 장. 순서는 `METRICS` 가 정한 순서 그대로다 — 지수·가율이
+            앞이고 금액이 뒤인데, 그게 '변화' 에서 '수준' 으로 가는 순서다. */}
+        {metrics.map((m) => {
+          const d = series[m.key]
+          return (
+            <PanelCard
+              key={m.key}
+              title={m.label}
+              sub={
+                d
+                  ? `${d.unit} · ${d.months[0]}~${d.months[d.months.length - 1]}`
+                  : '불러오는 중'
+              }
+              onOpen={() => setOpen(m.key)}
+              ready={!!d}
+            >
+              {d && <MultiLine data={d} hidden={hidden} compact />}
+            </PanelCard>
+          )
+        })}
       </div>
 
       {open === 'cycle' && ins && (
@@ -393,27 +396,25 @@ export default function MacroView() {
         </Modal>
       )}
 
-      {open === 'series' && data && (
-        <Modal title={data.label} onClose={() => setOpen(null)} wide>
-          <p className="muted small">{data.note}</p>
-          <MultiLine data={data} hidden={hidden} />
-          <Legend data={data} hidden={hidden} onToggle={toggle} />
-          {data.items.some((i) => i.partial) && (
+      {/* 지표 창 — 추이·범례·최신값을 한자리에. 예전에는 '지표 추이' 와 '최신값' 이
+          따로 있었는데, 둘 다 같은 지표를 보는 것이라 나눌 이유가 없었다. */}
+      {series[open] && (
+        <Modal title={series[open].label} onClose={() => setOpen(null)} wide>
+          <p className="muted small">{series[open].note}</p>
+          <MultiLine data={series[open]} hidden={hidden} />
+          <Legend data={series[open]} hidden={hidden} onToggle={toggle} />
+          {series[open].items.some((i) => i.partial) && (
             <p className="paste-warn" style={{ marginTop: 8 }}>
               화성시 분구(만세·효행·병점·동탄)는 <b>분구 시점부터</b> 공표가 시작돼
               시계열이 짧습니다. 없는 기간을 채우지 않았으므로 선이 중간에서 시작합니다.
             </p>
           )}
-        </Modal>
-      )}
 
-      {open === 'table' && data && (
-        <Modal title="최신값" onClose={() => setOpen(null)} wide>
-          <p className="muted small">
-            {data.label} 기준 · {data.items[0]?.latest_ym} 공표. 변화율은 선택한 기간의
-            처음 대비입니다.
-          </p>
-          <FullTable data={data} />
+          <h3 className="mt16">
+            최신값 <span className="muted small">{series[open].items[0]?.latest_ym} 공표</span>
+          </h3>
+          <p className="muted small">변화율은 고른 기간의 처음 대비입니다.</p>
+          <FullTable data={series[open]} />
         </Modal>
       )}
     </>
@@ -567,30 +568,6 @@ function colorAt(i, n) {
 
    카드 안에는 **모양만** 둔다. 300px 폭에 이름표 17개를 적으면 읽을 수가 없고,
    읽히지도 않는 글자를 그려 놓는 것은 자리만 먹는다. 자세한 것은 눌러서 띄운다. */
-function MacroCard({ title, sub, onOpen, ready, children }) {
-  return (
-    <div className="factor macro-card">
-      <div className="factor-head">
-        <button
-          className="linklike factor-open"
-          onClick={onOpen}
-          disabled={!ready}
-          aria-haspopup="dialog"
-        >
-          <strong>{title}</strong>
-          <span className="factor-caret" aria-hidden="true">
-            &#10530;
-          </span>
-        </button>
-      </div>
-      <div className="muted small">{sub}</div>
-      <div className="macro-card-body">
-        {ready ? children : <div className="empty">준비 중</div>}
-      </div>
-    </div>
-  )
-}
-
 function CycleChart({ ins, compact }) {
   return (
     <QuadrantScatter
@@ -812,43 +789,6 @@ function GapTable({ gap }) {
   )
 }
 
-/* 카드 안에는 위아래 세 곳씩만. 전체는 눌러서 본다. */
-function MiniTable({ data }) {
-  const n = data.items.length
-  const row = (i) => (
-    <tr key={i.sgg_cd}>
-      <td>{i.name}</td>
-      <td className="num">
-        <b>{fmt(i.latest, data.decimals)}</b>
-      </td>
-      <td
-        className={`num ${
-          i.change_pct > 0 ? 'tone-pos' : i.change_pct < 0 ? 'tone-neg' : ''
-        }`}
-      >
-        {i.change_pct == null
-          ? '—'
-          : `${i.change_pct > 0 ? '+' : ''}${fmt(i.change_pct, 1)}%`}
-      </td>
-    </tr>
-  )
-  return (
-    <table className="macro-mini">
-      <tbody>
-        {data.items.slice(0, 3).map(row)}
-        {n > 6 && (
-          <tr className="macro-mini-gap">
-            <td colSpan={3} className="muted small">
-              ⋯ {n - 6}곳 더
-            </td>
-          </tr>
-        )}
-        {n > 3 && data.items.slice(-3).map(row)}
-      </tbody>
-    </table>
-  )
-}
-
 function FullTable({ data }) {
   return (
     <div className="table-wrap">
@@ -890,67 +830,6 @@ function FullTable({ data }) {
   )
 }
 
-
-/* 지표 칩. 마우스를 올리면 그 숫자가 **무엇이고 어떻게 읽는지**가 뜬다.
- *
- * 지표 이름만으로는 알 수 없는 것들이 있다. '전세가율' 이 내려간 것이 좋은 신호인지
- * 나쁜 신호인지, '매매가격지수 102' 가 비싼 동네라는 뜻인지 아닌지 — 이름은 아무
- * 말도 해 주지 않는다.
- *
- * 호버는 터치 화면에 없으므로, 고른 지표의 설명은 칩 아래에 **항상** 적어 둔다
- * (`MetricNote`). 호버는 고르기 전에 미리 볼 수 있다는 점에서만 더하는 것이다.
- */
-function MetricChips({ metrics, value, onChange }) {
-  const tip = useTooltip()
-  return (
-    <div className="rank-basis" style={{ margin: 0 }}>
-      {metrics.map((m) => (
-        <button
-          key={m.key}
-          className={`chip${value === m.key ? ' on' : ''}`}
-          onClick={() => onChange(m.key)}
-          onMouseEnter={(e) =>
-            tip.show(
-              e,
-              <>
-                <div className="t-title">
-                  {m.label} <span className="muted">({m.unit})</span>
-                </div>
-                <div className="t-row">{m.what}</div>
-                <div className="t-row" style={{ marginTop: 4 }}>
-                  {m.read}
-                </div>
-                {m.base && (
-                  <div className="t-row" style={{ marginTop: 4 }}>
-                    기준시점 {m.base}
-                  </div>
-                )}
-              </>,
-              'is-wide',
-            )
-          }
-          onMouseLeave={tip.hide}
-        >
-          {m.label}
-        </button>
-      ))}
-      {tip.node}
-    </div>
-  )
-}
-
-/* 고른 지표의 설명. 호버가 없는 터치 화면에서도 읽을 수 있어야 한다. */
-function MetricNote({ m }) {
-  if (!m) return null
-  return (
-    <p className="metric-note">
-      <b>{m.label}</b>
-      <span className="muted"> ({m.unit}{m.base ? ` · 기준시점 ${m.base}` : ''})</span>
-      {' — '}
-      {m.what} {m.read}
-    </p>
-  )
-}
 
 /* 그림 읽는 법.
  *

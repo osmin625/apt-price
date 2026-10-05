@@ -48,6 +48,7 @@ export default function MarketView({ filters, setFilters }) {
       </div>
 
       <FactorPanel months={filters.months} />
+
     </>
   )
 }
