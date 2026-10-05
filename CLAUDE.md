@@ -11,14 +11,22 @@
 | 하려는 일 | 읽을 것 |
 |---|---|
 | 화면·기능 동작을 바꾼다 | [docs/design.md](docs/design.md) |
-| 계수·적정가 계산을 건드린다 | [docs/model.md](docs/model.md) |
+| 그 화면이 왜 그렇게 됐는지 찾는다 | [docs/ui-log.md](docs/ui-log.md) |
+| 모델에 요인을 더하거나 뺀다 | [docs/factors.md](docs/factors.md) |
+| 추정 방법·수식을 건드린다 | [docs/model.md](docs/model.md) |
 | 데이터를 채우거나 지역을 넓힌다 | [docs/data.md](docs/data.md) |
+| 공표 통계(한국부동산원)를 건드린다 | [docs/reb.md](docs/reb.md) |
 | 코드 위치를 찾는다 | [docs/architecture.md](docs/architecture.md) |
 | 느려진 것을 고친다 | [docs/performance.md](docs/performance.md) |
 | 정적 사이트를 내보내거나 배포한다 | [docs/deploy.md](docs/deploy.md) |
-| 공표 통계(한국부동산원)를 건드린다 | [docs/data.md](docs/data.md) |
 
 새로 알아낸 사실은 그 주제의 문서에 적는다. README 로 돌려보내지 말 것 — 다시 뚱뚱해진다.
+
+**한 문서가 두 가지 일을 하기 시작하면 나눈다.** 세 번 그랬다. `design.md` 는 '지금의
+설계' 와 '그렇게 된 경위' 가 붙어 1,420줄이 됐고, `model.md` 는 '추정 방법' 과 '무슨
+요인이 들어 있나' 가 붙어 Stage 2 한 절이 409줄이 됐고, `data.md` 는 우리가 모으는
+데이터와 남이 공표한 통계를 같이 담고 있었다. 표에 같은 파일을 가리키는 행이 둘이면
+그것도 신호다 — 나눠 둔 척하면서 안 나눠진 것이다.
 
 ## 이 저장소의 방식
 
