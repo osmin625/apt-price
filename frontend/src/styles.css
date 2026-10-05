@@ -481,6 +481,14 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .fcurve-xlabel { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: -2px; }
 .fcurve-linear { fill: none; stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.75; }
 .lin-badge { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; letter-spacing: 0.02em; }
+
+/* 효과가 0 과 구분되지 않는 요인. 비선형/선형과 **다른 축**이라 색도 다르게 둔다 —
+   둘 다 '모양' 을 말하지만 이건 '있나 없나' 를 말한다. */
+.lin-badge.is-null {
+  background: var(--surface-2, var(--surface-1));
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
 .lin-badge.is-linear { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-secondary); }
 .lin-badge.is-nonlinear { background: color-mix(in srgb, var(--series-2) 20%, transparent); color: var(--series-2); }
 .factor-head { flex-wrap: wrap; }

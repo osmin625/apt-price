@@ -74,6 +74,16 @@ export default function FactorPrice({ fair, model, gap, gapFactor }) {
         기준은 <b>{model.reference}</b>. 단지 요인은 그 기준 단지 대비, 유닛 요인은 전용
         84㎡·중층 대비입니다.
       </p>
+      {/* 이 단지의 시세가 **몇 건에 얹혀 있는지**. 직거래는 모델이 할인을 걷어내지만
+          단지 수준을 관측해 주지는 않으므로, 숫자가 빠듯하면 그렇게 말해야 한다. */}
+      {model.market_count != null && (
+        <p className={model.market_count < 5 ? 'paste-warn' : 'muted small'}>
+          이 단지 시세는 <b>중개거래 {model.market_count}건</b>에 기반합니다
+          {model.trade_count > model.market_count &&
+            ` (직거래 ${model.trade_count - model.market_count}건은 할인을 걷어낸 뒤 씁니다)`}
+          {model.market_count < 5 && ' — 표본이 적어 흔들릴 수 있습니다.'}
+        </p>
+      )}
       {cal?.applied && (
         <p className="muted small">
           면적 곡선 교정 <b>{cal.pct > 0 ? '+' : ''}{cal.pct}%</b> 적용 (원값{' '}

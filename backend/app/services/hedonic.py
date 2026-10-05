@@ -451,7 +451,17 @@ def _build_frame(rows, ref_year: int):
         return df
 
     # 표본이 너무 적은 단지는 α̂_c 가 사실상 관측치 하나라 stage 2 에 노이즈만 더한다.
-    counts = df.groupby("complex_id")["log_ppp"].transform("size")
+    #
+    # **중개거래로 센다.** 직거래는 Stage 1 에서 더미로 할인을 걷어내지만, 그 거래가
+    # 단지 수준을 **관측해 주는 것은 아니다** — 더미는 평균적인 할인을 되돌릴 뿐이다.
+    # 중개거래 2건 + 직거래 1건인 단지를 '3건' 으로 세면 α̂_c 가 사실은 2건에 얹혀
+    # 있는데 기준을 통과한 것처럼 보인다.
+    #
+    # 재 보니 1,896곳 → 1,864곳(32곳)이 빠지고 거래는 69,425건 중 167건(0.24%)이
+    # 준다. 빠지는 곳은 전부 전체 3~5건짜리이고, 3건이 전부 직거래인 단지도 있었다.
+    counts = df.groupby("complex_id")["is_direct"].transform(
+        lambda v: (v == 0).sum()
+    )
     df = df[counts >= MIN_TRADES_PER_COMPLEX].copy()
 
     # 원룸형 도시형생활주택 제외 (위 MIN_MAX_AREA_M2 주석 참조)
@@ -586,6 +596,8 @@ def _fit_stage1(df, use_controls: bool):
             alpha=("log_ppp", "mean"),
             sd=("log_ppp", "std"),
             trade_count=("log_ppp", "size"),
+            # 직거래를 뺀 건수. 시세가 실제로 몇 건에 얹혀 있는지다.
+            market_count=("is_direct", lambda v: int((v == 0).sum())),
             complex_name=("complex_name", "first"),
             sgg_cd=("sgg_cd", "first"),
             sgg_name=("sgg_name", "first"),
@@ -750,6 +762,8 @@ def _fit_stage1(df, use_controls: bool):
             umd_nm=("umd_nm", "first"),
             line=("line", "first"),
             trade_count=("log_ppp", "size"),
+            # 직거래를 뺀 건수. 시세가 실제로 몇 건에 얹혀 있는지다.
+            market_count=("is_direct", lambda v: int((v == 0).sum())),
             walk_min=("walk_min", "first"),
             dong_walk_mean=("dong_walk_min", "mean"),
             gangnam_min=("gangnam_min", "first"),
@@ -1225,22 +1239,47 @@ def _linear_walk_check(alpha, X, y, walk_terms, weights):
 
 
 def _linearity_tests(res, spline_terms: dict) -> dict:
-    """각 연속 요인이 선형인지 Wald 검정한다.
+    """각 연속 요인을 두 번 Wald 검정한다 — **효과가 있는가**, 그리고 **직선인가**.
 
-    귀무가설은 "비선형항 계수가 모두 0" = 직선이다. p 가 작으면 직선으로는
-    설명이 안 된다는 뜻이고, 크면 굳이 곡선을 그릴 근거가 없다는 뜻이다.
+    ## 두 질문은 다르다
 
-    이걸 보고해야 하는 이유: 함수 형태를 사람이 미리 고르면(로그냐 2차냐 직선이냐)
-    그 선택이 결론을 만든다. 유연하게 적합해 놓고 데이터에 물어보는 편이 정직하다.
+    오랫동안 비선형성만 검정했다(`비선형항 = 0`). 그런데 요인 카드가 답해야 하는
+    질문은 그 앞이다 — 이 요인이 가격을 움직이기는 하는가.
+
+    둘은 전혀 다르다. **효과가 0 인 요인도 '선형' 으로 나온다.** 비선형항이 0 이면
+    직선이라는 뜻일 뿐, 그 직선의 기울기가 0 인지는 묻지 않기 때문이다. 그래서
+    화면은 아무 효과 없는 요인에도 '선형' 배지를 달고 곡선을 그릴 수 있었다.
+
+    지금 들어 있는 요인은 M2·M3 모두 전부 유의하다(최악이 유흥주점 p=0.0138). 즉
+    고칠 값이 있어서 넣는 검정이 아니라, **다음에 넣는 요인이 그냥 통과하지 않게**
+    하려고 넣는다. 이 저장소가 '사람이 발견하기를 기다리는 구조를 만들지 말 것'
+    이라고 해 둔 것과 같은 이유다.
+
+    ## 왜 개별 계수의 p 로는 안 되나
+
+    스플라인 기저는 서로 물려 있어 **개별 항의 p 가 전부 커도 합동은 유의할 수
+    있다.** 단지 최고층에서 실제로 그랬다 — `top_floor__nl1..5` 가 하나하나는
+    p 0.06~0.48 인데 합동 검정은 유의했다. 열을 하나씩 보면 틀린다.
     """
     out: dict[str, dict] = {}
     for var, names in spline_terms.items():
+        # 1) 요인 전체 = 0 인가. 기저가 몇 개든 한 번에 묻는다.
+        allp = [n for n in names if n in res.params.index]
+        joint = None
+        if allp:
+            try:
+                jt = res.wald_test([f"{n} = 0" for n in allp], scalar=True)
+                joint = float(jt.pvalue)
+            except Exception:
+                joint = None
+
         nl = [n for n in names[1:] if n in res.params.index]
         if not nl:
             out[var] = {
                 "testable": False,
                 "verdict": "선형(가정)",
                 "note": "변동이 적어 비선형항을 넣지 않았습니다.",
+                **_joint_fields(joint),
             }
             continue
         try:
@@ -1248,7 +1287,8 @@ def _linearity_tests(res, spline_terms: dict) -> dict:
             pval = float(t.pvalue)
             stat = float(t.statistic)
         except Exception:
-            out[var] = {"testable": False, "verdict": "검정 실패"}
+            out[var] = {"testable": False, "verdict": "검정 실패",
+                        **_joint_fields(joint)}
             continue
         nonlinear = pval < 0.05
         out[var] = {
@@ -1264,8 +1304,31 @@ def _linearity_tests(res, spline_terms: dict) -> dict:
                 else "곡선으로 적합했지만 직선과 통계적으로 구분되지 않습니다. "
                      "직선으로 읽어도 무방합니다."
             ),
+            **_joint_fields(joint),
         }
     return out
+
+
+def _joint_fields(joint: float | None) -> dict:
+    """합동 검정 결과를 카드가 쓸 수 있는 모양으로.
+
+    `significant=False` 면 화면은 곡선을 **단정해서 보여 주면 안 된다.** 모양이
+    있는 것처럼 그려 놓고 '효과는 없다' 고 작게 적는 것은 추정을 사실처럼 보여
+    주는 쪽에 가깝다.
+    """
+    if joint is None:
+        return {"joint_p": None, "significant": None}
+    return {
+        "joint_p": round(joint, 6),
+        "significant": bool(joint < 0.05),
+        "joint_note": (
+            "이 요인 전체가 0 이라는 가설을 기각합니다 — 가격을 움직입니다."
+            if joint < 0.05
+            else "이 요인 전체가 0 이라는 가설을 기각하지 못합니다. "
+                 "이 표본에서는 **효과가 검출되지 않았습니다** — 곡선의 모양을 "
+                 "그대로 믿으면 안 됩니다."
+        ),
+    }
 
 
 def _vif(X):
@@ -1496,7 +1559,8 @@ def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None)
         raise ValueError(
             f"표본이 부족합니다 (거래 {0 if df.empty else len(df)}건, "
             f"단지 {0 if df.empty else df['complex_id'].nunique()}곳). "
-            f"단지당 최소 {MIN_TRADES_PER_COMPLEX}건, 단지 4곳 이상 필요합니다."
+            f"단지당 중개거래 최소 {MIN_TRADES_PER_COMPLEX}건, 단지 4곳 이상 "
+            f"필요합니다."
         )
 
     chosen = SPECS.get(spec, SPECS[DEFAULT_SPEC])
