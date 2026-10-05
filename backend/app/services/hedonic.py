@@ -68,7 +68,8 @@ MIN_MAX_AREA_M2 = 40.0
 # 이건 구조적이라 경고할 일이 아니다. 진짜 문제는 서로 다른 개념 간의 공선성이다.
 # 스플라인 동반항은 설계상 서로 상관이 높다. 구조적이라 경고할 일이 아니고,
 # 진짜 문제는 서로 다른 개념 사이의 공선성이다.
-_SPLINE_BASES = {"walk_min", "gangnam_min", "age", "log_households", "top_floor"}
+_SPLINE_BASES = {"walk_min", "gangnam_min", "age", "log_households", "top_floor",
+                 "elem_dist", "mid_dist", "academy", "adult"}
 
 # 대형 건설사 브랜드. 단지명에 **이미 들어 있어서** 따로 받아올 것이 없다.
 #
@@ -218,6 +219,8 @@ class Spec:
     # 단지 최고층과 브랜드. 둘 다 **단지 단위**라 Stage 2 에 들어간다.
     use_top_floor: bool = False
     use_brand: bool = False
+    # 입지(학교 거리·학원 수·유흥주점 수). 적재가 없으면 자동으로 빠진다.
+    use_amenity: bool = False
 
 
 # 스펙 사다리 — 통제를 늘려가며 도보계수가 어떻게 변하는지 보여준다.
@@ -232,10 +235,10 @@ SPECS: dict[str, Spec] = {
     "M2": Spec(
         "M2", "+ 연식·세대수·강남접근성·노선·구 FE",
         True, True, True, True, False, True, True,
-        use_top_floor=True, use_brand=True,
+        use_top_floor=True, use_brand=True, use_amenity=True,
     ),
     "M3": Spec("M3", "+ 법정동 FE", True, True, True, True, True, True, True,
-               use_top_floor=True, use_brand=True),
+               use_top_floor=True, use_brand=True, use_amenity=True),
 }
 DEFAULT_SPEC = "M2"
 
@@ -266,7 +269,8 @@ def available() -> bool:
 # rows 의 각 항목이 가져야 하는 키:
 #   complex_id, complex_name, sgg_cd, sgg_name, umd_nm,
 #   deal_ym('YYYY-MM'), exclusive_area, floor, max_floor, deal_amount,
-#   build_year, walk_min(float|None), gangnam_min(float|None), lat, lng
+#   build_year, walk_min(float|None), gangnam_min(float|None), lat, lng,
+#   elem_dist(float|None), mid_dist(float|None), academy(int|None), adult(int|None)
 #
 # 시드 생성기도 **이 스키마 그대로** 소비해야 한다. 시드가 모델과 다른 컬럼을
 # 읽으면 측정오차가 계수를 감쇠시켜, 추정량과 무관한 이유로 복원 검증이 실패한다.
@@ -282,10 +286,17 @@ def load_rows(db, months: int = 24) -> list[dict]:
 
     from sqlalchemy import select
 
-    from ..models import Complex, ComplexDong, Station, Trade
+    from ..models import Complex, ComplexAmenity, ComplexDong, Station, Trade
 
     stations = {s.id: s for s in db.execute(select(Station)).scalars().all()}
     cutoff = date.today() - timedelta(days=31 * months)
+
+    # 단지 주변 입지. 아직 안 받은 단지는 빠지고, 그 단지는 입지 항 없이 적합된다
+    # (결측 표시자로 처리한다 — 세대수와 같은 방식이다).
+    amenity: dict[int, tuple] = {
+        a.complex_id: (a.elem_dist_m, a.mid_dist_m, a.academy_500, a.adult_500)
+        for a in db.execute(select(ComplexAmenity)).scalars().all()
+    }
 
     # 동 단위 도보시간. 같은 단지라도 동에 따라 역까지 100~330m 차이난다.
     dong_walk: dict[tuple[int, str], float] = {}
@@ -347,9 +358,22 @@ def load_rows(db, months: int = 24) -> list[dict]:
                 # 그 거래가 속한 동의 도보시간. 좌표를 못 찾은 동은 None 이고,
                 # 그 거래는 단지 내 비교에 기여하지 않는다(다른 항 추정에는 계속 쓰인다).
                 "dong_walk_min": dong_walk.get((cx_id, dong)),
+                **_amenity_fields(amenity.get(cx_id)),
             }
         )
     return rows
+
+
+def _amenity_fields(row: tuple | None) -> dict:
+    if row is None:
+        return {"elem_dist": None, "mid_dist": None, "academy": None, "adult": None}
+    elem, mid, academy, adult = row
+    return {
+        "elem_dist": float(elem) if elem is not None else None,
+        "mid_dist": float(mid) if mid is not None else None,
+        "academy": float(academy) if academy is not None else None,
+        "adult": float(adult) if adult is not None else None,
+    }
 
 
 def _build_frame(rows, ref_year: int):
@@ -407,6 +431,12 @@ def _build_frame(rows, ref_year: int):
                     float(r["max_floor"]) if r.get("max_floor") else np.nan
                 ),
                 "brand": brand_of(r.get("complex_name")),
+                # 입지는 단지 속성이라 거래마다 같은 값이다. Stage 2 에서
+                # 단지당 first 로 집는다.
+                "elem_dist": r.get("elem_dist"),
+                "mid_dist": r.get("mid_dist"),
+                "academy": r.get("academy"),
+                "adult": r.get("adult"),
                 "lat": r.get("lat"),
                 "lng": r.get("lng"),
             }
@@ -564,6 +594,10 @@ def _fit_stage1(df, use_controls: bool):
             log_households=("log_households", "first"),
             top_floor=("top_floor", "first"),
             brand=("brand", "first"),
+            elem_dist=("elem_dist", "first"),
+            mid_dist=("mid_dist", "first"),
+            academy=("academy", "first"),
+            adult=("adult", "first"),
             lat=("lat", "first"),
             lng=("lng", "first"),
             ppp_median=("log_ppp", "median"),
@@ -698,6 +732,10 @@ def _fit_stage1(df, use_controls: bool):
             log_households=("log_households", "first"),
             top_floor=("top_floor", "first"),
             brand=("brand", "first"),
+            elem_dist=("elem_dist", "first"),
+            mid_dist=("mid_dist", "first"),
+            academy=("academy", "first"),
+            adult=("adult", "first"),
             lat=("lat", "first"),
             lng=("lng", "first"),
             ppp_median=("log_ppp", "median"),
@@ -993,6 +1031,29 @@ def _stage2_design(alpha, spec: Spec, knots: dict):
             if tf.isna().any():
                 cols["top_floor_missing"] = tf.isna().astype(float).tolist()
 
+    # 주변 입지. 세대수와 **같은 방식**으로 넣는다 — 중앙값 대체 + 결측 표시자.
+    # 적재를 아직 안 돌린 단지가 있어도 나머지가 빠지지 않아야 한다.
+    #
+    # 무엇을 넣고 무엇을 뺐는지는 재서 정했다. 처음에는 음식점·소매·의원·숙박·
+    # 오락·주점·대형마트까지 열 가지를 넣었다. 표본 밖 오차는 더 줄었지만(교차검증
+    # 3.96% vs 2.87%) 그 변수들은 서로 상관이 0.92 까지 가는 '반경 안 가게 수' 의
+    # 변주라, 요인 카드에 따로 올리면 혼자 읽을 수 없는 값이 된다.
+    #
+    # 하나씩 얹어 보니 **학교 거리 위에 아무것도 더하지 못했다** — 학교만 +1.80%
+    # 인데 상권 규모·음식점·숙박·오락을 각각 더해도 1.74~1.87% 였다. 학원 수만
+    # +2.71% 로 뚜렷했고, 유흥주점이 거기에 +0.16%p 를 더했다. 그래서 넷만 남겼다.
+    if spec.use_amenity:
+        for var in ("elem_dist", "mid_dist", "academy", "adult"):
+            if var not in alpha.columns:
+                continue
+            v = alpha[var].astype(float)
+            if not v.notna().any():
+                continue
+            filled = v.fillna(v.median())
+            spline_terms[var] = _spline_cols(cols, var, filled, knots.get(var))
+            if v.isna().any():
+                cols[f"{var}_missing"] = v.isna().astype(float).tolist()
+
     X = pd.DataFrame(cols, index=alpha.index)
 
     # 브랜드 FE. 브랜드가 없는 단지가 기준이다.
@@ -1193,6 +1254,14 @@ LABELS = {
     "households_missing": "세대수 결측 표시자",
     "top_floor": "단지 최고층(층)",
     "top_floor_missing": "최고층 결측 표시자",
+    "elem_dist": "초등학교까지(m)",
+    "mid_dist": "중학교까지(m)",
+    "academy": "학원 수(500m)",
+    "adult": "유흥주점 수(500m)",
+    "elem_dist_missing": "입지 결측 표시자",
+    "mid_dist_missing": "입지 결측 표시자",
+    "academy_missing": "입지 결측 표시자",
+    "adult_missing": "입지 결측 표시자",
 }
 
 
@@ -1393,7 +1462,8 @@ def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None)
     # top_floor 를 빼먹으면 매듭이 없어 **직선으로만** 들어간다 — 이 파일이
     # "형태를 가정하지 않고 적합한 뒤 비선형인지 검정한다" 고 해 놓은 것과 어긋난다.
     # 실제로 한 번 빠뜨렸고, 계수가 층당 +1.53% 직선으로 나왔다.
-    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor"):
+    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor",
+                "elem_dist", "mid_dist", "academy", "adult"):
         if var in alpha.columns and alpha[var].notna().any():
             knots[var] = _knots(alpha[var].dropna().astype(float).to_numpy(), nk)
 

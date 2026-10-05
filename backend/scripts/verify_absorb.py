@@ -128,7 +128,8 @@ def stage2_from(alpha_tbl, spec_key="M2"):
     # 목록이어야 하는데, 한 번 어긋나서 top_floor 가 빠졌고 Stage 2 가 KeyError 로
     # 죽었다. 4·5번 검사가 통째로 돌지 않았는데 `| tail` 이 종료 코드를 가려
     # '통과' 처럼 보였다.
-    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor"):
+    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor",
+                "elem_dist", "mid_dist", "academy", "adult"):
         if var in alpha_tbl.columns and alpha_tbl[var].notna().any():
             knots[var] = _knots(alpha_tbl[var].dropna().astype(float).to_numpy())
     return hedonic._fit_stage2(alpha_tbl, hedonic.SPECS[spec_key], knots)
@@ -188,6 +189,8 @@ def main() -> int:
         log_households=("log_households", "first"), lat=("lat", "first"),
         lng=("lng", "first"), ppp_median=("log_ppp", "median"),
         top_floor=("top_floor", "first"), brand=("brand", "first"),
+        elem_dist=("elem_dist", "first"), mid_dist=("mid_dist", "first"),
+        academy=("academy", "first"), adult=("adult", "first"),
     ).reset_index()
     base["ppp_median"] = np.exp(base["ppp_median"])
 
