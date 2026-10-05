@@ -424,6 +424,9 @@ FACTOR_REF = {
     "gangnam_min": 55.0,
     "age": 15.0,
     "households": 800.0,
+    # 단지 최고층. 15층이 기준인 이유: 중위가 18층인데, 15층은 '구축 중층 단지' 의
+    # 전형이라 '거기서 몇 층 더 높으면 얼마' 로 읽기 쉽다.
+    "top_floor": 15.0,
 }
 _AREA_POINTS = [(39, "39㎡"), (49, "49㎡"), (59, "59㎡"), (74, "74㎡"),
                 (84, "84㎡"), (101, "101㎡"), (114, "114㎡"), (135, "135㎡")]
@@ -435,6 +438,11 @@ _AGE_POINTS = [(1, "1년"), (5, "5년"), (10, "10년"), (15, "15년"),
                (20, "20년"), (30, "30년"), (40, "40년")]
 _HH_POINTS = [(150, "150세대"), (300, "300세대"), (600, "600세대"),
               (800, "800세대"), (1200, "1200세대"), (2000, "2000세대"), (3000, "3000세대")]
+# 브랜드 더미 이름 그대로 쓰면 '기타브랜드' 가 붙어 나온다. 화면에서는 띄운다.
+_BRAND_LABEL = {"기타브랜드": "기타 브랜드"}
+
+_TOPFLOOR_POINTS = [(5, "5층"), (10, "10층"), (15, "15층"), (20, "20층"),
+                    (25, "25층"), (30, "30층"), (40, "40층")]
 
 # 연속 요인은 대표 지점(막대)뿐 아니라 **조밀한 곡선**으로도 보낸다.
 # 막대만 보면 log·2차항·스플라인의 굽은 모양이 보이지 않는다.
@@ -449,11 +457,13 @@ _CURVE_RANGE = {
     "gangnam": (28.0, 68.0),
     "age": (0.0, 45.0),
     "households": (100.0, 3500.0),
+    "top_floor": (5.0, 40.0),
 }
 # 요인 키 → 적합이 쓰는 분포 이름
 _RANGE_VAR = {
     "area": "area_m2", "walk": "walk_min", "gangnam": "gangnam_min",
     "age": "age", "households": "households",
+    "top_floor": "top_floor",
 }
 _CURVE_N = 120
 
@@ -708,6 +718,12 @@ def factor_payload(fit: dict) -> dict:
          FACTOR_REF["households"], _HH_POINTS,
          "커뮤니티 시설·관리비 규모의 경제·거래 유동성이 함께 들어온다.",
          lambda n: math.log(n)),
+        ("top_floor", "top_floor", "단지 최고층", "층", "단지 최고층",
+         FACTOR_REF["top_floor"], _TOPFLOOR_POINTS,
+         "그 집이 몇 층인지가 아니라 단지가 몇 층짜리인지다. 위 '층' 카드와는 "
+         "다른 것으로, 용적률·조망·시공 시기가 함께 들어온다. 세대수와도 겹치지 "
+         "않는다 — 1,000세대가 10동 10층일 수도 2동 30층일 수도 있다.",
+         lambda x: x),
     ]
     for key, var, label, unit, xlab, ref, points, note, fx in plan:
         cs = coefs_of(var)
@@ -718,7 +734,7 @@ def factor_payload(fit: dict) -> dict:
         if t.get("linear_coef") is not None:
             mult = math.log(2) if key == "households" else 1.0
             pu = _per_unit(
-                "세대수 2배당" if key == "households" else ("1분당" if unit == "분" else "1년당"),
+                "세대수 2배당" if key == "households" else f"1{unit}당",
                 t["linear_coef"] * mult,
                 (t.get("linear_se") or 0) * mult or None,
             )
@@ -742,7 +758,29 @@ def factor_payload(fit: dict) -> dict:
     # 쟀던 값은 `fit["dong_premium"]` 에 그대로 남아 있다 — 지역이나 기간이 바뀌어
     # 검출되기 시작하면 다시 꺼내 쓸 수 있다. 지우는 것은 화면이지 측정이 아니다.
 
-    # 8) 노선 — 범주형
+    # 8) 브랜드 — 범주형
+    #
+    # 기준이 '브랜드 없음' 이라 계수가 '브랜드가 붙으면 몇 %' 로 바로 읽힌다.
+    brand_terms = [(n, t) for n, t in terms.items() if n.startswith("brand_")]
+    if brand_terms:
+        levels = [{"band": "브랜드 없음 (기준)", "premium_pct": 0.0}]
+        levels += [
+            {"band": _BRAND_LABEL.get(n[6:], n[6:]), "premium_pct": _pct(t["coef"]),
+             "p": t["p"]}
+            for n, t in sorted(brand_terms, key=lambda kv: kv[1]["coef"])
+        ]
+        out.append({
+            "key": "brand", "label": "브랜드", "unit": "", "reference": "브랜드 없음",
+            "note": "도보·강남분·연식·세대수·최고층·노선·구를 모두 통제한 뒤 남는 "
+                    "브랜드 프리미엄입니다. 시공 품질만이 아니라 '그 브랜드를 "
+                    "올릴 만한 입지' 가 섞여 있을 수 있어, 순수한 브랜드값보다는 "
+                    "위쪽으로 치우친 값으로 읽어야 합니다. "
+                    f"표본이 {hedonic._BRAND_MIN}곳 미만인 브랜드는 '기타 브랜드' 로 "
+                    "묶었습니다.",
+            "levels": levels,
+        })
+
+    # 9) 노선 — 범주형
     line_terms = [(n, t) for n, t in terms.items() if n.startswith("line_")]
     if line_terms:
         present = {n[5:] for n, _ in line_terms}
@@ -770,7 +808,8 @@ def factor_payload(fit: dict) -> dict:
         "reference": (
             f"전용 {FACTOR_REF['area_m2']:.0f}㎡ · 중층 · 최신월 · "
             f"도보 {FACTOR_REF['walk_min']:.0f}분 · 강남 {FACTOR_REF['gangnam_min']:.0f}분 · "
-            f"연식 {FACTOR_REF['age']:.0f}년 · {FACTOR_REF['households']:.0f}세대"
+            f"연식 {FACTOR_REF['age']:.0f}년 · {FACTOR_REF['households']:.0f}세대 · "
+            f"최고 {FACTOR_REF['top_floor']:.0f}층 · 브랜드 없음"
         ),
         "note": (
             "각 요인을 기준값에서 움직였을 때 전용 평당가가 몇 % 달라지는지입니다. "
@@ -927,6 +966,21 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
             "value": f"{cx.household_count:,}세대" if cx and cx.household_count else "—",
             "pct": _pct(d),
         })
+    tf = row["top_floor"] if "top_floor" in row else float("nan")
+    if tf == tf:
+        d = spline_val("top_floor", float(tf)) - spline_val(
+            "top_floor", FACTOR_REF["top_floor"]
+        )
+        complex_parts.append({
+            "key": "top_floor", "label": "단지 최고층",
+            "value": f"{float(tf):.0f}층", "pct": _pct(d),
+        })
+    bname, bcoef = _brand_term(terms, row["complex_name"])
+    if bcoef:
+        complex_parts.append({
+            "key": "brand", "label": "브랜드",
+            "value": bname, "pct": _pct(bcoef),
+        })
     lt = terms.get(f"line_{row['line']}")
     if lt:
         complex_parts.append({
@@ -946,12 +1000,33 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
         "complex_parts": complex_parts,
         "reference": fit["stage1"].get("reference"),
         "note": (
-            "요인 기준은 역거리·강남접근성·연식·세대수·노선·자치구만으로 세운 값입니다. "
-            "학군·브랜드·재건축 기대처럼 측정하지 않은 것은 빠져 있습니다. "
+            "요인 기준은 역거리·강남접근성·연식·세대수·단지 최고층·브랜드·노선·"
+            "자치구만으로 세운 값입니다. 학군·재건축 기대처럼 측정하지 않은 것은 "
+            "빠져 있습니다. "
             "시장 기준은 그 단지가 실제로 거래되는 수준에서 출발합니다. "
             "둘의 차이가 그 단지에 붙어 있는 프리미엄입니다."
         ),
     }
+
+
+def _brand_term(terms: dict, name: str | None) -> tuple[str, float]:
+    """단지명에서 브랜드를 뽑고 **실제로 모델에 들어간 더미**의 계수를 돌려준다.
+
+    표본이 얇은 브랜드는 적합 쪽에서 '기타브랜드' 로 묶인다(`_BRAND_MIN`). 그래서
+    `brand_칸타빌` 을 찾아 없으면 0 을 돌려주면 안 된다 — 그 단지는 브랜드가 없는
+    것이 아니라 묶인 것이고, 0 으로 두면 그 몫이 비교 탭에서 '설명되지 않는 격차'
+    로 조용히 넘어간다. 없을 때는 '기타브랜드' 를 한 번 더 찾는다.
+    """
+    b = hedonic.brand_of(name)
+    if not b:
+        return "없음", 0.0
+    t = terms.get(f"brand_{b}")
+    if t:
+        return b, t["coef"]
+    t = terms.get("brand_기타브랜드")
+    if t:
+        return f"{b} (기타 브랜드)", t["coef"]
+    return b, 0.0
 
 
 def _dong_walk(db, complex_id: int, dong: str | None) -> tuple[str | None, float | None]:
@@ -1048,6 +1123,11 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
             "log_households": float(row["log_households"])
             if row["log_households"] == row["log_households"]
             else None,
+            "top_floor": (
+                float(row["top_floor"])
+                if "top_floor" in row and row["top_floor"] == row["top_floor"]
+                else None
+            ),
             "alpha": float(row["alpha"]),
             "predicted_alpha": resid.get(cid, {}).get("predicted_alpha"),
             "residual_pct": resid.get(cid, {}).get("residual_shrunk_pct"),
@@ -1164,6 +1244,26 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
             spline_val("log_households", A["log_households"]),
             spline_val("log_households", B["log_households"]),
             "커뮤니티·관리비 규모의 경제·거래 유동성이 함께 들어온다.")
+
+    if A["top_floor"] is None or B["top_floor"] is None:
+        # 빼먹고 말을 안 하면 "최고층이 같다" 로 오해한다. 빠졌다고 적는다.
+        missing = [s_["name"] for s_ in (A, B) if s_["top_floor"] is None]
+        skipped.append({
+            "label": "단지 최고층",
+            "reason": f"{', '.join(missing)} 의 최고층 정보가 없어 비교에서 제외했습니다.",
+        })
+    else:
+        add("top_floor", "단지 최고층",
+            f"{A['top_floor']:.0f}층", f"{B['top_floor']:.0f}층",
+            spline_val("top_floor", A["top_floor"]),
+            spline_val("top_floor", B["top_floor"]),
+            "그 집의 층이 아니라 단지가 몇 층짜리인지. 용적률·조망이 함께 들어온다.")
+
+    ba, ca = _brand_term(terms, A["name"])
+    bb, cb = _brand_term(terms, B["name"])
+    if ca or cb:
+        add("brand", "브랜드", ba, bb, ca, cb,
+            "시공 품질만이 아니라 '그 브랜드를 올릴 만한 입지' 가 섞여 있다.")
 
     def dummy(prefix: str, val: str) -> float:
         t = terms.get(f"{prefix}{val}")

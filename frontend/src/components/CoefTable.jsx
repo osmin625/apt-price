@@ -3,6 +3,14 @@ import { Fragment, useState } from 'react'
 import { fmt } from './Charts'
 import Hint from './Hint'
 
+// 연속 요인의 단위. 요인이 늘면 여기에 적는다.
+const UNIT = {
+  walk_min: '1분당',
+  gangnam_min: '1분당',
+  age: '1년당',
+  top_floor: '1층당',
+}
+
 /**
  * 계수표 — 44개를 평평하게 늘어놓지 않는다.
  *
@@ -57,7 +65,9 @@ export default function CoefTable({ fit }) {
     if (g.varName === 'log_households') {
       return `세대수 2배당 ${fmt((Math.exp(c * Math.LN2) - 1) * 100, 2)}%`
     }
-    const unit = g.varName === 'age' ? '1년당' : '1분당'
+    // 'age 면 년, 아니면 분' 으로 두었다가 단지 최고층을 넣는 순간 "1분당 1.40%"
+    // 가 됐다. 단위는 변수마다 적어 둔다 — 모르는 변수는 '1단위당' 으로 둔다.
+    const unit = UNIT[g.varName] || '1단위당'
     return `${unit} ${fmt((Math.exp(c) - 1) * 100, 2)}%`
   }
 

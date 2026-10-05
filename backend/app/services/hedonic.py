@@ -68,7 +68,128 @@ MIN_MAX_AREA_M2 = 40.0
 # 이건 구조적이라 경고할 일이 아니다. 진짜 문제는 서로 다른 개념 간의 공선성이다.
 # 스플라인 동반항은 설계상 서로 상관이 높다. 구조적이라 경고할 일이 아니고,
 # 진짜 문제는 서로 다른 개념 사이의 공선성이다.
-_SPLINE_BASES = {"walk_min", "gangnam_min", "age", "log_households"}
+_SPLINE_BASES = {"walk_min", "gangnam_min", "age", "log_households", "top_floor"}
+
+# 대형 건설사 브랜드. 단지명에 **이미 들어 있어서** 따로 받아올 것이 없다.
+#
+# 왜 넣나: 잔차로 재 보니 브랜드 단지의 잔차 중위가 +5.27%, 나머지가 -0.99% 였다
+# (차이 6.26%p). 모델이 층·면적·도보·강남·연식·세대수·노선·구를 통제한 **뒤에** 남는
+# 값이라, 넣지 않으면 그 6%p 가 통째로 잔차로 흘러간다.
+#
+# 다만 **연식·최고층과 겹친다.** 브랜드 단지는 대개 신축이고 고층이다. 겹침이 얼마나
+# 되는지도 쟀다 — 최고층을 먼저 넣고 같은 것을 다시 재니 브랜드 단지 664곳 +2.55%,
+# 그 외 1,182곳 -1.25% 로 차이가 **3.81%p 로 줄었다.** 즉 6.26%p 중 2.4%p 가량은
+# 브랜드가 아니라 '고층 단지' 였다. 그래서 하나씩 넣어 보면 둘 다 커 보인다. 같이 넣고
+# 각자 살아남는지 보는 것이 이 변수를 넣는 진짜 이유다.
+#
+# 그래서 둘을 같이 넣고 쟀다. **둘 다 살아남았다** — 단지 고유분산 tau 가
+# 0.2015 -> 0.1846 (-8.4%), adj R2 0.8190 -> 0.8477. 일은 대부분 최고층이 하고
+# (0.8447), 브랜드가 그 위에 얹는다. 네 조합의 표는 docs/model.md.
+#
+# 이름 매칭이라 놓치는 것이 있다. 2,469곳 중 701곳(28.4%)이 걸린다.
+
+# 따로 계수를 줄 최소 단지 수. 이보다 적은 브랜드는 '기타브랜드' 로 묶는다.
+# 20곳이면 그 브랜드의 계수가 한두 단지에 끌려가지 않는다. 지금 독립 더미를 받는 것은
+# 9개(자이 56·푸르지오 50·아이파크 45·힐스테이트 40·래미안 32·e편한세상 27·
+# 아너스빌 22·롯데캐슬 21·더샵 20)이고, 나머지 50개 브랜드 388곳이 '기타브랜드' 다.
+_BRAND_MIN = 20
+
+# 브랜드 → 단지명에서 찾을 표기들. **별칭을 묶는 것이 핵심이다** — 처음에는
+# `e편한세상` 과 `이편한세상` 을 따로 두었는데, 그러면 같은 브랜드가 더미 두 개로
+# 갈려 각각의 표본이 반토막 난다. `SK뷰`/`SKVIEW` 도 같았다.
+#
+# 목록은 실측으로 넓혔다. 2,469곳 중 어떤 이름이 안 걸리는지 세 보니 경남아너스빌
+# 22곳·우남퍼스트빌 13곳·현대홈타운 19곳·신안인스빌 9곳처럼 **큰 브랜드가 통째로**
+# 빠져 있었다. 걸릴 이름을 하나하나 눈으로 확인하고 넣었다(오매칭 0).
+#
+# **건설사명은 넣지 않는다.** `현대`(85곳)·`삼성`(53곳)·`대우`·`한양`·`벽산`·`쌍용`
+# 같은 이름이 더 흔하지만, 1990년대 '현대아파트' 는 지금의 힐스테이트와 다른 것이다.
+# 그것까지 브랜드로 세면 기준군('브랜드 없음')이 거의 비고, 계수는 '브랜드값' 이
+# 아니라 '구축이 아님' 을 재게 된다 — 연식이 이미 그 일을 하고 있다. 시공사를 보고
+# 싶으면 K-apt `kaptBcompany` 가 맞는 출처다(커버리지 35%).
+#
+# `센트럴`(77곳)도 뺐다. 브랜드가 아니라 작명에 쓰는 낱말이다.
+_BRANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("자이", ("자이",)),
+    ("래미안", ("래미안",)),
+    ("푸르지오", ("푸르지오",)),
+    ("힐스테이트", ("힐스테이트",)),
+    ("e편한세상", ("e편한세상", "이편한세상")),
+    ("아이파크", ("아이파크",)),
+    ("롯데캐슬", ("롯데캐슬",)),
+    ("더샵", ("더샵",)),
+    ("SK뷰", ("sk뷰", "skview")),
+    ("스위첸", ("스위첸",)),
+    ("위브", ("위브",)),
+    ("센트레빌", ("센트레빌",)),
+    ("한라비발디", ("비발디",)),
+    ("리슈빌", ("리슈빌",)),
+    ("데시앙", ("데시앙",)),
+    ("베르디움", ("베르디움",)),
+    ("해모로", ("해모로",)),
+    ("우미린", ("우미린",)),
+    ("호반", ("호반",)),
+    ("중흥", ("중흥",)),
+    ("유보라", ("유보라",)),
+    ("칸타빌", ("칸타빌",)),
+    ("하늘채", ("하늘채",)),
+    ("꿈에그린", ("꿈에그린",)),
+    ("어울림", ("어울림",)),
+    ("포레나", ("포레나",)),
+    ("아크로", ("아크로",)),
+    ("트리마제", ("트리마제",)),
+    # 아래는 실측으로 찾아 넣은 것들. 대부분 20곳 미만이라 '기타브랜드' 로 묶이지만,
+    # 그래도 넣는 이유는 **기준군을 깨끗하게** 하기 위해서다. 브랜드 단지를 '브랜드
+    # 없음' 에 남겨 두면 기준 자체가 올라가 모든 계수가 작아진다.
+    ("아너스빌", ("아너스빌",)),
+    ("현대홈타운", ("홈타운",)),
+    ("퍼스트빌", ("퍼스트빌",)),
+    ("블루밍", ("블루밍",)),
+    ("수자인", ("수자인",)),
+    ("스타힐스", ("스타힐스",)),
+    ("해링턴", ("해링턴",)),
+    ("펜테리움", ("펜테리움",)),
+    ("미래도", ("미래도",)),
+    ("노블랜드", ("노블랜드",)),
+    ("휴먼빌", ("휴먼빌",)),
+    ("인스빌", ("인스빌",)),
+    ("풍경채", ("풍경채",)),
+    ("쉐르빌", ("쉐르빌",)),
+    ("로얄듀크", ("로얄듀크",)),
+    ("그린코아", ("그린코아",)),
+    ("베라체", ("베라체",)),
+    ("휴튼", ("휴튼",)),
+    ("코아루", ("코아루",)),
+    ("리첼", ("리첼",)),
+    ("이안", ("이안",)),
+    ("동일하이빌", ("하이빌",)),
+    ("아이유쉘", ("아이유쉘",)),
+    ("파밀리에", ("파밀리에",)),
+    ("굿모닝힐", ("굿모닝힐",)),
+    ("메르디앙", ("메르디앙",)),
+    ("예가", ("예가",)),
+    ("더휴", ("더휴",)),
+    ("스타클래스", ("스타클래스",)),
+    ("더플래티넘", ("더플래티넘",)),
+    ("나우빌", ("나우빌",)),
+    ("코오롱", ("코오롱",)),
+)
+
+
+def brand_of(name: str | None) -> str | None:
+    """단지명에서 브랜드. 없으면 None.
+
+    공백을 지우고 대소문자를 무시한다 — 'SK 뷰'·'skview' 가 같은 것이기 때문이다.
+    두 브랜드가 함께 적힌 이름(`우미린제일풍경채`)은 목록에서 먼저 나오는 쪽으로
+    간다. 합작 단지라 어느 쪽도 틀리지 않고, 둘을 쪼개면 표본만 얇아진다.
+    """
+    if not name:
+        return None
+    n = name.replace(" ", "").lower()
+    for canon, pats in _BRANDS:
+        if any(pat.lower() in n for pat in pats):
+            return canon
+    return None
 
 
 def _is_structural(name: str) -> bool:
@@ -94,6 +215,9 @@ class Spec:
     use_umd_fe: bool
     use_households: bool = True
     use_line_fe: bool = False
+    # 단지 최고층과 브랜드. 둘 다 **단지 단위**라 Stage 2 에 들어간다.
+    use_top_floor: bool = False
+    use_brand: bool = False
 
 
 # 스펙 사다리 — 통제를 늘려가며 도보계수가 어떻게 변하는지 보여준다.
@@ -108,8 +232,10 @@ SPECS: dict[str, Spec] = {
     "M2": Spec(
         "M2", "+ 연식·세대수·강남접근성·노선·구 FE",
         True, True, True, True, False, True, True,
+        use_top_floor=True, use_brand=True,
     ),
-    "M3": Spec("M3", "+ 법정동 FE", True, True, True, True, True, True, True),
+    "M3": Spec("M3", "+ 법정동 FE", True, True, True, True, True, True, True,
+               use_top_floor=True, use_brand=True),
 }
 DEFAULT_SPEC = "M2"
 
@@ -273,6 +399,14 @@ def _build_frame(rows, ref_year: int):
                     if r.get("household_count")
                     else np.nan
                 ),
+                # 단지 최고층. 지금까지는 **층 구간을 만드는 데만** 썼다
+                # (`pricing.floor_band` 위에서). 단지 수준 요인으로는 안 들어갔는데,
+                # 잔차로 재 보니 25층+ 가 +8.98%, 14층 이하가 -9.95% 로 가장 크게
+                # 갈렸다. 연식·브랜드와 겹치므로 함께 넣어 각자 남는지 본다.
+                "top_floor": (
+                    float(r["max_floor"]) if r.get("max_floor") else np.nan
+                ),
+                "brand": brand_of(r.get("complex_name")),
                 "lat": r.get("lat"),
                 "lng": r.get("lng"),
             }
@@ -428,6 +562,8 @@ def _fit_stage1(df, use_controls: bool):
             gangnam_min=("gangnam_min", "first"),
             age=("age", "first"),
             log_households=("log_households", "first"),
+            top_floor=("top_floor", "first"),
+            brand=("brand", "first"),
             lat=("lat", "first"),
             lng=("lng", "first"),
             ppp_median=("log_ppp", "median"),
@@ -560,6 +696,8 @@ def _fit_stage1(df, use_controls: bool):
             gangnam_min=("gangnam_min", "first"),
             age=("age", "first"),
             log_households=("log_households", "first"),
+            top_floor=("top_floor", "first"),
+            brand=("brand", "first"),
             lat=("lat", "first"),
             lng=("lng", "first"),
             ppp_median=("log_ppp", "median"),
@@ -725,6 +863,23 @@ def _knots(values, n: int = DEFAULT_KNOTS):
 
     그래서 밀어내지 않고 **중복을 없앤 뒤 그만큼 매듭을 줄인다.** 분포가 한 점에
     몰려 있다는 것은 그 구간에 볼 것이 없다는 뜻이고, 개수는 목표가 아니다.
+
+    ## 가까이 붙은 매듭은 **재 보고 그냥 뒀다**
+
+    단지 최고층을 넣으니 매듭이 `[5, 14, 15, 19, 20, 25, 35.9]` 로 나왔다. 14 와 15 는
+    다른 값이라 위 규칙을 통과하지만, 전체 범위 31층에서 폭 1층(3.2%)짜리 구간이다.
+    최고층이 정수에 몰려 있어서다 — 1,846곳 중 20층 271곳, 15층 260곳, 25층 150곳.
+    겹친 매듭과 같은 병리로 보여서 '범위의 5% 미만이면 중복' 규칙을 넣어 재 봤다.
+
+    **차이가 없었다.** 매듭이 `[7, 15, 18, 20, 24, 30]`(최소 간격 8.7%)으로 바뀌어도
+    곡선은 어디서나 2%p 이내로 같고(20층 +6.5% → +7.7%, 30층 +22.6% → +23.8%),
+    adj R² 는 오히려 0.8477 → 0.8465 로 조금 낮아졌다. 비선형 p 도 0.00112 → 0.00108.
+
+    그래서 규칙을 넣지 않았다. 대신 얻은 것이 있다 — 최고층 곡선이 **매듭 위치의
+    산물이 아니라는 확인**이다. 참고로 `top_floor__nl*` 이 하나하나는 유의하지 않고
+    (p 0.06~0.48) 합동 검정만 유의한 것은 매듭 간격 탓이 아니었다. 매듭을 띄워도
+    그대로였다. 스플라인 기저끼리의 공선성은 원래 그렇다 — 개별 항의 p 를 읽지 말고
+    합동 검정과 곡선을 읽어야 한다.
     """
     np, _, _ = _deps()
     uniq = len(set(float(v) for v in values))
@@ -823,7 +978,39 @@ def _stage2_design(alpha, spec: Spec, knots: dict):
         if hh.isna().any():
             cols["households_missing"] = hh.isna().astype(float).tolist()
 
+    # 단지 최고층. 연속이고 굽을 수 있으므로 다른 연속 요인과 **같은 방식**으로
+    # 스플라인을 준다 — 형태를 미리 정하지 않고 비선형인지 검정한다.
+    #
+    # 세대수와 같은 자리에 있다(대단지 프리미엄). 다만 겹치지는 않는다 — 1,000세대가
+    # 10동 10층일 수도 2동 30층일 수도 있다.
+    if spec.use_top_floor:
+        tf = alpha["top_floor"].astype(float)
+        if tf.notna().any():
+            filled = tf.fillna(tf.median())
+            spline_terms["top_floor"] = _spline_cols(
+                cols, "top_floor", filled, knots.get("top_floor")
+            )
+            if tf.isna().any():
+                cols["top_floor_missing"] = tf.isna().astype(float).tolist()
+
     X = pd.DataFrame(cols, index=alpha.index)
+
+    # 브랜드 FE. 브랜드가 없는 단지가 기준이다.
+    #
+    # 더미를 브랜드마다 주면 2,469곳에 31개 더미라 표본이 얇은 브랜드의 계수가
+    # 요동친다. 그렇다고 '브랜드 있음' 하나로 묶으면 자이와 칸타빌이 같아진다.
+    # **표본이 충분한 브랜드만 따로** 두고 나머지는 '기타 브랜드' 로 묶는다 —
+    # 층 구간을 저/중/고로 묶는 것과 같은 발상이다.
+    if spec.use_brand and alpha["brand"].notna().any():
+        b = alpha["brand"].fillna("없음")
+        counts = b.value_counts()
+        keep = set(counts[counts >= _BRAND_MIN].index) - {"없음"}
+        lab = b.map(lambda x: x if x in keep else ("기타브랜드" if x != "없음" else "없음"))
+        if lab.nunique() > 1:
+            d = pd.get_dummies(lab, prefix="brand", dtype=float)
+            # 기준은 **브랜드 없음**이다. 계수가 '브랜드가 붙으면 몇 %' 로 읽힌다.
+            d = d.drop(columns=["brand_없음"], errors="ignore")
+            X = pd.concat([X, d], axis=1)
 
     # 노선 FE. 강남 소요시간과 상관이 있지만(노선이 강남분 분산의 50%를 설명)
     # 완전 중복은 아니다 — 같은 노선 안에서도 역마다 소요시간이 다르기 때문이다.
@@ -1004,6 +1191,8 @@ LABELS = {
     "age_sq": "연식²",
     "log_households": "log(세대수)",
     "households_missing": "세대수 결측 표시자",
+    "top_floor": "단지 최고층(층)",
+    "top_floor_missing": "최고층 결측 표시자",
 }
 
 
@@ -1015,6 +1204,10 @@ def _label(name: str) -> str:
         return f"{LABELS.get(base, base)} 비선형항{name.split('__nl')[1]}"
     if name.startswith("line_"):
         return name[5:]
+    if name.startswith("brand_"):
+        # 이름을 그대로 두면 계수표에 'brand_자이' 가 찍힌다.
+        b = name[6:]
+        return "기타 브랜드" if b == "기타브랜드" else b
     if name.startswith("sgg_"):
         # 코드를 그대로 두면 '구 FE 41113' 이라 읽을 수 없다. 이름으로 바꾼다.
         from ..clients.molit import DISTRICTS
@@ -1197,7 +1390,10 @@ def fit(rows, spec: str = DEFAULT_SPEC, ref_year: int | None = None, truth=None)
     # 연속 요인마다 매듭을 따로 놓는다. 분포가 제각각이라 공통 매듭은 맞지 않는다.
     knots = {}
     nk = knots_for(len(alpha))
-    for var in ("walk_min", "gangnam_min", "age", "log_households"):
+    # top_floor 를 빼먹으면 매듭이 없어 **직선으로만** 들어간다 — 이 파일이
+    # "형태를 가정하지 않고 적합한 뒤 비선형인지 검정한다" 고 해 놓은 것과 어긋난다.
+    # 실제로 한 번 빠뜨렸고, 계수가 층당 +1.53% 직선으로 나왔다.
+    for var in ("walk_min", "gangnam_min", "age", "log_households", "top_floor"):
         if var in alpha.columns and alpha[var].notna().any():
             knots[var] = _knots(alpha[var].dropna().astype(float).to_numpy(), nk)
 
