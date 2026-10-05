@@ -3,6 +3,16 @@
 사용법:
     python -m scripts.ingest_trades --months 24
     python -m scripts.ingest_trades --months 12 --district 41117
+
+## 이미 있는 거래도 손본다 — 거래 유형 채우기
+
+`dealingGbn`(중개거래/직거래)을 나중에 받기 시작했다. 그런데 이 스크립트는 같은
+거래가 다시 오면 **건너뛴다.** 그대로 두면 재적재를 돌려도 기존 11.7만 행의
+`deal_type` 은 영영 빈 채로 남는다. 전부 지우고 다시 받는 것은 몇 시간짜리다.
+
+그래서 중복일 때 그냥 넘기지 않고, **비어 있는 값만 채운다.** 가격·면적 같은 이미
+있는 값은 건드리지 않는다 — 덮어쓰기 시작하면 이 스크립트가 '적재' 가 아니라
+'동기화' 가 되고, 국토부가 값을 고쳤을 때 조용히 과거가 바뀐다.
 """
 
 from __future__ import annotations
@@ -147,7 +157,7 @@ def ingest(
         # (아직 flush 전이라 select 에 안 보인다). 국토부 응답에는 같은 날·같은 면적·
         # 같은 층·같은 금액 거래가 실제로 들어온다(동이 다른 경우).
         seen: set = set()
-        inserted = skipped = failed_months = 0
+        inserted = skipped = failed_months = filled = 0
 
         # 이미 적재된 (구, 월) 조합. 같은 달을 매번 다시 내려받지 않기 위한 캐시.
         done = {
@@ -186,17 +196,22 @@ def ingest(
                         continue
 
                     exists = db.execute(
-                        select(Trade.id).where(
+                        select(Trade).where(
                             Trade.complex_id == cx.id,
                             Trade.deal_date == deal_date,
                             Trade.exclusive_area == raw.exclusive_area,
                             Trade.floor == raw.floor,
                             Trade.deal_amount == raw.deal_amount,
                         )
-                    ).first()
-                    if exists:
+                    ).scalars().first()
+                    if exists is not None:
                         seen.add(nat_key)
-                        skipped += 1
+                        # 비어 있는 것만 채운다. 있는 값은 건드리지 않는다.
+                        if raw.deal_type and not exists.deal_type:
+                            exists.deal_type = raw.deal_type
+                            filled += 1
+                        else:
+                            skipped += 1
                         continue
                     seen.add(nat_key)
 
@@ -210,6 +225,7 @@ def ingest(
                             deal_amount=raw.deal_amount,
                             build_year=raw.build_year,
                             apt_dong=raw.apt_dong,
+                            deal_type=raw.deal_type or "",
                             source="molit",
                         )
                     )
@@ -229,7 +245,8 @@ def ingest(
 
         refresh_complex_stats(db)
         tail = f" / 커밋 실패한 달 {failed_months}개" if failed_months else ""
-        print(f"\n적재 완료: 신규 {inserted}건 / 중복 {skipped}건{tail}")
+        fill = f" / 거래유형 채움 {filled}건" if filled else ""
+        print(f"\n적재 완료: 신규 {inserted}건 / 중복 {skipped}건{fill}{tail}")
 
         if fuzzy_log:
             print(f"\n이름이 비슷하지만 **합치지 않은** 단지 {len(fuzzy_log)}건 (참고용)")

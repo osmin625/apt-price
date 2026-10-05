@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from statistics import median
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .. import pricing
@@ -15,6 +15,19 @@ from ..pricing import TradePoint
 
 def _cutoff(months: int) -> date:
     return date.today() - timedelta(days=int(months * 30.44))
+
+
+# 직거래는 **뺀다.** 회귀(Stage 1)는 더미로 할인을 걷어내지만, 비교표본은
+# 중앙값이라 통제할 방법이 없다 — 넣으면 중앙값이 끌려 내려가고, 빼면 표본이
+# 2.9% 줄 뿐이다.
+#
+# 그리고 이 경로가 답하는 질문은 "비슷한 집이 **실제로 얼마에 팔리나**" 다.
+# 증여성 거래나 친족 간 이전은 그 질문의 답이 아니다. 같은 단지·같은 전용면적
+# 안에서도 13.9% 싸게 신고된다(회귀 추정, SE 0.44%p).
+#
+# `coalesce` 가 필요하다. `deal_type != '직거래'` 로 쓰면 SQL 삼치논리에서 NULL 인
+# 행이 **조용히 빠진다** — 적재 전 거래 111건이 그랬다(세어 보고 알았다).
+DIRECT = "직거래"
 
 
 def load_points(
@@ -51,6 +64,7 @@ def load_points(
         )
         .join(Complex, Trade.complex_id == Complex.id)
         .where(Trade.deal_date >= _cutoff(months))
+        .where(func.coalesce(Trade.deal_type, "") != DIRECT)
     )
     if sgg_cd:
         stmt = stmt.where(Complex.sgg_cd == sgg_cd)

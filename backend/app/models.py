@@ -189,6 +189,17 @@ class Trade(Base):
     build_year: Mapped[int | None] = mapped_column(Integer)
     apt_dong: Mapped[str | None] = mapped_column(String(20))
 
+    # 국토부 `dealingGbn`. '중개거래' | '직거래' | '' (적재 전 행은 빈 문자열).
+    #
+    # 왜 담나: 직거래는 같은 단지·같은 전용면적 안에서도 **16.6% 싸다**(실측,
+    # 190칸 중 171칸 음수). 증여성 거래·친족 간 이전이 섞여 있다. 전체의 3.7%
+    # 뿐이지만 직거래가 몰린 단지는 시세가 통째로 내려간다.
+    #
+    # NULL 이 아니라 빈 문자열을 기본값으로 쓴다. 적재 전 행과 '값이 없는 행' 을
+    # 같은 것으로 다루기 위해서이고, SQLite 의 UNIQUE 가 NULL 끼리를 서로 다른
+    # 값으로 보는 것과도 맞춘다(이 저장소 규약).
+    deal_type: Mapped[str] = mapped_column(String(10), default="", server_default="")
+
     # 'seed' = 합성 거래, 'molit' = 실거래가. 둘이 한 DB에 공존할 수 있어야 한다.
     source: Mapped[str] = mapped_column(String(20), default="seed", index=True)
 

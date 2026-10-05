@@ -710,6 +710,30 @@ def factor_payload(fit: dict) -> dict:
             "levels": floors,
         })
 
+    # 1-2) 거래 유형 — Stage 1 범주형. 층 바로 다음에 둔다(둘 다 거래 속성이다).
+    #
+    # 이 카드는 '어떤 집을 사느냐' 가 아니라 **'어떤 숫자를 믿을 수 있느냐'** 를
+    # 말한다. 직거래는 증여성 거래가 섞여 시세보다 싸게 신고되므로, 그 거래 하나를
+    # 보고 '이 단지가 싸졌다' 고 읽으면 안 된다.
+    dt = fit["stage1"].get("deal_type")
+    if dt:
+        out.append({
+            "key": "deal_type", "label": "거래 유형", "unit": "",
+            "reference": "중개거래",
+            "note": (
+                f"전체 거래의 {dt['share_pct']}%({dt['n_direct']:,}건)가 직거래입니다. "
+                "같은 단지·같은 평형 안에서도 싸게 신고되는데, 증여성 거래나 친족 간 "
+                "이전이 섞여 있기 때문입니다. 모델은 이 할인을 걷어낸 뒤 단지 시세를 "
+                "세우므로, 직거래가 많은 단지가 그 때문에 저평가로 보이지 않습니다. "
+                "거래를 버리지는 않습니다 — 층·면적·시점 정보는 그대로 씁니다."
+            ),
+            "levels": [
+                {"band": "중개거래 (기준)", "premium_pct": 0.0},
+                {"band": "직거래", "premium_pct": dt["pct"],
+                 "ci_pct": dt["ci_pct"], "p": dt["p"]},
+            ],
+        })
+
     # 2) 전용면적 — Stage 1. 매듭이 log 공간에 있으므로 x 를 log 로 바꿔 평가한다.
     al = fit["stage1"].get("area_linearity")
     if al and al.get("coefs"):

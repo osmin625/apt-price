@@ -4,8 +4,9 @@
 https://www.data.go.kr/data/15126468/openapi.do
 
 기본 자료(15126469, RTMSDataSvcAptTrade)가 아니라 상세 자료를 쓴다.
-상세 자료에만 동(aptDong)과 계약 해제 여부(cdealType)가 들어 있고,
-해제건을 걸러내지 못하면 시세가 왜곡된다.
+상세 자료에만 동(aptDong)·계약 해제 여부(cdealType)·거래 유형(dealingGbn)이
+들어 있다. 해제건을 걸러내지 못하면 시세가 왜곡되고, 직거래를 구분하지 못하면
+증여성 거래의 할인이 시세로 들어온다.
 """
 
 from __future__ import annotations
@@ -77,6 +78,16 @@ class RawTrade:
     deal_year: int
     deal_month: int
     deal_day: int
+    # '중개거래' | '직거래' | '' (옛 건은 비어 있다)
+    #
+    # 직거래는 **같은 단지·같은 전용면적 안에서도 16.6% 싸다**(190칸 중 171칸이
+    # 음수). 증여성 거래나 친족 간 이전이 섞여 있어서다. 전체의 3.7% 뿐이지만
+    # 그대로 두면 직거래가 많은 단지의 시세가 통째로 내려간다.
+    #
+    # **빼지는 않는다.** 그 거래도 층·면적·시점 식별에는 멀쩡히 기여하므로,
+    # Stage 1 에 더미를 넣어 할인만 흡수하게 한다(세대수 결측을 버리지 않고
+    # 표시자로 처리한 것과 같은 발상이다).
+    deal_type: str | None
 
 
 def _text(item: ET.Element, tag: str) -> str:
@@ -125,6 +136,7 @@ def _parse_item(item: ET.Element) -> RawTrade | None:
         deal_year=year,
         deal_month=month,
         deal_day=day,
+        deal_type=_text(item, "dealingGbn") or None,
     )
 
 
