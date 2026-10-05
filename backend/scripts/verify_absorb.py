@@ -45,6 +45,49 @@ class DummyPathFailed(RuntimeError):
     """더미 회귀가 **수치적으로** 실패했다 — 모델이 틀린 것이 아니다."""
 
 
+# 더미 경로의 잔차가 흡수 경로보다 이 비율 이상 크면 풀이가 실패한 것으로 본다.
+# 둘은 같은 모델이라 RSS 가 부동소수 오차 범위에서 같아야 한다. 1% 는 그 오차보다
+# 몇 자릿수 크고, 실패했을 때의 차이보다는 몇 자릿수 작다.
+RSS_TOL = 0.01
+
+
+def check_dummy_fit(params, rss_dummy: float, rss_absorbed: float, shape) -> None:
+    """더미 풀이가 **실제로 풀렸는지** 검사한다.
+
+    ## 왜 try/except 로는 모자라나
+
+    처음에는 `sm.OLS(...).fit()` 을 try 로 감싸는 것으로 됐다고 생각했다. **틀렸다.**
+    실제로 겪은 실패는 예외를 던지지 않았다 — LAPACK 이 `init_gesdd failed init` 을
+    stderr 에 찍고, statsmodels 는 pinv 결과로 그냥 진행했다. 계수는 0 과 NaN 이
+    섞인 채 돌아왔고, 스크립트는 종료 코드 0 으로 끝나며 비교 네 개를 전부 FAIL 로
+    찍었다. **메모리 부족이 정확성 실패와 똑같이 보였다.**
+
+    그래서 '터졌나' 가 아니라 '결과가 말이 되나' 를 본다. 두 가지다.
+
+      1. 계수가 전부 유한한가 — 실패하면 NaN/inf 가 섞인다
+      2. 잔차가 흡수 경로와 같은가 — 둘은 **같은 모델**이라 RSS 가 같아야 한다.
+         풀이가 실패하면 적합이 나빠지므로 여기서 걸린다. 1번을 통과하는
+         '조용한' 실패(전부 0 인 계수 같은)도 이쪽에서 잡힌다.
+    """
+    import numpy as np
+
+    arr = np.asarray(params, dtype=float)
+    if not np.isfinite(arr).all():
+        n_bad = int((~np.isfinite(arr)).sum())
+        raise DummyPathFailed(
+            f"더미 회귀 계수 {len(arr)}개 중 {n_bad}개가 NaN/inf 입니다. "
+            f"설계행렬이 {shape[0]:,}×{shape[1]:,} 라 LAPACK 이 풀지 못한 것으로 "
+            f"보입니다 — --max-complexes 를 줄여 다시 돌리세요."
+        )
+    if rss_absorbed > 0 and rss_dummy > rss_absorbed * (1 + RSS_TOL):
+        raise DummyPathFailed(
+            f"더미 회귀의 잔차가 흡수 경로보다 큽니다 "
+            f"(RSS {rss_dummy:.6g} vs {rss_absorbed:.6g}). 같은 모델이므로 같아야 "
+            f"합니다 — 풀이가 수렴하지 않았습니다. 설계행렬 "
+            f"{shape[0]:,}×{shape[1]:,}, --max-complexes 를 줄여 보세요."
+        )
+
+
 def build_parts(df):
     """Stage 1 설계행렬을 '더미'와 '나머지'로 나눠 만든다."""
     cx = pd.get_dummies(df["complex_id"].astype(str), prefix="cx", dtype=float)
@@ -80,20 +123,28 @@ def build_parts(df):
     return cx, Z, area_terms
 
 
-def fit_dummy(df, cx, Z):
-    """현재 방식 — 더미를 행렬에 직접 넣는다."""
+def fit_dummy(df, cx, Z, rss_absorbed: float | None = None):
+    """현재 방식 — 더미를 행렬에 직접 넣는다.
+
+    `rss_absorbed` 를 주면 풀이가 실제로 풀렸는지 검사한다(`check_dummy_fit`).
+    예외만 잡아서는 못 잡는다 — 실제 실패는 예외 없이 지나간다.
+    """
     X = pd.concat([cx, Z], axis=1)
     y = df["log_ppp"].astype(float)
     try:
         res = sm.OLS(y, X).fit(cov_type="HC1")
     except Exception as exc:  # noqa: BLE001
-        # LAPACK 이 SVD 초기화에 실패하면 (`init_gesdd failed init`) 뒤따르는
-        # 비교가 전부 FAIL 로 찍힌다. 그건 모델이 틀렸다는 뜻이 아니다.
         raise DummyPathFailed(
-            f"더미 회귀가 수치적으로 실패했습니다 ({type(exc).__name__}: {exc}). "
+            f"더미 회귀가 예외로 실패했습니다 ({type(exc).__name__}: {exc}). "
             f"설계행렬이 {X.shape[0]:,}×{X.shape[1]:,} 입니다 — "
             f"--max-complexes 를 줄여 다시 돌리세요."
         ) from exc
+
+    rss = float(((y.to_numpy() - res.fittedvalues.to_numpy()) ** 2).sum())
+    check_dummy_fit(
+        res.params.to_numpy(), rss,
+        rss_absorbed if rss_absorbed is not None else rss, X.shape,
+    )
     cids = [int(c[3:]) for c in cx.columns]
     alpha = pd.Series([float(res.params[c]) for c in cx.columns], index=cids)
     se = pd.Series([float(res.bse[c]) for c in cx.columns], index=cids)
@@ -188,8 +239,19 @@ def main() -> int:
     print(f"거래 {len(df):,} · 단지 {cx.shape[1]} · 설계행렬 "
           f"{len(df):,}×{cx.shape[1] + Z.shape[1]} → 흡수 후 {len(df):,}×{Z.shape[1]}\n")
 
-    t0 = time.perf_counter(); r_d, a_d, s_d, b_d = fit_dummy(df, cx, Z); t_d = time.perf_counter() - t0
+    # **흡수 경로를 먼저** 돌린다. 그 잔차가 더미 경로를 검사하는 기준이 되기
+    # 때문이다 — 둘은 같은 모델이라 RSS 가 같아야 하고, 더미 쪽이 크면 풀이가
+    # 실패한 것이다. 예외만 기다려서는 못 잡는다(`check_dummy_fit` 주석 참조).
     t0 = time.perf_counter(); r_a, a_a, s_a, b_a = fit_absorbed(df, Z); t_a = time.perf_counter() - t0
+    y_ = df["log_ppp"].astype(float).to_numpy()
+    gid_ = df["complex_id"].to_numpy()
+    _lvl = y_ - Z.to_numpy() @ b_a.reindex(Z.columns).to_numpy()
+    _al = pd.Series(_lvl).groupby(gid_).transform("mean").to_numpy()
+    rss_a = float(((_lvl - _al) ** 2).sum())
+
+    t0 = time.perf_counter()
+    r_d, a_d, s_d, b_d = fit_dummy(df, cx, Z, rss_absorbed=rss_a)
+    t_d = time.perf_counter() - t0
 
     ok = True
 

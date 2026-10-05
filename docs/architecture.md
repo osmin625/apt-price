@@ -23,6 +23,7 @@ backend/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
     validate_model.py       참값 복원 + 커버리지 검증
     cv_model.py             Stage 2 교차검증 — 요인을 넣을지 정하는 자
+    verify_guard.py         verify_absorb 의 실패 감지가 걸리는지 시험
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)
     ingest_trades.py        실거래 적재
