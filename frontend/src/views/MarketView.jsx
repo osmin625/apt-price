@@ -177,11 +177,10 @@ function FactorPanel({ months }) {
             </div>
             {/* 연속 요인은 곡선으로 — 로그·2차항·스플라인의 굽은 모양은
                 대표 지점 막대만으로는 보이지 않는다. 범주형(층·노선)은 막대. */}
-            {f.unresolved ? (
-              <p className="paste-warn" style={{ paddingLeft: 0 }}>
-                {f.unresolved}
-              </p>
-            ) : f.curve ? (
+            {/* `f.unresolved` 분기가 있었다. 동 위치 카드가 '검출되지 않았습니다'
+                를 띄우던 자리인데, 그 카드를 뺀 뒤로 백엔드가 이 필드를 보내지
+                않는다. 죽은 분기는 다음 사람이 '이런 상태가 있나' 하고 찾게 만든다. */}
+            {f.curve ? (
               <FactorCurve
                 curve={f.curve}
                 linearCurve={f.linear_curve}

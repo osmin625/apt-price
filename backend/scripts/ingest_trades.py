@@ -35,6 +35,32 @@ from app.db import SessionLocal, engine  # noqa: E402
 from app.models import Base, Complex, Trade  # noqa: E402
 
 
+def _pending_followups(db) -> list[tuple[str, int, str]]:
+    """좌표·도보경로·입지가 빈 단지를 센다. 순서대로 돌려야 한다."""
+    from app.models import ComplexAmenity
+
+    out = []
+    n = db.scalar(
+        select(func.count()).select_from(Complex).where(Complex.lat.is_(None))
+    ) or 0
+    if n:
+        out.append(("scripts.geocode", n, "좌표"))
+    n = db.scalar(
+        select(func.count()).select_from(Complex)
+        .where(Complex.lat.isnot(None), Complex.walk_seconds.is_(None))
+    ) or 0
+    if n:
+        out.append(("scripts.route_walk", n, "도보경로"))
+    n = db.scalar(
+        select(func.count()).select_from(Complex)
+        .where(Complex.lat.isnot(None))
+        .where(~Complex.id.in_(select(ComplexAmenity.complex_id)))
+    ) or 0
+    if n:
+        out.append(("scripts.ingest_amenity", n, "주변 입지"))
+    return out
+
+
 def month_range(months: int) -> list[str]:
     today = date.today()
     out = []
@@ -278,6 +304,20 @@ def ingest(
         tail = f" / 커밋 실패한 달 {failed_months}개" if failed_months else ""
         fill = f" / 거래유형 채움 {filled}건" if filled else ""
         print(f"\n적재 완료: 신규 {inserted}건 / 중복 {skipped}건{fill}{tail}")
+        # 새 단지가 생기면 **좌표·도보경로·입지가 비어 있다.** 실거래 적재만 돌리고
+        # 끝내면 그 단지들은 모델에서 조용히 빠지거나(도보 결측) 결측 표시자로
+        # 넘어간다. 실제로 그랬다 — 직거래 백필이 신규 거래 938건을 넣으며 단지
+        # 3곳이 생겼는데, 단지 수 2,472 vs 입지 2,469 를 **세어 보고서야** 알았다.
+        #
+        # 순서가 있다: 좌표(geocode) → 도보경로(route_walk) → 입지(ingest_amenity).
+        # `ingest_amenity` 는 좌표 없는 단지를 건너뛰므로 먼저 돌리면 아무 일도
+        # 일어나지 않는다(그것도 조용하다).
+        need = _pending_followups(db)
+        if need:
+            print("\n[!] 뒤따라 돌려야 할 적재가 있습니다:")
+            for cmd, n, what in need:
+                print(f"    python -m {cmd:<24} # {what} 없는 단지 {n}곳")
+
         if stale:
             print(
                 f"\n[!] 국토부가 더 이상 돌려주지 않는 거래 {stale}건이 DB 에 있습니다. "

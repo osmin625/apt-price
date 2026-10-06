@@ -48,8 +48,24 @@
 
 - `scripts/verify_spline.py` — 벡터화한 스플라인 기저 vs `pricing.rcs_basis` (오차 0)
 - `scripts/verify_absorb.py` — 고정효과 흡수 vs 더미 회귀 (1e-13)
+- `scripts/verify_name_match.py` — 단지명 매칭 규칙 변경 전후 전수 대조 (깨짐 0)
+- `scripts/verify_payloads.py` — 적합 페이로드가 정말 JSON 이 되는지
+- `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지
+- `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다
 
 새로 최적화할 때도 같은 것을 만든다. "눈으로 보니 같다" 는 근거가 아니다.
+
+### 검사를 넣었으면 **걸리는 것까지** 본다
+
+검사를 넣어 놓고 안 걸리면 없는 것과 같다. 한 번 그랬다 — `verify_absorb` 에 더미
+회귀 실패를 잡는 가드를 `try/except` 로 넣었는데, 정작 겪은 실패(LAPACK
+`init_gesdd failed init`)는 **예외를 던지지 않았다.** 계수에 0 과 NaN 이 섞인 채
+종료 코드 0 으로 끝나며 비교를 전부 FAIL 로 찍었다. 메모리 부족이 정확성 실패와
+똑같이 보였고 가드는 한 번도 걸리지 않았다.
+
+- `scripts/verify_guard.py` — 실패 모양을 직접 만들어 넣어 본다(27개 경우).
+  **걸리지 말아야 할 때 안 걸리는지도** 같이 본다 — 그게 없으면 전부 걸리게 해 놓고
+  통과했다고 할 수 있다.
 
 ### 조용히 틀리는 것을 가장 경계한다
 
