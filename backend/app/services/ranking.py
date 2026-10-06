@@ -103,6 +103,10 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
                     "complex": m.get("complex_parts"),
                     "unit": m.get("unit_parts"),
                     "premium_pct": m.get("complex_premium_pct"),
+                    # 이 시세가 **몇 건의 중개거래에 얹혀 있는지.** 직거래는 Stage 1
+                    # 에서 할인을 걷어내지만 단지 수준을 관측해 주지는 않는다.
+                    "market_count": m.get("market_count"),
+                    "trade_count": m.get("trade_count"),
                 }
 
         items.append(item)

@@ -811,6 +811,11 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
 .fh-value { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .fh-pct { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fh-foot { padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-secondary); }
+/* 표본이 빠듯한 단지. 끄는 색이 아니라 **눈에 걸리는** 색이어야 한다 —
+   '적정' 판정이 중개거래 2건 위에 서 있다는 뜻이기 때문이다.
+   클래스 이름에 `fh-` 를 붙인 이유: 전역 `.is-thin` 은 향 카드가 '표본 부족'
+   을 흐리게 칠하는 데 이미 쓰고 있어서, 겹치면 정반대로 보인다. */
+.fh-foot.fh-thin { color: var(--warning); font-weight: 600; }
 .tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
 tr.is-deleting td { opacity: 0.4; }

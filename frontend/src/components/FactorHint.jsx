@@ -37,6 +37,16 @@ export default function FactorHint({ parts }) {
             ))}
           </span>
         ))}
+        {/* 이 시세가 몇 건에 얹혀 있나. 직거래가 섞인 단지는 중개거래가 더 적다 —
+            '적정' 판정이 2건 위에 서 있는지 아닌지는 보여야 한다. */}
+        {parts.market_count != null && (
+          <span className={`fh-foot${parts.market_count < 5 ? ' fh-thin' : ''}`}>
+            중개거래 <b>{parts.market_count}건</b> 기준
+            {parts.trade_count > parts.market_count &&
+              ` · 직거래 ${parts.trade_count - parts.market_count}건은 할인을 걷어낸 뒤 씀`}
+            {parts.market_count < 5 && ' · 표본이 적어 흔들릴 수 있음'}
+          </span>
+        )}
         {parts.premium_pct != null && (
           <span className="fh-foot">
             단지 고유 프리미엄{' '}
