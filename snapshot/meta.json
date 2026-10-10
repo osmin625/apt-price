@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-10-11T01:40:50+09:00",
+  "git_head": "5579abd",
+  "months": [
+    12,
+    24,
+    36
+  ],
+  "tabs": [
+    "micro",
+    "macro",
+    "map",
+    "ranking"
+  ],
+  "includes_quotes": true,
+  "data": {
+    "trades": 118548,
+    "complexes": 2472,
+    "quotes": 1157,
+    "latest_deal_date": "2026-10-03"
+  },
+  "files": 2160,
+  "walk_paths_absent": 0,
+  "bytes": 40172661,
+  "export_seconds": 249.7,
+  "failures": []
+}
