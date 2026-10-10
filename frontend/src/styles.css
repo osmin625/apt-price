@@ -21,7 +21,6 @@
   --radius: 10px;
   font-family: Pretendard, system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
 }
-
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
@@ -39,9 +38,7 @@
     --neg: #e66767;
   }
 }
-
 * { box-sizing: border-box; }
-
 body {
   margin: 0;
   background: var(--page);
@@ -49,18 +46,15 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
-
 /* 1240 -> 1560 -> 2200(2단) -> 다시 1760.
    미시·거시를 한 탭에 좌우로 놓으려고 2,200px 까지 넓혔는데, 탭을 다시 나누면서
    한 섹션이 폭을 통째로 쓰게 됐다. 1760px 에 격자 300px 면 **다섯 칸·325px** 이고
    (실측) 미시 카드 일곱 장이 5+2 로 떨어진다.
    글줄은 따로 묶는다(.card 아래) — 폭을 늘린 만큼 문장이 길어지면 읽기 나빠진다. */
 .app { max-width: min(100%, 1760px); margin: 0 auto; padding: 24px 20px 64px; }
-
 header.top { margin-bottom: 20px; }
 header.top h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
 header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
-
 .tabs { display: flex; gap: 4px; margin: 20px 0 18px; border-bottom: 1px solid var(--border); }
 .tabs button {
   background: none; border: none; padding: 9px 14px; cursor: pointer;
@@ -69,11 +63,9 @@ header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 }
 .tabs button:hover { color: var(--text-primary); }
 .tabs button[aria-selected='true'] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--series-1); }
-
 /* 넓은 화면에서 문장이 1500px 로 뻗으면 눈이 줄을 잃는다. 숫자·격자는 폭을 다
    쓰고 글줄만 묶는다. 90ch 는 한글 기준 한 줄 45자 안팎이다. */
 .card > p, .card > .sub { max-width: 90ch; }
-
 .card {
   background: var(--surface-1);
   border: 1px solid var(--border);
@@ -83,7 +75,6 @@ header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 }
 .card > h2 { font-size: 15px; margin: 0 0 2px; letter-spacing: -0.01em; }
 .card > .sub { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 16px; }
-
 .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field label { font-size: 11.5px; color: var(--text-muted); }
@@ -93,7 +84,6 @@ header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
   background: var(--surface-1); color: var(--text-primary); min-width: 132px;
 }
 .field input { min-width: 110px; }
-
 button.primary {
   font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px;
   border: none; border-radius: 7px; background: var(--series-1); color: #fff; cursor: pointer;
@@ -106,7 +96,6 @@ button.ghost {
   background: transparent; color: var(--text-secondary);
 }
 button.ghost:hover { color: var(--text-primary); }
-
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
 .tile .label { font-size: 12px; color: var(--text-secondary); }
@@ -114,9 +103,7 @@ button.ghost:hover { color: var(--text-primary); }
 .tile .value.hero { font-size: 40px; }
 .tile .unit { font-size: 13px; font-weight: 400; color: var(--text-secondary); margin-left: 3px; }
 .tile .note { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
-
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; }
-
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
 th { font-size: 11.5px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
@@ -150,7 +137,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent)
   .modal-backdrop { padding: 0; align-items: stretch; }
   .modal { max-width: none; max-height: 100vh; border-radius: 0; border: 0; }
 }
-
 /* 도보거리 카드에서 창을 여는 자리 */
 .factor-open { display: inline-flex; align-items: center; gap: 5px; }
 .factor-caret { font-size: 11px; color: var(--text-muted); }
@@ -160,7 +146,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent)
 .walk-detail h3 + p { margin-top: 0; }
 .walk-detail .tiles { margin: 10px 0 0; }
 .walk-detail > *:last-child { margin-bottom: 0; }
-
 /* ── 계수표 · 계수 쓰임새 ─────────────────────────── */
 .coef td:first-child { font-weight: 500; }
 .coef .coef-basis td { color: var(--text-muted); font-size: 12px; padding-left: 22px; }
@@ -170,7 +155,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent)
   border-bottom: 1px solid var(--border);
 }
 .coef-more { margin-left: 8px; font-size: 11.5px; color: var(--text-muted); }
-
 .usage { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .usage li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .usage-mark { flex: none; font-size: 10px; color: var(--series-1); }
@@ -178,7 +162,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent)
 .usage-where { font-weight: 500; }
 .usage li.is-off .usage-where { color: var(--text-secondary); font-weight: 400; }
 .usage-what { flex: 1 1 260px; }
-
 /* 표·카드 안에서 단지 상세로 가는 이름. 버튼이지만 본문처럼 보여야 해서
    버튼 기본 모양을 지운다 — 줄마다 파란 링크가 깔리면 표가 시끄럽다. */
 .linklike {
@@ -188,17 +171,14 @@ tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent)
 .linklike:hover, .linklike:focus-visible { color: var(--series-1); text-decoration: underline; }
 tbody tr.clickable { cursor: pointer; }
 .table-wrap { overflow-x: auto; }
-
 .badge {
   display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px;
   border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap;
 }
-
 .verdict { font-size: 15px; font-weight: 600; }
 .verdict[data-tone='good'] { color: var(--good); }
 .verdict[data-tone='bad'] { color: var(--critical); }
 .verdict[data-tone='mid'] { color: var(--text-primary); }
-
 .chart-tooltip {
   position: fixed; pointer-events: none; z-index: 40;
   background: var(--surface-1); color: var(--text-primary);
@@ -209,7 +189,6 @@ tbody tr.clickable { cursor: pointer; }
 }
 .chart-tooltip .t-title { font-weight: 600; margin-bottom: 3px; }
 .chart-tooltip .t-row { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-
 .empty { color: var(--text-muted); font-size: 13px; padding: 24px 0; text-align: center; }
 .notice {
   font-size: 12.5px; color: var(--text-secondary); background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
@@ -218,13 +197,11 @@ tbody tr.clickable { cursor: pointer; }
 /* 내보낸 스냅샷임을 알리는 띠. 경고(노란색)가 아니라 사실 고지라서 중립 색으로
    둔다 — 잘못된 상태가 아니고, 다만 값이 언제 것인지 알아야 하는 것이다. */
 .snapshot-note { background: var(--surface-2, var(--surface-1)); }
-
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
 .legend .key { display: inline-flex; align-items: center; gap: 6px; }
 .legend .swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--series-1); }
 .legend .swatch.wash { background: var(--series-1-wash); }
 .legend .swatch.dot { border-radius: 50%; }
-
 /* 구간별 평당가 (IQR 범위 + 중앙값 점) */
 .rdc-row {
   display: grid;
@@ -256,7 +233,6 @@ tbody tr.clickable { cursor: pointer; }
   font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums;
 }
 .rdc-unit { font-size: 11px; color: var(--text-muted); font-weight: 400; }
-
 /* 층 프리미엄 (0% 기준 발산 막대) */
 .pbar-row { display: grid; grid-template-columns: 96px 1fr 62px; align-items: center; gap: 10px; padding: 3px 0; border-radius: 6px; }
 .pbar-row:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
@@ -269,13 +245,11 @@ tbody tr.clickable { cursor: pointer; }
 .pbar-value { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .pbar-value.pos { color: var(--text-primary); }
 .pbar-value.neg { color: var(--text-primary); }
-
 .formula { font-size: 12.5px; color: var(--text-secondary); line-height: 1.7; }
 .formula code {
   background: color-mix(in srgb, var(--text-primary) 7%, transparent);
   padding: 1px 5px; border-radius: 4px; font-size: 12px;
 }
-
 /* ── 지도 · 분해 모델 ─────────────────────────────────── */
 
 .muted { color: var(--text-secondary); }
@@ -288,7 +262,6 @@ tbody tr.clickable { cursor: pointer; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
 tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
-
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
 .map-metric { font-size: 12.5px; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -301,15 +274,12 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
 .check.is-disabled { color: var(--text-muted); cursor: default; }
 .check.is-disabled input { cursor: default; }
-
 .map-scale { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .map-scale i { width: 96px; height: 9px; border-radius: 5px; border: 1px solid var(--border); }
 .map-scale .grad-seq { background: linear-gradient(90deg, color-mix(in srgb, var(--series-1) 15%, var(--surface-1)), var(--series-1)); }
 .map-scale .grad-div { background: linear-gradient(90deg, var(--series-1), var(--surface-1) 50%, var(--neg)); }
-
 .map-wrap { position: relative; margin: 10px 0 12px; }
 .map-canvas { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
-
 .map-fallback {
   display: flex; flex-direction: column; justify-content: center; gap: 8px;
   border: 1px dashed var(--border); border-radius: var(--radius);
@@ -318,7 +288,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .map-fallback strong { color: var(--text-primary); font-size: 15px; }
 .map-fallback ol { margin: 4px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.8; }
 .map-fallback code { background: color-mix(in srgb, var(--text-primary) 7%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
-
 /* 지도 위에 얹는 도크.
  *
  * z-index 를 반드시 준다. `.map-canvas` 는 `position: relative` 지만 z-index 가
@@ -347,10 +316,8 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 }
 .dock-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
 .dock-head strong { font-size: 12.5px; }
-
 .map-detail { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .map-detail-actions { display: flex; gap: 8px; }
-
 /* 마커는 CustomOverlay 의 DOM 노드라 CSS 변수를 그대로 상속한다 → 다크모드 자동 */
 .marker {
   width: 15px; height: 15px; border-radius: 50%; padding: 0; cursor: pointer;
@@ -360,7 +327,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 }
 .marker.is-hovered { transform: scale(1.65); z-index: 5; }
 .marker.is-selected { width: 21px; height: 21px; border-width: 3px; border-color: var(--series-2); z-index: 6; }
-
 .station-marker {
   font-size: 10.5px; font-weight: 600; white-space: nowrap;
   background: var(--surface-1); color: var(--text-secondary);
@@ -377,7 +343,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   transition: r 0.1s ease, opacity 0.1s ease;
 }
 .scatter-dot:hover, .scatter-dot.is-hovered { fill: var(--series-2); opacity: 1; }
-
 .scatter-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
 .scatter-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .scatter-legend i { width: 16px; height: 3px; border-radius: 2px; }
@@ -385,7 +350,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .scatter-legend .sw-band { background: var(--series-1); opacity: 0.25; height: 9px; border-radius: 2px; }
 .scatter-legend .sw-truth { background: repeating-linear-gradient(90deg, var(--series-2) 0 5px, transparent 5px 9px); }
 .scatter-legend .sw-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); opacity: 0.55; }
-
 /* ── 좁은 화면 ───────────────────────────────────────
  *
  * 탭이 가장 크게 망가졌다. `.tabs` 가 `display: flex` 인데 줄바꿈을 막지 않아,
@@ -397,7 +361,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { flex: 0 0 auto; white-space: nowrap; padding: 9px 11px; }
-
   .card { padding: 14px; }
   h1 { font-size: 20px; }
   /* 필터는 한 줄에 억지로 넣지 않고 접어 내린다. */
@@ -409,7 +372,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   .map-canvas { height: 380px; }
   .loading { max-width: none; }
 }
-
 /* ── 매물 순위 카드 (좁은 화면) ───────────────────────
  * 표를 눕힌 게 아니라 정보 구조를 다시 짠 것이다. RankCards.jsx 주석 참조. */
 .rank-cards { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -418,7 +380,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   padding: 12px 13px; background: var(--surface-1);
 }
 .rank-card.is-deleting { opacity: 0.45; }
-
 .rc-head { display: flex; align-items: baseline; gap: 8px; }
 .rc-rank {
   flex: none; min-width: 20px; font-size: 13px; font-weight: 700;
@@ -426,16 +387,13 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 }
 .rc-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .rc-head .verdict { flex: none; font-size: 12px; }
-
 .rc-spec { margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
-
 /* 답을 가장 크게 — 호가와 괴리율 */
 .rc-answer { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 9px 0 7px; }
 .rc-ask { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .rc-gap { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .rc-gap[data-tone='good'] { color: var(--good); }
 .rc-gap[data-tone='bad'] { color: var(--critical); }
-
 .rc-basis {
   display: flex; flex-wrap: wrap; gap: 4px 14px;
   font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums;
@@ -447,10 +405,8 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 /* 안 보이는 쪽 기준. 카드에는 호버가 없으니 한 줄로 내려 적는다 — 열을 숨겼다고
    값까지 버리지는 않는다. 흐리게 둬서 지금 기준과 섞이지 않게 한다. */
 .rc-basis .rc-other { flex-basis: 100%; font-size: 11.5px; }
-
 .rc-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
 .rc-foot .ghost { padding: 5px 10px; font-size: 12px; }
-
 /* ── 요인별 보정계수 ─────────────────────────────────── */
 
 /* 300 -> 260(2단) -> 다시 300.
@@ -468,7 +424,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .factor .pbar { margin-bottom: 8px; }
 .factor .muted.small { line-height: 1.55; display: block; }
 .factor .muted.small + .muted.small { margin-top: 4px; }
-
 /* ── 요인 효과 곡선 ──────────────────────────────────── */
 
 .fcurve { position: relative; }
@@ -481,10 +436,16 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .fcurve-xlabel { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: -2px; }
 .fcurve-linear { fill: none; stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.75; }
 .lin-badge { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; letter-spacing: 0.02em; }
+/* 효과가 0 과 구분되지 않는 요인. 비선형/선형과 **다른 축**이라 색도 다르게 둔다 —
+   둘 다 '모양' 을 말하지만 이건 '있나 없나' 를 말한다. */
+.lin-badge.is-null {
+  background: var(--surface-2, var(--surface-1));
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
 .lin-badge.is-linear { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-secondary); }
 .lin-badge.is-nonlinear { background: color-mix(in srgb, var(--series-2) 20%, transparent); color: var(--series-2); }
 .factor-head { flex-wrap: wrap; }
-
 /* ── 매물 비교 ───────────────────────────────────────── */
 
 .cmp-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 16px; }
@@ -496,7 +457,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .cmp-side .field:last-child { margin-bottom: 0; }
 .cmp-side .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
 .cmp-side input, .cmp-side select { width: 100%; box-sizing: border-box; }
-
 /* A·B 표식은 카드 모서리에 붙인 배지로 — 한 줄을 차지할 내용이 아니다 */
 .cmp-tag {
   position: absolute; top: 0; left: 0; display: grid; place-items: center;
@@ -504,7 +464,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   background: var(--series-1); color: #fff; font-size: 12px; font-weight: 700;
 }
 .cmp-side.is-b .cmp-tag { background: var(--series-2); }
-
 /* 붙여넣기 — 이 화면의 기본 동선이라 맨 위에 크게 둔다 */
 .paste-box { margin-bottom: 10px; }
 .paste-box > label {
@@ -532,7 +491,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   font-weight: 700; color: var(--warning);
 }
 .paste-cands { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-
 /* 채워진 값 요약 — 접혀 있어도 상태는 항상 보여야 한다 */
 /* `:not(.is-empty)` 가 있어야 한다. `.cmp-side.is-b .cmp-summary` 쪽 특이도가
    더 높아서, 안 붙이면 빈 상태에서도 B 카드에 배경색이 남는다. */
@@ -546,14 +504,12 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 }
 .cmp-summary.is-empty { display: none; }
 .cmp-summary > b { font-size: 13.5px; }
-
 .cmp-specs { display: flex; gap: 14px; margin-top: 7px; }
 .spec { display: flex; flex-direction: column; gap: 1px; }
 .spec-label { font-size: 10.5px; letter-spacing: 0.03em; color: var(--text-muted); }
 .spec-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .spec-sub { font-size: 10.5px; color: var(--text-muted); }
 .spec.is-empty .spec-value { color: var(--text-muted); font-weight: 400; }
-
 /* 직접 입력 토글 */
 .cmp-toggle {
   display: flex; align-items: center; gap: 5px; width: 100%; margin-top: 8px;
@@ -563,19 +519,16 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .cmp-toggle:hover { color: var(--text-primary); }
 .caret { display: inline-block; transition: transform 0.15s ease; font-size: 13px; }
 .caret.open { transform: rotate(90deg); }
-
 .cmp-manual { padding-top: 6px; border-top: 1px solid var(--border); }
 .cmp-filters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
 .cmp-filters select { font-size: 12px; padding: 5px 6px; }
 .cmp-pair { display: grid; grid-template-columns: 1.1fr 0.8fr 1.3fr; gap: 8px; }
 .cmp-side select[size] { font-size: 12.5px; padding: 4px; }
-
 .cmp-actions {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 16px;
   padding-top: 14px; border-top: 1px solid var(--border);
 }
 .cmp-hint { margin-right: auto; padding-bottom: 8px; }
-
 .chip {
   font-size: 12px; padding: 4px 9px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--border); background: var(--page); color: inherit;
@@ -584,7 +537,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .chip.on { background: var(--series-1); border-color: var(--series-1); color: #fff; }
 .chip.on .muted { color: rgba(255, 255, 255, 0.75); }
 .area-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-
 .verdict-card { border-left: 4px solid var(--series-1); }
 .verdict-card.is-b { border-left-color: var(--series-2); }
 .verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -594,31 +546,8 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   background: var(--series-1); color: #fff; font-weight: 700; font-size: 13px;
 }
 .verdict-card.is-b .verdict-badge { background: var(--series-2); }
-
-/* ── 적정가 진단 카드 ─────────────────────────────────── */
-
-.fair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
-.fair-card {
-  border: 1px solid var(--border); border-left: 3px solid var(--series-1);
-  border-radius: var(--radius); padding: 13px 15px; background: var(--surface-1);
-}
 .fair-card.is-b { border-left-color: var(--series-2); }
-.fair-head { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
-.fair-head > b { font-size: 14px; margin-right: auto; }
-.fair-tag {
-  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--series-1); color: #fff; font-size: 11px; font-weight: 700;
-}
 .fair-card.is-b .fair-tag { background: var(--series-2); }
-
-.fair-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.fair-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.fair-label { font-size: 10.5px; letter-spacing: 0.03em; color: var(--text-muted); }
-.fair-value { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.fair-sub { font-size: 10.5px; color: var(--text-muted); }
-.fair-detail { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); }
-.fair-detail table { font-size: 12px; }
-
 /* 자동 계산 중 표시 — 버튼이 없으니 진행 상태가 보여야 한다 */
 .live { animation: live-pulse 1.4s ease-in-out infinite; }
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
@@ -626,7 +555,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 @media (prefers-reduced-motion: reduce) {
   .live { animation: none; }
 }
-
 /* 로딩 — 진행률이 아니라 경과 시간을 보여 준다(Loading.jsx 주석 참조) */
 .loading { padding: 28px 0 24px; max-width: 360px; margin: 0 auto; }
 .loading.is-compact { padding: 12px 0; }
@@ -659,17 +587,14 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 @media (prefers-reduced-motion: reduce) {
   .loading-bar > span { animation: none; left: 0; width: 100%; opacity: 0.5; }
 }
-
 /* 적정가 진단 실거래 표에서 '같은 동' 거래를 강조 */
 tr.is-same-dong td { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
 tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
-
 /* 그 동 자체 거래로 낸 추정치 — 단지 전체 기준값과 견주라고 나란히 둔다 */
 .own-dong {
   margin: 9px 0 0; padding: 7px 10px; border-radius: 7px; font-size: 12.5px;
   background: color-mix(in srgb, var(--series-1) 6%, transparent);
 }
-
 /* 누적 호가 — 실거래 옆에 놓고 견주는 보조 지표 */
 .quote-box {
   margin-top: 9px; padding: 8px 10px; border-radius: 7px;
@@ -679,30 +604,11 @@ tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
 .quote-table { width: 100%; font-size: 12px; }
 .quote-table td { padding: 3px 6px; border: none; }
 .quote-table tr.is-same-dong td { background: color-mix(in srgb, var(--series-1) 10%, transparent); font-weight: 600; }
-
 /* 요인별 적정가 — 매물 하나를 요인으로 분해 */
 .factor-price { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-.fp-heads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-.fp-head { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.fp-table { width: 100%; font-size: 12px; margin-top: 4px; }
-.fp-table td, .fp-table th { padding: 4px 6px; }
-.fp-table tr.fp-group td {
-  font-size: 11px; font-weight: 600; color: var(--text-muted);
-  padding-top: 9px; border-bottom: 1px solid var(--border);
-}
 .tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
-
-/* 진단 카드 간소화 — 접힌 상태는 호가 + 두 기준값만 */
-.fair-spec { margin-right: auto; }
-.fair-basis { width: 100%; font-size: 13px; }
-.fair-basis td { padding: 4px 6px; border: none; }
-.fair-basis td:first-child { color: var(--text-secondary); }
 .fair-basis td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
-.fair-basis td[data-tone='good'] { color: var(--good); }
-.fair-basis td[data-tone='bad'] { color: var(--critical); }
-.fp-lead { margin: 0 0 8px; font-size: 12.5px; }
-
 /* 값에 붙는 주석 — 호버/포커스에서만 펼친다 */
 .hint { position: relative; display: inline-block; margin-left: 4px; outline: none; }
 .hint-dot {
@@ -731,17 +637,7 @@ tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
   white-space: normal; text-align: left;
 }
 .hint-line { display: block; }
-
-/* 답을 가장 크게 — 괴리율 + 판정 */
-.fair-answer { display: flex; align-items: baseline; gap: 9px; margin: 2px 0 8px; }
-.fair-gap { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.fair-verdict { font-size: 14px; font-weight: 600; }
-.fair-answer[data-tone='good'] .fair-gap, .fair-answer[data-tone='good'] .fair-verdict { color: var(--good); }
-.fair-answer[data-tone='bad'] .fair-gap, .fair-answer[data-tone='bad'] .fair-verdict { color: var(--critical); }
-.fair-answer[data-tone='mid'] .fair-verdict { color: var(--text-secondary); }
-.fair-basis td:nth-child(2) { font-size: 14px; }
 .fair-basis td.muted { font-weight: 400; font-size: 11.5px; color: var(--text-muted); }
-
 /* 제목 옆 ⓘ 는 제목 크기에 눌리지 않게 살짝 키운다 */
 h2 .hint-dot { width: 15px; height: 15px; font-size: 10px; vertical-align: middle; }
 /* 여백 압축 — 결과가 첫 화면 안에 들어오도록 */
@@ -750,9 +646,6 @@ h2 .hint-dot { width: 15px; height: 15px; font-size: 10px; vertical-align: middl
 .paste-box { margin-bottom: 8px; }
 .cmp-summary:not(.is-empty) { padding: 8px 10px; }
 .cmp-actions { margin-top: 12px; padding-top: 11px; }
-.fair-grid { gap: 12px; margin-top: 12px; }
-.fair-card { padding: 11px 13px; }
-
 /* 외부 링크 — 매물을 찾아오는 곳 */
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .top-main { min-width: 0; }
@@ -763,7 +656,6 @@ h2 .hint-dot { width: 15px; height: 15px; font-size: 10px; vertical-align: middl
   border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
 }
 .ext-link:hover { border-color: var(--series-1); color: var(--series-1); }
-
 /* 순위표 */
 .rank-basis { display: flex; align-items: center; gap: 6px; margin: 10px 0 8px; }
 .rank-no { font-weight: 700; color: var(--text-muted); }
@@ -772,7 +664,6 @@ tr.is-top td { background: color-mix(in srgb, var(--series-1) 6%, transparent); 
 th.is-sort, td.is-sort { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
 td[data-tone='good'] { color: var(--good); font-weight: 600; }
 td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
-
 /* 여러 매물 한 번에 */
 .bulk-input {
   width: 100%; box-sizing: border-box; resize: vertical; font: inherit;
@@ -782,7 +673,6 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
   background: color-mix(in srgb, var(--series-1) 4%, transparent);
 }
 .bulk-input:focus { outline: none; border-style: solid; border-color: var(--series-1); background: var(--surface-1); }
-
 /* 여러 매물 한 번에 */
 .bulk-input {
   width: 100%; box-sizing: border-box; resize: vertical; font: inherit;
@@ -792,7 +682,6 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
   background: color-mix(in srgb, var(--series-1) 4%, transparent);
 }
 .bulk-input:focus { outline: none; border-style: solid; border-color: var(--series-1); background: var(--surface-1); }
-
 /* 요인 분해 호버 */
 .hint-pop.is-wide { max-width: 360px; }
 .fh { display: flex; flex-direction: column; gap: 8px; }
@@ -803,16 +692,19 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
 .fh-value { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .fh-pct { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fh-foot { padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-secondary); }
+/* 표본이 빠듯한 단지. 끄는 색이 아니라 **눈에 걸리는** 색이어야 한다 —
+   '적정' 판정이 중개거래 2건 위에 서 있다는 뜻이기 때문이다.
+   클래스 이름에 `fh-` 를 붙인 이유: 전역 `.is-thin` 은 향 카드가 '표본 부족'
+   을 흐리게 칠하는 데 이미 쓰고 있어서, 겹치면 정반대로 보인다. */
+.fh-foot.fh-thin { color: var(--warning); font-weight: 600; }
 .tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
 tr.is-deleting td { opacity: 0.4; }
-
 /* ── 매크로 ───────────────────────────────────────────────────────────────
    시군구 17개를 한 축에 그린다. KB 가 5개까지만 그려 주던 것을 전부 펼치는 것이
    이 탭의 요점이라, 범례가 길어지는 것은 감수하고 접지 않는다. */
 .macro-chart { width: 100%; margin-top: 10px; }
 .macro-chart svg { width: 100%; height: auto; display: block; }
-
 .macro-legend {
   display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 12px;
 }
@@ -825,18 +717,15 @@ tr.is-deleting td { opacity: 0.4; }
 .macro-key i { width: 10px; height: 3px; border-radius: 2px; flex: none; }
 /* 숨긴 지역은 지우지 않고 흐리게 둔다 — 목록에서 사라지면 다시 켤 수가 없다. */
 .macro-key.is-off { color: var(--text-muted); text-decoration: line-through; }
-
 @media (max-width: 720px) {
   .macro-legend { gap: 4px 8px; }
   .macro-key { font-size: 11px; }
 }
-
 /* 사분면 산점도 — 두 축을 겹쳐야 보이는 것을 보여 준다 */
 .quad-chart { width: 100%; margin-top: 10px; }
 .quad-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
 .quad-chart text { pointer-events: none; }
 .quad-chart g { cursor: default; }
-
 /* ── 매크로 카드 격자 ─────────────────────────────────────────────────
    시장 분석의 요인 카드(.factor)와 같은 규격을 쓴다. 전부 전폭으로 두니 그림
    하나 보려고 한참 스크롤해야 했다. 카드에는 모양만 두고 자세한 것은 창으로 띄운다. */
@@ -851,24 +740,20 @@ tr.is-deleting td { opacity: 0.4; }
 .macro-card-body > * { width: 100%; }
 .macro-card-body .empty { padding: 18px 0; }
 .macro-card .quad-chart, .macro-card .macro-chart { margin-top: 0; }
-
 .macro-mini { width: 100%; font-size: 11.5px; }
 .macro-mini td { padding: 3px 4px; border: none; }
 .macro-mini td:first-child { color: var(--text-secondary); }
 .macro-mini-gap td { text-align: center; padding: 2px 0; opacity: 0.75; }
-
 /* 설명문 툴팁 — 차트 값과 달리 줄바꿈이 필요하다 */
 .chart-tooltip.is-wide { white-space: normal; max-width: 320px; }
 .chart-tooltip.is-wide .t-row { color: var(--text-secondary); font-variant-numeric: normal; }
 .chart-tooltip .muted { color: var(--text-muted); font-weight: 400; }
-
 /* 고른 지표의 설명. 호버가 없는 터치 화면에서도 읽혀야 해서 항상 보인다. */
 .metric-note {
   margin: 12px 0 0; font-size: 12.5px; line-height: 1.6;
   color: var(--text-secondary);
   border-left: 2px solid var(--border); padding-left: 10px;
 }
-
 /* ── 매물 비고 ────────────────────────────────────────────────────────
    유닛(단지·동·평형·층)에 붙는 메모. 호가가 바뀌어도 그 줄에 남는다. */
 .col-note { min-width: 150px; }
@@ -890,10 +775,8 @@ tr.is-deleting td { opacity: 0.4; }
 .note-mark.ok { color: var(--series-1); }
 .note-mark.bad { color: var(--neg); font-weight: 700; cursor: help; }
 .note-ro { font-size: 12.5px; color: var(--text-secondary); }
-
 .rc-note { margin-top: 6px; }
 .rc-note .note-cell input { border-color: var(--border); background: var(--surface-1); }
-
 /* ── 동 정보 · 민간임대 표시 ──────────────────────────────────────────
    민간임대 동은 분양 물건과 성격이 달라 시세가 다른데 실거래가에는 그 구분이 없다.
    사람이 표시해 두면 매물 순위의 비고에 파생돼 따라붙는다. */
@@ -912,7 +795,6 @@ tr.is-deleting td { opacity: 0.4; }
   border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
   color: var(--text-primary); font-weight: 600;
 }
-
 /* ── 메모 사전 ────────────────────────────────────────────────────────
    동 버튼과 **같은 모양**을 쓴다. 하는 일이 같기 때문이다 — 목록을 한눈에 보고
    눌러서 켜고 끈다. 새 모양을 만들면 같은 동작을 두 가지로 배우게 된다.
@@ -937,11 +819,9 @@ tr.is-deleting td { opacity: 0.4; }
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
 }
 .dong-chip.is-static { cursor: default; display: inline-flex; align-items: center; gap: 5px; }
-
 .memo-unknown { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .memo-untagged { margin: 4px 0 0 16px; padding: 0; font-size: 12.5px; color: var(--text-secondary); }
 .memo-untagged li { margin-bottom: 2px; }
-
 .note-tag {
   display: inline-block; flex: none;
   font-size: 10.5px; font-weight: 600; line-height: 1.5;
@@ -950,7 +830,6 @@ tr.is-deleting td { opacity: 0.4; }
   color: var(--text-secondary);
 }
 .note-ro .note-tag { margin-right: 4px; }
-
 /* 중개사 메모 키워드. 민간임대 배지(채운 노랑)와 **다른 모양**이어야 한다 —
    저쪽은 사용자가 직접 표시한 사실이고 이쪽은 올린 사람의 말이다. 테두리만 둬서
    한눈에 "단정한 것이 아니다" 로 읽히게 한다. 이 저장소의 '추정을 사실처럼 보여
@@ -963,9 +842,7 @@ tr.is-deleting td { opacity: 0.4; }
 }
 .note-tag.is-memo.is-more { border-style: dashed; color: var(--text-muted); }
 .note-cell .note-tag.is-memo { margin-right: 3px; }
-
 .mt16 { margin-top: 16px; }
-
 /* 더 보기. 표 아래 가운데에 둔다 — 스크롤 끝에서 손이 가는 자리다. */
 .rank-more {
   display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -974,15 +851,6 @@ tr.is-deleting td { opacity: 0.4; }
 }
 .rank-more .ghost { padding: 6px 14px; }
 .is-muted td { color: var(--text-muted); }
-
-/* 향 축소판 — 네 칸 십자. 300px 안에서 눈금 원·수염·다각형을 다 그리니 선이 너무
-   많아 "뭘 보라는 거지" 가 됐다. 카드가 답할 질문은 '어느 쪽이 비싼가' 하나다. */
-.aspect-grid { grid-template-columns: minmax(260px, 420px); }
-.ac-cross {
-  display: grid; width: 100%; max-width: 300px; margin: 0 auto;
-  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px;
-  aspect-ratio: 3 / 2.1;
-}
 .acx {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: 8px; border: 1px solid var(--border); line-height: 1.35;
@@ -991,47 +859,11 @@ tr.is-deleting td { opacity: 0.4; }
 .acx span { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .acx.is-thin { border-style: dashed; }
 .acx.is-thin b, .acx.is-thin span { color: var(--text-muted); font-weight: 400; }
-.acx-북 { grid-area: 1 / 2; }
-.acx-서 { grid-area: 2 / 1; }
-.acx-동 { grid-area: 2 / 3; }
-.acx-남 { grid-area: 3 / 2; }
-/* 가운데는 기준점이라는 표시. 테두리 없이 글자만. */
-.acx-mid {
-  grid-area: 2 / 2; border: 0; font-size: 10.5px; color: var(--text-muted); text-align: center;
-}
-
-/* 향 나침반. 북이 위 — 지도와 같아야 번역 없이 읽힌다. */
-.aspect-compass { display: flex; flex-direction: column; align-items: center; margin-top: 12px; }
-.aspect-compass svg { width: 100%; max-width: 400px; height: auto; }
-.ac-grid { fill: none; stroke: var(--grid); stroke-width: 1; }
-/* 0 원 = 그 단지·평형의 보통 호가. 그림의 기준선이라 눈에 띄어야 한다. */
-.ac-zero { fill: none; stroke: var(--axis); stroke-width: 1.5; stroke-dasharray: 4 3; }
-.ac-axis { stroke: var(--grid); stroke-width: 1; }
 .ac-axis.is-thin { stroke-dasharray: 2 4; }
-.ac-area { fill: color-mix(in srgb, var(--series-1) 18%, transparent); stroke: var(--series-1); stroke-width: 1.5; }
-/* 95% 구간. 이 선이 0 원을 넘나들면 아직 못 가른다 — 그림의 핵심이라 굵게. */
-/* 0 원을 넘나드는지가 이 그림의 핵심이라 흐리면 안 된다. 0.45 로 뒀더니
-   면 위에서 거의 안 보였다. */
-.ac-whisker { stroke: var(--series-1); stroke-width: 3.5; stroke-linecap: round; opacity: 0.7; }
-.ac-dot { fill: var(--surface-1); stroke: var(--series-1); stroke-width: 2.5; }
 .ac-dot.is-sig { fill: var(--series-1); }
-.ac-name { font-size: 13px; font-weight: 700; fill: var(--text-primary); }
-.ac-val { font-size: 11.5px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .is-thin .ac-name, .is-thin .ac-val { fill: var(--text-muted); font-weight: 400; }
-.ac-legend { margin-top: 6px; text-align: center; max-width: 440px; line-height: 1.6; }
-
-/* 향 막대. 0 을 가운데 두고 좌우로 — 칸 중위 대비라 음수가 나온다. */
-.aspect-bars { margin-top: 12px; }
-.ab-row { display: grid; grid-template-columns: 48px 1fr 72px 96px; align-items: center; gap: 10px; padding: 3px 0; }
-.ab-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.ab-track { position: relative; height: 16px; }
-.ab-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
-.ab-fill { position: absolute; top: 3px; height: 10px; min-width: 2px; }
 .ab-fill.pos { background: var(--series-1); border-radius: 0 3px 3px 0; }
 .ab-fill.neg { background: var(--neg); border-radius: 3px 0 0 3px; }
-.ab-value { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.ab-n { text-align: right; }
-
 /* 정렬 가능한 머리말. 모든 머리말에 흐린 화살표를 깔면 표가 온통 화살표가 되고
    정작 어디로 정렬됐는지가 안 보인다 — 점선 밑줄로 '누를 수 있다' 만 알리고 화살표는
    지금 정렬 중인 열에만 띄운다. */
@@ -1044,14 +876,11 @@ tr.is-deleting td { opacity: 0.4; }
 .th-sort.on { color: var(--text-primary); font-weight: 700; border-bottom-color: transparent; }
 .th-arrow { font-style: normal; font-size: 9px; color: var(--series-1); }
 .num .th-sort { justify-content: flex-end; }
-
 /* Ctrl(⌘)+클릭으로 좁힐 수 있는 값. 평소에는 표시하지 않는다 — 수식키를 눌러야
    동작하는 것에 늘 밑줄을 그으면 그냥 눌러도 되는 줄 안다. 호버에서만 알린다. */
 .scopable { cursor: pointer; }
 .scopable:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
-
 .aspect { white-space: nowrap; font-size: 12.5px; color: var(--text-secondary); }
-
 /* 한 단지만 보는 중. 좁혀 놓은 것을 모르면 '매물이 왜 이것뿐이지' 가 된다 —
    해제하는 길을 같은 줄에 둔다. */
 .only-complex {
@@ -1060,7 +889,6 @@ tr.is-deleting td { opacity: 0.4; }
   background: color-mix(in srgb, var(--series-1) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--series-1) 30%, var(--border));
 }
-
 /* ── 메모 키워드로 빼기 ──────────────────────────────────────────────
    누르면 **숨긴다**. 그래서 켜진 모양이 아니라 '지워진' 모양(취소선)이다 —
    칩이 밝아지면 '이것만 보기' 로 읽히는데 하는 일은 정반대다. */
@@ -1091,7 +919,6 @@ tr.is-deleting td { opacity: 0.4; }
 .tf-clear { margin-left: 4px; font-size: 12px; }
 /* 번호를 다시 매겼다는 표시. 숫자를 바꿔 놓고 아무 말이 없으면 전체 순위로 읽힌다. */
 .rank-was { font-style: normal; color: var(--text-muted); font-size: 10px; vertical-align: super; }
-
 /* ── 단지 고르기 ──────────────────────────────────────────────────────
    같은 이름이 여럿이라 자동으로 못 고른 매물. 버리지 않고 고르게 한다.
    칩이 아니라 **카드**인 이유: 시군구만으로는 못 고르고(현대는 수원 장안구에만
@@ -1123,11 +950,9 @@ tr.is-deleting td { opacity: 0.4; }
 .uc-meta b { color: var(--text-secondary); }
 .uc-meta b.none { color: var(--neg); }
 .uc-dongs { font-variant-numeric: tabular-nums; }
-
 /* 붙여넣기 단축 — 북마클릿으로 담은 뒤 창만 바꾸면 끝나게 한다 */
 .bulk-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 8px; }
 .bulk-actions .muted.small { line-height: 1.5; }
-
 /* ── 그림 읽는 법 ─────────────────────────────────────────────────────
    접어 둔다. 늘 펼쳐 두면 정작 그림이 아래로 밀린다. */
 /* 매크로 막대 목록 — 값이 하나뿐인 지표(표본 두께·가격 편차)에 쓴다.
@@ -1161,7 +986,6 @@ tr.is-deleting td { opacity: 0.4; }
 .mbars.compact .mbar-row { grid-template-columns: 1fr; gap: 0; padding: 1px 0; }
 .mbars.compact .mbar-track { height: 7px; }
 .mbars.compact .mbar-fill { top: 1px; height: 5px; }
-
 .chart-guide { margin: 8px 0 4px; }
 .guide-toggle { font-size: 12.5px; }
 .guide-body {
@@ -1183,7 +1007,6 @@ tr.is-deleting td { opacity: 0.4; }
 .guide-tips { margin: 10px 0 0 16px; padding: 0; color: var(--text-secondary); }
 .guide-tips li { margin-bottom: 5px; }
 .guide-caveat { margin: 10px 0 0; color: var(--text-muted); }
-
 @media (max-width: 720px) {
   .guide-quad li { display: block; }
   .guide-quad b { display: block; min-width: 0; margin-bottom: 1px; }

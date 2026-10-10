@@ -35,6 +35,32 @@ from app.db import SessionLocal, engine  # noqa: E402
 from app.models import Base, Complex, Trade  # noqa: E402
 
 
+def _pending_followups(db) -> list[tuple[str, int, str]]:
+    """좌표·도보경로·입지가 빈 단지를 센다. 순서대로 돌려야 한다."""
+    from app.models import ComplexAmenity
+
+    out = []
+    n = db.scalar(
+        select(func.count()).select_from(Complex).where(Complex.lat.is_(None))
+    ) or 0
+    if n:
+        out.append(("scripts.geocode", n, "좌표"))
+    n = db.scalar(
+        select(func.count()).select_from(Complex)
+        .where(Complex.lat.isnot(None), Complex.walk_seconds.is_(None))
+    ) or 0
+    if n:
+        out.append(("scripts.route_walk", n, "도보경로"))
+    n = db.scalar(
+        select(func.count()).select_from(Complex)
+        .where(Complex.lat.isnot(None))
+        .where(~Complex.id.in_(select(ComplexAmenity.complex_id)))
+    ) or 0
+    if n:
+        out.append(("scripts.ingest_amenity", n, "주변 입지"))
+    return out
+
+
 def month_range(months: int) -> list[str]:
     today = date.today()
     out = []
@@ -157,7 +183,7 @@ def ingest(
         # (아직 flush 전이라 select 에 안 보인다). 국토부 응답에는 같은 날·같은 면적·
         # 같은 층·같은 금액 거래가 실제로 들어온다(동이 다른 경우).
         seen: set = set()
-        inserted = skipped = failed_months = filled = 0
+        inserted = skipped = failed_months = filled = stale = 0
 
         # 이미 적재된 (구, 월) 조합. 같은 달을 매번 다시 내려받지 않기 위한 캐시.
         done = {
@@ -184,6 +210,8 @@ def ingest(
                     print(f"  [{DISTRICTS.get(lawd, lawd)} {ym}] 실패: {exc}")
                     continue
 
+                month_keys: set = set()
+
                 for raw in rows:
                     cx = get_or_create_complex(db, raw, cache, fuzzy_log)
                     deal_date = date(raw.deal_year, raw.deal_month, raw.deal_day)
@@ -191,6 +219,7 @@ def ingest(
                     nat_key = (
                         cx.id, deal_date, raw.exclusive_area, raw.floor, raw.deal_amount
                     )
+                    month_keys.add(nat_key)
                     if nat_key in seen:
                         skipped += 1
                         continue
@@ -231,6 +260,34 @@ def ingest(
                     )
                     inserted += 1
 
+                # 적재한 뒤에 **해제된** 거래를 센다.
+                #
+                # `cdealType == "O"`(계약 해제)는 받는 시점에만 걸러진다. 적재한
+                # 다음에 해제되면 국토부는 그 거래를 더 이상 돌려주지 않지만 우리
+                # DB 에는 남는다. 실측으로 11.8만 건 중 111건(0.09%)이 그랬다.
+                #
+                # **지우지는 않는다.** API 가 일시적으로 비면 멀쩡한 거래를 통째로
+                # 날리게 된다 — 공공 API 가 그러는 것을 이 저장소에서 이미 겪었다
+                # (K-apt 일시 오류로 시군구 6곳이 빠졌다). 대신 센다. 문제는 크기가
+                # 아니라 **조용히 자란다**는 것이라, 숫자가 찍히기만 해도 된다.
+                #
+                # 응답이 비어 있으면 세지 않는다. 그 경우 '전부 해제됐다' 가 아니라
+                # '못 받았다' 일 가능성이 높다.
+                if rows:
+                    have = db.execute(
+                        select(
+                            Trade.complex_id, Trade.deal_date, Trade.exclusive_area,
+                            Trade.floor, Trade.deal_amount,
+                        )
+                        .join(Complex, Complex.id == Trade.complex_id)
+                        .where(Complex.sgg_cd == lawd)
+                        .where(Trade.deal_ym == f"{ym[:4]}-{ym[4:]}")
+                        .where(Trade.source == "molit")
+                    ).all()
+                    gone = [k for k in have if tuple(k) not in month_keys]
+                    if gone:
+                        stale += len(gone)
+
                 # 한 달치가 실패해도 24개월 × 4개 구 작업 전체를 버리지 않는다.
                 try:
                     db.commit()
@@ -247,6 +304,26 @@ def ingest(
         tail = f" / 커밋 실패한 달 {failed_months}개" if failed_months else ""
         fill = f" / 거래유형 채움 {filled}건" if filled else ""
         print(f"\n적재 완료: 신규 {inserted}건 / 중복 {skipped}건{fill}{tail}")
+        # 새 단지가 생기면 **좌표·도보경로·입지가 비어 있다.** 실거래 적재만 돌리고
+        # 끝내면 그 단지들은 모델에서 조용히 빠지거나(도보 결측) 결측 표시자로
+        # 넘어간다. 실제로 그랬다 — 직거래 백필이 신규 거래 938건을 넣으며 단지
+        # 3곳이 생겼는데, 단지 수 2,472 vs 입지 2,469 를 **세어 보고서야** 알았다.
+        #
+        # 순서가 있다: 좌표(geocode) → 도보경로(route_walk) → 입지(ingest_amenity).
+        # `ingest_amenity` 는 좌표 없는 단지를 건너뛰므로 먼저 돌리면 아무 일도
+        # 일어나지 않는다(그것도 조용하다).
+        need = _pending_followups(db)
+        if need:
+            print("\n[!] 뒤따라 돌려야 할 적재가 있습니다:")
+            for cmd, n, what in need:
+                print(f"    python -m {cmd:<24} # {what} 없는 단지 {n}곳")
+
+        if stale:
+            print(
+                f"\n[!] 국토부가 더 이상 돌려주지 않는 거래 {stale}건이 DB 에 있습니다. "
+                f"적재 후 계약이 해제된 건들로 보입니다 — 지우지는 않았습니다. "
+                f"(비율이 커지면 해제분 반영이 필요합니다)"
+            )
 
         if fuzzy_log:
             print(f"\n이름이 비슷하지만 **합치지 않은** 단지 {len(fuzzy_log)}건 (참고용)")

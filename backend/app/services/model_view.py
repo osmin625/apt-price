@@ -328,6 +328,9 @@ def map_payload(db, fit: dict) -> dict:
                 "sgg_name": cx.sgg_name,
                 "build_year": cx.build_year,
                 "trade_count": n,
+                "market_count": (
+                    int(row["market_count"]) if "market_count" in row else None
+                ),
                 "ppp": round(float(row["ppp_median"]), 1),
                 "normalized_ppp": round(math.exp(float(row["alpha"])), 1),
                 "predicted_ppp": (
@@ -597,6 +600,12 @@ def _factor(
             "verdict": lin.get("verdict"),
             "p": lin.get("p"),
             "note": lin.get("note"),
+            # 요인 **전체**가 0 인지. 비선형 여부와 다른 축이고, 화면은 이쪽을
+            # 먼저 읽어야 한다 — 효과가 없는 요인에 '선형' 배지를 달면
+            # '직선으로 움직인다' 로 읽힌다.
+            "joint_p": lin.get("joint_p"),
+            "significant": lin.get("significant"),
+            "joint_note": lin.get("joint_note"),
         }
         # 비선형항을 뺀 제약 모델의 직선. 곡선과 겹쳐 그려 굽은 정도를 보여 준다.
         lc = lin.get("linear_coef")
@@ -1093,6 +1102,12 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
         "market_price": round(market_ppp * pyeong),
         # 요인으로 설명되지 않고 그 단지에 붙어 있는 값. 축소(shrinkage)한 잔차다.
         "complex_premium_pct": resid.get(cid, {}).get("residual_shrunk_pct"),
+        # 이 단지의 시세가 **몇 건의 중개거래에 얹혀 있는지**. 직거래는 Stage 1 에서
+        # 할인을 걷어내지만 단지 수준을 관측해 주지는 않으므로, 둘을 갈라서 보인다.
+        "trade_count": int(row["trade_count"]) if "trade_count" in row else None,
+        "market_count": (
+            int(row["market_count"]) if "market_count" in row else None
+        ),
         "unit_parts": parts,
         "complex_parts": complex_parts,
         "reference": fit["stage1"].get("reference"),
@@ -1233,6 +1248,9 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
             "predicted_alpha": resid.get(cid, {}).get("predicted_alpha"),
             "residual_pct": resid.get(cid, {}).get("residual_shrunk_pct"),
             "trade_count": int(row["trade_count"]),
+            "market_count": (
+                int(row["market_count"]) if "market_count" in row else None
+            ),
             "asking_price": asking,
             "asking_ppp": (
                 round(pricing.price_per_pyeong(asking, area), 1) if asking else None

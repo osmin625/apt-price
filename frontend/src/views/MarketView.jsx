@@ -155,7 +155,17 @@ function FactorPanel({ months }) {
               ) : (
                 <strong>{f.label}</strong>
               )}
-              {f.linearity?.testable && (
+              {/* 검출 여부가 먼저다. 효과가 0 과 구분되지 않는 요인에 '선형' 배지를
+                  달면 '직선으로 움직인다' 로 읽힌다 — 움직이지 않는 것인데. */}
+              {f.linearity?.significant === false && (
+                <span
+                  className="lin-badge is-null"
+                  title={f.linearity.joint_note}
+                >
+                  검출 안 됨
+                </span>
+              )}
+              {f.linearity?.testable && f.linearity?.significant !== false && (
                 <span
                   className={`lin-badge ${f.linearity.nonlinear ? 'is-nonlinear' : 'is-linear'}`}
                   title={`${f.linearity.note} (p=${f.linearity.p})`}
@@ -167,11 +177,10 @@ function FactorPanel({ months }) {
             </div>
             {/* 연속 요인은 곡선으로 — 로그·2차항·스플라인의 굽은 모양은
                 대표 지점 막대만으로는 보이지 않는다. 범주형(층·노선)은 막대. */}
-            {f.unresolved ? (
-              <p className="paste-warn" style={{ paddingLeft: 0 }}>
-                {f.unresolved}
-              </p>
-            ) : f.curve ? (
+            {/* `f.unresolved` 분기가 있었다. 동 위치 카드가 '검출되지 않았습니다'
+                를 띄우던 자리인데, 그 카드를 뺀 뒤로 백엔드가 이 필드를 보내지
+                않는다. 죽은 분기는 다음 사람이 '이런 상태가 있나' 하고 찾게 만든다. */}
+            {f.curve ? (
               <FactorCurve
                 curve={f.curve}
                 linearCurve={f.linear_curve}
@@ -191,7 +200,14 @@ function FactorPanel({ months }) {
                 {f.per_unit.se_pct ? ` (SE ${fmt(f.per_unit.se_pct, 2)}%p)` : ''}
               </div>
             )}
-            {f.linearity?.testable && (
+            {f.linearity?.significant === false && (
+              <div className="paste-warn" style={{ paddingLeft: 0 }}>
+                이 요인 전체가 0 이라는 가설을 기각하지 못했습니다 (p=
+                {f.linearity.joint_p}). 이 표본에서는 <b>효과가 검출되지 않았습니다</b> —
+                곡선의 모양을 그대로 믿으면 안 됩니다.
+              </div>
+            )}
+            {f.linearity?.testable && f.linearity?.significant !== false && (
               <div className="muted small">
                 <b>{f.linearity.nonlinear ? '비선형' : '선형'}</b> (p={f.linearity.p}).{' '}
                 {f.linearity.note}

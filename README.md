@@ -12,9 +12,12 @@
 
 | 문서 | 무엇이 있나 | 언제 보나 |
 |---|---|---|
-| [docs/design.md](docs/design.md) | 화면·기능 설계 결정, 왜 그렇게 만들었나 | 동작을 바꾸기 전에 |
+| [docs/design.md](docs/design.md) | 화면·기능이 지금 어떻게 되어 있고 왜 그런가 | 동작을 바꾸기 전에 |
+| [docs/ui-log.md](docs/ui-log.md) | 화면을 바꾸며 무엇을 시도하고 버렸나 | 같은 자리를 또 건드리기 전에 |
 | [docs/model.md](docs/model.md) | 2단계 헤도닉 회귀와 비교표본 방식의 수식 | 숫자가 어떻게 나오는지 알아야 할 때 |
+| [docs/factors.md](docs/factors.md) | 모델에 어떤 요인이 왜 들어 있나 | 요인을 더하거나 뺄 때 |
 | [docs/data.md](docs/data.md) | 공공 API 적재, 파싱 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
+| [docs/reb.md](docs/reb.md) | 한국부동산원 공표 통계 (거시 탭) | 공표 통계를 건드릴 때 |
 | [docs/architecture.md](docs/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
 | [docs/performance.md](docs/performance.md) | 느린 곳을 찾아 고친 기록 | 다시 느려졌을 때 |
 | [docs/deploy.md](docs/deploy.md) | 결과를 정적 사이트로 내보내 올리는 방법 | 로컬 밖에서 보게 할 때 |
@@ -35,9 +38,9 @@ cd ../frontend && npm install && npm run dev
 [docs/data.md](docs/data.md) 에 있다. 키가 없어도 막히지는 않는다 — TMap 키가 없으면
 도보거리는 직선×1.25 추정치로, 카카오 키가 없으면 단지에 저장된 역거리로 폴백한다.
 
-## 매크로 — 바깥 기준
+## 거시 분석 — 바깥 기준
 
-다른 탭은 전부 우리 모델이 낸 값이다. **매크로 탭만 한국부동산원 공표 통계**다.
+다른 탭은 전부 우리 모델이 낸 값이다. **거시 분석 탭만 한국부동산원 공표 통계**다.
 경기 남부 17개 시군구의 아파트 매매·전세 가격지수, 전세가율, 평당/평균/중위
 매매가격을 월 단위로 한 화면에 놓는다.
 
@@ -66,7 +69,7 @@ python -m scripts.ingest_reb     # 적재 (16,452행 · 2012-01~)
 cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 ```
 
-내보내면 시장 분석과 매물 순위가 파이썬 없이 열린다. 매물 분석은 붙여넣은 텍스트를
+내보내면 미시 분석과 매물 순위가 파이썬 없이 열린다. 매물 관리는 붙여넣은 텍스트를
 그 자리에서 평가하므로 정적으로는 성립하지 않는다.
 
 **지도 탭은 기본으로 꺼져 있다.** 데이터는 늘 내보내지만, 카카오 JS 키가 공개 번들에

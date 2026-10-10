@@ -53,8 +53,36 @@ RADIUS_SCHOOL = 1500    # 학교를 찾는 반경
 DIST_CAP = 1500.0       # 반경 안에 학교가 없을 때 넣는 값
 
 # 경기 남부 좌표 범위. 경도/위도를 바꿔 넣으면 여기서 걸린다.
+#
+# 넉넉히 잡되 **뒤집힌 좌표는 반드시 걸리게** 둔다. 경기 남부는 경도 126~127 대,
+# 위도 36~37 대라 뒤집으면 경도가 37 이 되어 상한(127.6)을 넘는다.
 LNG_RANGE = (126.5, 127.6)
 LAT_RANGE = (36.9, 37.7)
+
+
+def is_fatal(exc: Exception) -> bool:
+    """더 돌려도 소용없는 오류인가 — 활용신청 미승인·일일 한도.
+
+    문자열로 가린다. 메시지를 고치면 이 판정이 조용히 틀어지므로
+    `scripts/verify_guard.py` 가 실제 메시지로 시험한다.
+    """
+    t = str(exc)
+    return "활용신청" in t or "한도" in t
+
+
+def out_of_range(lng: float, lat: float) -> bool:
+    """좌표가 경기 남부 밖인가.
+
+    `cx`/`cy` 를 바꿔 넣으면 한국 밖을 찾아 **0건**이 오는데, 그건 오류가 아니라
+    빈 결과라 조용히 지나간다. 적재 전에 전수로 거른다.
+
+    함수로 뺀 이유는 **시험하기 위해서**다(`scripts/verify_guard.py`). 검사를 넣어
+    놓고 걸리는 것을 본 적이 없으면 없는 것과 같다 — verify_absorb 에서 한 번 그랬다.
+    """
+    return not (
+        LNG_RANGE[0] <= float(lng) <= LNG_RANGE[1]
+        and LAT_RANGE[0] <= float(lat) <= LAT_RANGE[1]
+    )
 
 
 def _dist_m(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
@@ -172,9 +200,7 @@ def main() -> int:
         return 0
 
     # 좌표가 뒤집혀 들어오면 한국 밖을 찾아 0건이 오고, 그건 오류가 아니라 빈 결과다.
-    bad = [c for c in todo
-           if not (LNG_RANGE[0] <= float(c.lng) <= LNG_RANGE[1])
-           or not (LAT_RANGE[0] <= float(c.lat) <= LAT_RANGE[1])]
+    bad = [c for c in todo if out_of_range(c.lng, c.lat)]
     if bad:
         print(f"[X] 좌표가 경기 남부 범위 밖인 단지 {len(bad)}곳 — 적재를 멈춥니다.")
         for c in bad[:10]:
@@ -192,7 +218,7 @@ def main() -> int:
                 rec = collect_one(cx, client)
             except sdsc.SdscError as exc:
                 # 키·한도 문제면 더 돌려도 소용없다. 멈추고 사람에게 말한다.
-                if "활용신청" in str(exc) or "한도" in str(exc):
+                if is_fatal(exc):
                     print(f"[X] {exc}")
                     db.commit()
                     return 1
