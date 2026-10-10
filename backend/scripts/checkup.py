@@ -167,6 +167,10 @@ def check_fresh(rep: Report, today: dt.date) -> None:
 # ──────────────────────────────────────────────────────────
 def dead_css() -> tuple[int, int, list[str]]:
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    # **주석을 먼저 벗긴다.** 안 그러면 규칙은 이미 지웠는데 설명 주석에만 남은
+    # 이름이 '죽은 클래스' 로 영영 잡힌다. z-index 사다리 주석이 `.map-dock`·
+    # `.chart-tooltip` 을 언급하는데, 그중 `.map-dock` 은 규칙이 없다.
+    css = re.sub(r"/\*.*?\*/", " ", css, flags=re.S)
     # 상태 접두사(is-/has-)는 템플릿 문자열로 붙이는 일이 많아 뺀다.
     names = {c for c in re.findall(r"\.([a-zA-Z][\w-]*)", css)
              if not c.startswith(("hover", "focus", "active", "is-", "has-"))}
