@@ -442,3 +442,52 @@ class DongTag(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ComplexAmenity(Base):
+    """단지 주변 입지. 단지당 한 줄.
+
+    ## 무엇을 담나
+
+    모델에 실제로 들어가는 네 가지만 담는다. 처음에는 열 가지를 모았지만(음식점·
+    소매·의원·숙박·오락·주점·대형마트…), 교차검증으로 하나씩 가려 보니 **학교 거리와
+    학원 수 위에 아무것도 더하지 못했다.** 자세한 경과는 docs/model.md 에 있다.
+
+    - `elem_dist_m`·`mid_dist_m` — 가장 가까운 초·중학교까지 직선거리. 반경 안에
+      없으면 상한값(1500)을 넣는다. NULL 로 두면 그 단지가 적합에서 통째로 빠지는데,
+      그러면 '학교가 먼 단지' 만 골라 버리는 셈이 된다.
+    - `academy_500` — 반경 500m 교육 업종 수(학원·교습소)
+    - `adult_500` — 반경 500m 일반유흥주점·무도유흥주점 수
+
+    ## 왜 원자료를 안 남기나
+
+    반경 500m 상가는 단지당 중위 511건, 많게는 2,981건이다. 2,469곳이면 백만 행이
+    넘는데, 우리가 쓰는 것은 집계값 네 개다. 다시 세고 싶으면 적재를 다시 돌리는 쪽이
+    싸다(전체 15분).
+
+    ## 갱신
+
+    상가 데이터는 분기마다 바뀌고 학교는 거의 안 바뀐다. `collected_at` 을 보고
+    오래된 것부터 다시 돌린다. 거래 가격은 수시로 들어오지만 이 값은 단지의 성질이라
+    자주 받을 이유가 없다.
+    """
+
+    __tablename__ = "complex_amenities"
+
+    complex_id: Mapped[int] = mapped_column(
+        ForeignKey("complexes.id"), primary_key=True
+    )
+
+    elem_dist_m: Mapped[float | None] = mapped_column(Float)
+    mid_dist_m: Mapped[float | None] = mapped_column(Float)
+    academy_500: Mapped[int | None] = mapped_column(Integer)
+    adult_500: Mapped[int | None] = mapped_column(Integer)
+
+    # 받은 상가 총건수. 0 이면 '그 동네에 가게가 없다' 가 아니라 **좌표나 호출이
+    # 잘못된 것**일 가능성이 높다 — 실측 최소가 3건이었다. 검사에 쓴다.
+    store_count: Mapped[int | None] = mapped_column(Integer)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    complex: Mapped[Complex] = relationship()

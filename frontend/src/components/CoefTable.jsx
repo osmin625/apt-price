@@ -9,7 +9,14 @@ const UNIT = {
   gangnam_min: '1분당',
   age: '1년당',
   top_floor: '1층당',
+  // 거리는 1m 당으로 쓰면 '-0.014%' 가 되어 읽히지 않는다. 100m 로 환산한다.
+  elem_dist: '100m당',
+  mid_dist: '100m당',
+  academy: '1개당',
+  adult: '1곳당',
 }
+// 100m 로 읽는 변수. 계수에 곱할 배수다.
+const UNIT_MULT = { elem_dist: 100, mid_dist: 100 }
 
 /**
  * 계수표 — 44개를 평평하게 늘어놓지 않는다.
@@ -68,7 +75,8 @@ export default function CoefTable({ fit }) {
     // 'age 면 년, 아니면 분' 으로 두었다가 단지 최고층을 넣는 순간 "1분당 1.40%"
     // 가 됐다. 단위는 변수마다 적어 둔다 — 모르는 변수는 '1단위당' 으로 둔다.
     const unit = UNIT[g.varName] || '1단위당'
-    return `${unit} ${fmt((Math.exp(c) - 1) * 100, 2)}%`
+    const mult = UNIT_MULT[g.varName] || 1
+    return `${unit} ${fmt((Math.exp(c * mult) - 1) * 100, 2)}%`
   }
 
   return (

@@ -17,6 +17,7 @@ backend/
     clients/molit.py        국토교통부 실거래가 API
     clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
     clients/tmap.py         보행자 경로안내
+    clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
     routers/                complexes / analysis / listings / model / map
   scripts/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
@@ -25,6 +26,7 @@ backend/
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)
     ingest_trades.py        실거래 적재
     geocode.py              좌표·역거리 채우기
+    ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
   src/views/                시장 분석 / 단지 상세 / 매물 분석 / 매물 순위 / 지도 / 분해 모델
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선

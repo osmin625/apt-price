@@ -427,6 +427,14 @@ FACTOR_REF = {
     # 단지 최고층. 15층이 기준인 이유: 중위가 18층인데, 15층은 '구축 중층 단지' 의
     # 전형이라 '거기서 몇 층 더 높으면 얼마' 로 읽기 쉽다.
     "top_floor": 15.0,
+    # 주변 입지. 기준은 전부 **중위 근처의 읽기 쉬운 값**으로 잡았다.
+    # (실측 중위: 초등 314m · 중등 506m · 학원 44개 · 유흥주점 0개)
+    "elem_dist": 300.0,
+    "mid_dist": 500.0,
+    "academy": 50.0,
+    # 유흥주점은 2,469곳 중 1,409곳이 0개다. 기준을 중위(0)로 두면 '없는 상태'가
+    # 기준이 되어 '한 곳 생기면 몇 %' 로 읽힌다.
+    "adult": 0.0,
 }
 _AREA_POINTS = [(39, "39㎡"), (49, "49㎡"), (59, "59㎡"), (74, "74㎡"),
                 (84, "84㎡"), (101, "101㎡"), (114, "114㎡"), (135, "135㎡")]
@@ -443,6 +451,14 @@ _BRAND_LABEL = {"기타브랜드": "기타 브랜드"}
 
 _TOPFLOOR_POINTS = [(5, "5층"), (10, "10층"), (15, "15층"), (20, "20층"),
                     (25, "25층"), (30, "30층"), (40, "40층")]
+_ELEM_POINTS = [(80, "80m"), (150, "150m"), (300, "300m"), (500, "500m"),
+                (800, "800m"), (1200, "1200m"), (1500, "1500m+")]
+_MID_POINTS = [(150, "150m"), (300, "300m"), (500, "500m"), (800, "800m"),
+               (1200, "1200m"), (1500, "1500m+")]
+_ACADEMY_POINTS = [(5, "5개"), (15, "15개"), (30, "30개"), (50, "50개"),
+                   (80, "80개"), (150, "150개"), (300, "300개")]
+_ADULT_POINTS = [(0, "없음"), (2, "2곳"), (5, "5곳"), (10, "10곳"),
+                 (25, "25곳"), (60, "60곳")]
 
 # 연속 요인은 대표 지점(막대)뿐 아니라 **조밀한 곡선**으로도 보낸다.
 # 막대만 보면 log·2차항·스플라인의 굽은 모양이 보이지 않는다.
@@ -458,12 +474,18 @@ _CURVE_RANGE = {
     "age": (0.0, 45.0),
     "households": (100.0, 3500.0),
     "top_floor": (5.0, 40.0),
+    "elem_dist": (60.0, 1500.0),
+    "mid_dist": (100.0, 1500.0),
+    "academy": (0.0, 300.0),
+    "adult": (0.0, 60.0),
 }
 # 요인 키 → 적합이 쓰는 분포 이름
 _RANGE_VAR = {
     "area": "area_m2", "walk": "walk_min", "gangnam": "gangnam_min",
     "age": "age", "households": "households",
     "top_floor": "top_floor",
+    "elem_dist": "elem_dist", "mid_dist": "mid_dist",
+    "academy": "academy", "adult": "adult",
 }
 _CURVE_N = 120
 
@@ -724,6 +746,25 @@ def factor_payload(fit: dict) -> dict:
          "다른 것으로, 용적률·조망·시공 시기가 함께 들어온다. 세대수와도 겹치지 "
          "않는다 — 1,000세대가 10동 10층일 수도 2동 30층일 수도 있다.",
          lambda x: x),
+        ("elem_dist", "elem_dist", "초등학교까지", "m", "가장 가까운 초등학교(m)",
+         FACTOR_REF["elem_dist"], _ELEM_POINTS,
+         "직선거리다. 길을 건너는지는 보지 않는다 — '초품아' 라고 부르는 것의 핵심은 "
+         "큰길을 안 건너는 것인데, 그건 도로 데이터가 있어야 잰다. 반경 1.5km 안에 "
+         "없으면 1500m 로 본다.", lambda x: x),
+        ("mid_dist", "mid_dist", "중학교까지", "m", "가장 가까운 중학교(m)",
+         FACTOR_REF["mid_dist"], _MID_POINTS,
+         "중학교는 배정 단위가 넓어 거리보다 학군이 중요하지만, 통학구역 자료 없이 "
+         "잴 수 있는 것은 거리까지다.", lambda x: x),
+        ("academy", "academy", "학원 수", "개", "학원·교습소(500m)",
+         FACTOR_REF["academy"], _ACADEMY_POINTS,
+         "소상공인 상가정보의 '교육' 업종이다. 학원가가 가까우면 비싸다는 것인데, "
+         "학원이 비싼 동네를 따라가는 면도 있어 인과로 읽으면 안 된다. 법정동 "
+         "고정효과를 넣어도 남는 값이다.", lambda x: x),
+        ("adult", "adult", "유흥주점", "곳", "유흥주점·무도유흥(500m)",
+         FACTOR_REF["adult"], _ADULT_POINTS,
+         "식품위생법상 '일반유흥주점·무도유흥주점' 이다. 요리주점·생맥주 같은 "
+         "일반 술집은 여기 안 들어간다 — 둘을 섞어서 재면 효과가 사라진다. "
+         "단지 57%가 0곳이라 분위 매듭이 겹쳐 직선으로만 들어간다.", lambda x: x),
     ]
     for key, var, label, unit, xlab, ref, points, note, fx in plan:
         cs = coefs_of(var)
@@ -731,10 +772,23 @@ def factor_payload(fit: dict) -> dict:
             continue
         pu = None
         t = lin.get(var, {})
+        # 매듭이 없어 **직선으로만** 들어간 요인은 비선형 검정 자체가 없다(검정할
+        # 비선형항이 없으니). 그러면 `linear_coef` 도 없어서 '1곳당 몇 %' 가
+        # 사라진다 — 유흥주점이 그랬다(2,469곳 중 1,409곳이 0곳이라 분위 매듭이
+        # 전부 0 에 겹쳐 없어진다). 그 경우 **계수가 곧 선형계수**이므로 그대로 쓴다.
+        if t.get("linear_coef") is None and len(cs) == 1:
+            head = terms.get(sterms[var][0])
+            if head:
+                t = {**t, "linear_coef": head["coef"], "linear_se": head.get("se")}
         if t.get("linear_coef") is not None:
-            mult = math.log(2) if key == "households" else 1.0
+            # '1m 당 -0.014%' 는 읽을 수 없다. 거리는 100m, 세대수는 2배로 읽는다.
+            mult, label_ = (
+                (math.log(2), "세대수 2배당") if key == "households"
+                else (100.0, "100m당") if unit == "m"
+                else (1.0, f"1{unit}당")
+            )
             pu = _per_unit(
-                "세대수 2배당" if key == "households" else f"1{unit}당",
+                label_,
                 t["linear_coef"] * mult,
                 (t.get("linear_se") or 0) * mult or None,
             )
@@ -809,7 +863,9 @@ def factor_payload(fit: dict) -> dict:
             f"전용 {FACTOR_REF['area_m2']:.0f}㎡ · 중층 · 최신월 · "
             f"도보 {FACTOR_REF['walk_min']:.0f}분 · 강남 {FACTOR_REF['gangnam_min']:.0f}분 · "
             f"연식 {FACTOR_REF['age']:.0f}년 · {FACTOR_REF['households']:.0f}세대 · "
-            f"최고 {FACTOR_REF['top_floor']:.0f}층 · 브랜드 없음"
+            f"최고 {FACTOR_REF['top_floor']:.0f}층 · 브랜드 없음 · "
+            f"초등 {FACTOR_REF['elem_dist']:.0f}m · 중등 {FACTOR_REF['mid_dist']:.0f}m · "
+            f"학원 {FACTOR_REF['academy']:.0f}개 · 유흥주점 없음"
         ),
         "note": (
             "각 요인을 기준값에서 움직였을 때 전용 평당가가 몇 % 달라지는지입니다. "
@@ -975,6 +1031,23 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
             "key": "top_floor", "label": "단지 최고층",
             "value": f"{float(tf):.0f}층", "pct": _pct(d),
         })
+    for key, label, fmt_ in (
+        ("elem_dist", "초등학교까지", "{:.0f}m"),
+        ("mid_dist", "중학교까지", "{:.0f}m"),
+        ("academy", "학원 수(500m)", "{:.0f}개"),
+        ("adult", "유흥주점(500m)", "{:.0f}곳"),
+    ):
+        if key not in row:
+            continue
+        v = row[key]
+        if v != v:  # NaN — 입지를 아직 안 받은 단지
+            continue
+        d = spline_val(key, float(v)) - spline_val(key, FACTOR_REF[key])
+        complex_parts.append({
+            "key": key, "label": label,
+            "value": fmt_.format(float(v)), "pct": _pct(d),
+        })
+
     bname, bcoef = _brand_term(terms, row["complex_name"])
     if bcoef:
         complex_parts.append({
@@ -1000,9 +1073,9 @@ def model_price(db, fit: dict, side: dict) -> dict | None:
         "complex_parts": complex_parts,
         "reference": fit["stage1"].get("reference"),
         "note": (
-            "요인 기준은 역거리·강남접근성·연식·세대수·단지 최고층·브랜드·노선·"
-            "자치구만으로 세운 값입니다. 학군·재건축 기대처럼 측정하지 않은 것은 "
-            "빠져 있습니다. "
+            "요인 기준은 역거리·강남접근성·연식·세대수·단지 최고층·브랜드·"
+            "학교 거리·학원 수·유흥주점·노선·자치구만으로 세운 값입니다. "
+            "재건축 기대처럼 측정하지 않은 것은 빠져 있습니다. "
             "시장 기준은 그 단지가 실제로 거래되는 수준에서 출발합니다. "
             "둘의 차이가 그 단지에 붙어 있는 프리미엄입니다."
         ),
@@ -1123,6 +1196,10 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
             "log_households": float(row["log_households"])
             if row["log_households"] == row["log_households"]
             else None,
+            **{
+                k: (float(row[k]) if k in row and row[k] == row[k] else None)
+                for k in ("elem_dist", "mid_dist", "academy", "adult")
+            },
             "top_floor": (
                 float(row["top_floor"])
                 if "top_floor" in row and row["top_floor"] == row["top_floor"]
@@ -1258,6 +1335,24 @@ def compare_listings(db, fit: dict, a: dict, b: dict) -> dict:
             spline_val("top_floor", A["top_floor"]),
             spline_val("top_floor", B["top_floor"]),
             "그 집의 층이 아니라 단지가 몇 층짜리인지. 용적률·조망이 함께 들어온다.")
+
+    for key, label, unit, note in (
+        ("elem_dist", "초등학교까지", "m", "직선거리. 길을 건너는지는 보지 않는다."),
+        ("mid_dist", "중학교까지", "m", "배정이 아니라 거리다."),
+        ("academy", "학원 수(500m)", "개", "학원가가 가까우면 비싸다 — 인과는 아니다."),
+        ("adult", "유흥주점(500m)", "곳", "일반유흥·무도유흥만. 일반 술집은 뺀다."),
+    ):
+        if A.get(key) is None or B.get(key) is None:
+            missing = [s_["name"] for s_ in (A, B) if s_.get(key) is None]
+            skipped.append({
+                "label": label,
+                "reason": f"{', '.join(missing)} 의 주변 입지를 아직 받지 않아 "
+                          "비교에서 제외했습니다.",
+            })
+            continue
+        add(key, label,
+            f"{A[key]:.0f}{unit}", f"{B[key]:.0f}{unit}",
+            spline_val(key, A[key]), spline_val(key, B[key]), note)
 
     ba, ca = _brand_term(terms, A["name"])
     bb, cb = _brand_term(terms, B["name"])
