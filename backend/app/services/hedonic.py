@@ -231,7 +231,7 @@ class Spec:
 # 동 내부 편차만으로도 식별되고, 오히려 동 단위 교란이 빠지며 계수가 커졌다.
 SPECS: dict[str, Spec] = {
     "M0": Spec("M0", "도보거리만", False, False, False, False, False, False),
-    "M1": Spec("M1", "+ 면적·층·시점", True, False, False, False, False, False),
+    "M1": Spec("M1", "+ 면적·층·시점·거래유형", True, False, False, False, False, False),
     "M2": Spec(
         "M2", "+ 연식·세대수·강남접근성·노선·구 FE",
         True, True, True, True, False, True, True,
@@ -270,7 +270,8 @@ def available() -> bool:
 #   complex_id, complex_name, sgg_cd, sgg_name, umd_nm,
 #   deal_ym('YYYY-MM'), exclusive_area, floor, max_floor, deal_amount,
 #   build_year, walk_min(float|None), gangnam_min(float|None), lat, lng,
-#   elem_dist(float|None), mid_dist(float|None), academy(int|None), adult(int|None)
+#   elem_dist(float|None), mid_dist(float|None), academy(int|None), adult(int|None),
+#   deal_type('중개거래'|'직거래'|'')
 #
 # 시드 생성기도 **이 스키마 그대로** 소비해야 한다. 시드가 모델과 다른 컬럼을
 # 읽으면 측정오차가 계수를 감쇠시켜, 추정량과 무관한 이유로 복원 검증이 실패한다.
@@ -314,7 +315,7 @@ def load_rows(db, months: int = 24) -> list[dict]:
     stmt = (
         select(
             Trade.deal_ym, Trade.exclusive_area, Trade.floor, Trade.deal_amount,
-            Trade.build_year, Trade.apt_dong,
+            Trade.build_year, Trade.apt_dong, Trade.deal_type,
             Complex.id, Complex.name, Complex.sgg_cd, Complex.sgg_name,
             Complex.umd_nm, Complex.max_floor, Complex.build_year,
             Complex.walk_seconds, Complex.household_count, Complex.lat, Complex.lng,
@@ -323,7 +324,7 @@ def load_rows(db, months: int = 24) -> list[dict]:
         .join(Complex, Complex.id == Trade.complex_id)
         .where(Trade.deal_date >= cutoff)
     )
-    for (deal_ym, area, floor, amount, t_year, apt_dong,
+    for (deal_ym, area, floor, amount, t_year, apt_dong, deal_type,
          cx_id, cx_name, sgg_cd, sgg_name, umd_nm, max_floor, cx_year,
          walk_seconds, households, lat, lng, best_sid, near_sid) in db.execute(stmt):
         if walk_seconds is None:
@@ -355,6 +356,7 @@ def load_rows(db, months: int = 24) -> list[dict]:
                 "lat": lat,
                 "lng": lng,
                 "apt_dong": dong or None,
+                "deal_type": deal_type or "",
                 # 그 거래가 속한 동의 도보시간. 좌표를 못 찾은 동은 None 이고,
                 # 그 거래는 단지 내 비교에 기여하지 않는다(다른 항 추정에는 계속 쓰인다).
                 "dong_walk_min": dong_walk.get((cx_id, dong)),
@@ -431,6 +433,8 @@ def _build_frame(rows, ref_year: int):
                     float(r["max_floor"]) if r.get("max_floor") else np.nan
                 ),
                 "brand": brand_of(r.get("complex_name")),
+                # 직거래 표시. 국토부 `dealingGbn` 이 '직거래' 인 건.
+                "is_direct": 1.0 if r.get("deal_type") == "직거래" else 0.0,
                 # 입지는 단지 속성이라 거래마다 같은 값이다. Stage 2 에서
                 # 단지당 first 로 집는다.
                 "elem_dist": r.get("elem_dist"),
@@ -610,6 +614,9 @@ def _fit_stage1(df, use_controls: bool):
             "n_complexes": int(len(alpha)),
             "within_walk": None,
             "dong_premium": None,
+            # M0 은 통제가 없는 스펙이다. 거래 유형도 통제하지 않는다 — 그게 이
+            # 스펙의 정의이고, 사다리는 '통제를 늘리면 어떻게 변하나' 를 보여 준다.
+            "deal_type": None,
             "_dong_effects": {},
             "within_r2": None,
             "month_trend_pct": None,
@@ -660,6 +667,24 @@ def _fit_stage1(df, use_controls: bool):
         fb = fb.drop(columns=["fb_정보없음"], errors="ignore")
         floor_terms = list(fb.columns)
         parts.append(fb)
+
+        # 직거래 더미. **거래 속성**이라 단지 단위(Stage 2)가 아니라 여기다.
+        #
+        # 같은 단지·같은 전용면적 안에서도 직거래가 16.6% 싸다(실측, 190칸 중 171칸
+        # 음수). 증여성 거래·친족 간 이전이 섞여 있어서다. 전체의 3.7% 뿐이지만
+        # 직거래가 몰린 단지는 시세가 통째로 내려간다.
+        #
+        # **거래를 버리지 않는다.** α̂_c = mean_c(y - Zβ̂) 이므로 더미를 넣으면
+        # 직거래 행에서 할인분이 되돌아와, α̂_c 가 '전부 중개거래였다면' 수준이 된다.
+        # 빼 버리면 3.7%의 층·면적·시점 정보까지 같이 버리는 셈이다. 세대수 결측을
+        # 버리지 않고 표시자로 처리한 것과 같은 발상이다.
+        #
+        # 적재 전 행은 `deal_type` 이 빈 문자열이라 0 이 된다. 전부 0 이면 열이
+        # 상수라 흡수 후 0 이 되므로, 아예 넣지 않는다.
+        if "is_direct" in df.columns and float(df["is_direct"].sum()) > 0:
+            parts.append(pd.DataFrame(
+                {"deal_direct": df["is_direct"].astype(float)}, index=df.index
+            ))
 
         latest = df["deal_ym"].max()
         mo = pd.get_dummies(df["deal_ym"], prefix="ym", dtype=float)
@@ -828,6 +853,24 @@ def _fit_stage1(df, use_controls: bool):
             ),
         }
 
+    deal_type_term = None
+    if "deal_direct" in res.params.index:
+        c, se_ = float(res.params["deal_direct"]), float(res.bse["deal_direct"])
+        n_direct = int(df["is_direct"].sum())
+        deal_type_term = {
+            "coef": round(c, 6),
+            "se": round(se_, 6),
+            "p": round(float(res.pvalues["deal_direct"]), 6),
+            "pct": round((math.exp(c) - 1) * 100, 2),
+            "ci_pct": [
+                round((math.exp(c - 1.96 * se_) - 1) * 100, 2),
+                round((math.exp(c + 1.96 * se_) - 1) * 100, 2),
+            ],
+            "n_direct": n_direct,
+            "n_total": int(len(df)),
+            "share_pct": round(n_direct / max(len(df), 1) * 100, 2),
+        }
+
     # 차감된 적합의 잔차는 수준 잔차와 같다(α̂_c 정의상 서로 상쇄된다).
     dong_effects, dong_summary = _dong_effects(df, _e)
 
@@ -846,6 +889,7 @@ def _fit_stage1(df, use_controls: bool):
             else None
         ),
         "area_linearity": area_linearity,
+        "deal_type": deal_type_term,
         "reference": f"전용 {PYEONG_REF_AREA:.0f}㎡ · {FLOOR_REF} · {df['deal_ym'].max()}",
     }
     stage1["_dong_effects"] = dong_effects
@@ -1252,6 +1296,7 @@ LABELS = {
     "age_sq": "연식²",
     "log_households": "log(세대수)",
     "households_missing": "세대수 결측 표시자",
+    "deal_direct": "직거래",
     "top_floor": "단지 최고층(층)",
     "top_floor_missing": "최고층 결측 표시자",
     "elem_dist": "초등학교까지(m)",

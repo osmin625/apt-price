@@ -41,6 +41,10 @@ from app.services import hedonic
 from app.services.hedonic import FLOOR_REF, _knots, _spline_cols
 
 
+class DummyPathFailed(RuntimeError):
+    """더미 회귀가 **수치적으로** 실패했다 — 모델이 틀린 것이 아니다."""
+
+
 def build_parts(df):
     """Stage 1 설계행렬을 '더미'와 '나머지'로 나눠 만든다."""
     cx = pd.get_dummies(df["complex_id"].astype(str), prefix="cx", dtype=float)
@@ -54,6 +58,13 @@ def build_parts(df):
     dw = df["dong_walk_min"]
     dev = (dw - dw.groupby(df["complex_id"]).transform("mean")).fillna(0.0)
     parts.append(pd.DataFrame({"dong_walk_dev": dev.astype(float)}, index=df.index))
+
+    # 직거래 더미. `_fit_stage1` 과 **같은 조건**으로 넣어야 한다 — 설계가 다르면
+    # 이 검증이 '같은 모델의 두 계산법' 비교가 아니게 된다.
+    if "is_direct" in df.columns and float(df["is_direct"].sum()) > 0:
+        parts.append(pd.DataFrame(
+            {"deal_direct": df["is_direct"].astype(float)}, index=df.index
+        ))
 
     fb = pd.get_dummies(df["floor_band"], prefix="fb", dtype=float).drop(
         columns=[f"fb_{FLOOR_REF}", "fb_정보없음"], errors="ignore"
@@ -73,7 +84,16 @@ def fit_dummy(df, cx, Z):
     """현재 방식 — 더미를 행렬에 직접 넣는다."""
     X = pd.concat([cx, Z], axis=1)
     y = df["log_ppp"].astype(float)
-    res = sm.OLS(y, X).fit(cov_type="HC1")
+    try:
+        res = sm.OLS(y, X).fit(cov_type="HC1")
+    except Exception as exc:  # noqa: BLE001
+        # LAPACK 이 SVD 초기화에 실패하면 (`init_gesdd failed init`) 뒤따르는
+        # 비교가 전부 FAIL 로 찍힌다. 그건 모델이 틀렸다는 뜻이 아니다.
+        raise DummyPathFailed(
+            f"더미 회귀가 수치적으로 실패했습니다 ({type(exc).__name__}: {exc}). "
+            f"설계행렬이 {X.shape[0]:,}×{X.shape[1]:,} 입니다 — "
+            f"--max-complexes 를 줄여 다시 돌리세요."
+        ) from exc
     cids = [int(c[3:]) for c in cx.columns]
     alpha = pd.Series([float(res.params[c]) for c in cx.columns], index=cids)
     se = pd.Series([float(res.bse[c]) for c in cx.columns], index=cids)
@@ -144,11 +164,26 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--spec", default="M2")
+    ap.add_argument(
+        "--max-complexes", type=int, default=900,
+        help="더미 설계행렬이 메모리에 들어가도록 단지 수를 제한한다 (0 = 전부)",
+    )
     args = ap.parse_args()
 
     with SessionLocal() as db:
         rows = hedonic.load_rows(db, months=args.months)
     df = hedonic._build_frame(rows, date.today().year)
+
+    # 단지를 줄인다. 흡수 항등식은 **어떤 부분표본에서도** 성립하므로 전수가 아니어도
+    # 검증이 된다. 반면 비용은 단지 수에 비례해 폭발한다 — 더미 설계행렬이
+    # 11.7만 × 2,055 면 float64 로 1.9GB 이고, SVD 가 그 사본을 여러 개 만든다.
+    #
+    # 전수로 돌렸을 때 실제로 `init_gesdd failed init`(LAPACK SVD 초기화 실패)이
+    # 났고, 그 결과가 [FAIL] 네 줄로 찍혔다. **메모리 부족이 정확성 실패처럼
+    # 보였다.** 그래서 기본값을 줄이고, 실패하면 실패 이유를 말하게 했다.
+    if args.max_complexes:
+        keep = sorted(df["complex_id"].unique())[: args.max_complexes]
+        df = df[df["complex_id"].isin(set(keep))].reset_index(drop=True)
     cx, Z, _ = build_parts(df)
     print(f"거래 {len(df):,} · 단지 {cx.shape[1]} · 설계행렬 "
           f"{len(df):,}×{cx.shape[1] + Z.shape[1]} → 흡수 후 {len(df):,}×{Z.shape[1]}\n")
