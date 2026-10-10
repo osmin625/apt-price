@@ -1,4 +1,4 @@
-"""`verify_sync` 의 검사가 **일부러 깨뜨렸을 때 걸리는지** 본다.
+"""싱크·검진 검사가 **일부러 깨뜨렸을 때 걸리는지** 본다.
 
 사용법:
     python -m scripts.verify_sync_guard
@@ -26,11 +26,32 @@ ROOT = Path(r"E:\workspace\apt-price")
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 
 
-def run(with_model: bool = False) -> tuple[int, str]:
+def run(with_model: bool = False, cmd: list[str] | None = None) -> tuple[int, str]:
     env = {**os.environ, "FIT_IN_PROCESS": "1", "PYTHONIOENCODING": "utf-8"}
-    cmd = [PY, "-m", "scripts.verify_sync"] + ([] if with_model else ["--no-model"])
-    p = subprocess.run(cmd, cwd=ROOT / "backend", capture_output=True, env=env)
+    cmd = cmd or (["-m", "scripts.verify_sync"]
+                  + ([] if with_model else ["--no-model"]))
+    p = subprocess.run([PY, *cmd], cwd=ROOT / "backend",
+                       capture_output=True, env=env)
     return p.returncode, p.stdout.decode("utf-8", "replace")
+
+
+def check_freshness() -> bool:
+    """신선도는 파일을 고치지 않고 **기준일을 미래로** 줘서 깨뜨린다.
+
+    데이터를 건드리지 않아도 되는 유일한 검사라 이렇게 따로 둔다.
+    """
+    code, out = run(cmd=["-m", "scripts.checkup", "--only", "신선도",
+                         "--today", "2099-01-01"])
+    caught = code != 0 and out.count("뒤처짐") >= 3
+    print(f"  {'신선도 — 기준일을 미래로':<34} {'잡음' if caught else '못 잡음'}")
+    if not caught:
+        print(f"      종료 {code}")
+    # 되돌릴 것이 없다 — 오늘 기준으로 다시 돌려 통과하는지만 본다
+    code2, _ = run(cmd=["-m", "scripts.checkup", "--only", "신선도"])
+    if code2 != 0:
+        print("      [X] 오늘 기준으로도 실패합니다 — 실제로 뒤처져 있습니다")
+        return False
+    return caught
 
 
 def edit(rel: str, fn):
@@ -82,6 +103,8 @@ def main() -> int:
             with io.open(tmp, "w", encoding="utf-8", newline="\n") as f:
                 f.write(before)
             os.replace(tmp, p)
+
+    ok &= check_freshness()
 
     code, out = run()
     print(f"\n되돌린 뒤: 종료 코드 {code} ({'통과' if code == 0 else '실패 — 복구 안 됨!'})")

@@ -44,6 +44,7 @@ backend/
     geocode_dongs.py        동별 좌표·도보시간
     fetch_complexes.py      카카오 POI 로 단지 목록 채우기
     verify_sync.py          경계를 넘는 싱크(코드↔문서↔데이터↔프론트)
+    checkup.py              정기 검진 — 정합성·신선도·군살 (입구 하나)
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
