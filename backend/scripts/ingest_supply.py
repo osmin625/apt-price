@@ -40,7 +40,7 @@ from app.db import SessionLocal  # noqa: E402
 from app.models import RebStat  # noqa: E402
 
 
-def upsert(db, points: list[reb.RebPoint], base: str = "") -> int:
+def upsert(db, points: list[reb.RebPoint], base: str = "", source: str = "REB") -> int:
     """같은 (지역·지표·시점)이 다시 오면 값을 갱신한다.
 
     공표 통계는 공표 후에도 수정된다(잠정 → 확정). '있으면 건너뛴다' 로 두면 옛
@@ -50,6 +50,7 @@ def upsert(db, points: list[reb.RebPoint], base: str = "") -> int:
         {
             "sgg_cd": p.sgg_cd, "metric": p.metric, "ym": p.ym, "value": p.value,
             "region_name": p.region_name[:60], "unit": p.unit[:16], "base": base[:40],
+            "source": source,
         }
         for p in points if p.ym and p.sgg_cd
     ]
