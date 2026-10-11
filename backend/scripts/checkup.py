@@ -197,6 +197,25 @@ def check_cruft(rep: Report) -> None:
         print("      " + ", ".join(f"{k}-* {v}개" for k, v in top))
         print("      (템플릿 문자열로 붙이는 클래스는 거짓 양성일 수 있다)")
 
+    # 정적 번들. 문서에 적어 두면 또 어긋나므로 **여기서 잰다**(deploy.md 참조).
+    # 임계값 근거: GitHub Pages 소프트 한도가 1GB 라 용량 자체는 문제가 아니다.
+    # 다만 순위 스냅샷 하나를 휴대폰에서 통째로 받으므로, 한 파일이 3MB 를 넘으면
+    # 체감이 나빠진다. 전체는 자릿수가 바뀌는지 보려고 둔다.
+    dist = ROOT / "frontend" / "dist"
+    if dist.exists():
+        files = [p for p in dist.rglob("*") if p.is_file()]
+        mb = sum(p.stat().st_size for p in files) / 1e6
+        big = sorted((p for p in files if p.stat().st_size > 3e6),
+                     key=lambda p: -p.stat().st_size)
+        print(f"  정적 번들         {len(files)}개 · {mb:.1f}MB"
+              + (f" · 3MB 넘는 파일 {len(big)}개" if big else ""))
+        for p in big[:3]:
+            rep.add("!", "군살", f"스냅샷 한 파일이 큽니다: "
+                                 f"{p.relative_to(dist).as_posix()} "
+                                 f"{p.stat().st_size/1e6:.1f}MB")
+    else:
+        print("  정적 번들         없음 (내보낸 적 없음)")
+
     fc = BACKEND / "data" / "fitcache"
     if fc.exists():
         files = list(fc.glob("*.pkl"))

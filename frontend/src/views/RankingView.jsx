@@ -269,6 +269,9 @@ export default function RankingView({ months, setMonths, onSelect }) {
           <RankTable
             items={shown}
             basis={basis}
+            /* 단지 수준 분해는 행마다가 아니라 **단지별로 한 번** 온다.
+               같은 값을 1,018번 보내면 스냅샷이 0.79MB 늘어난다. */
+            cxParts={data.complex_parts}
             /* 정적에서는 지울 수 없다. 눌리는데 실패하는 버튼을 두지 않는다. */
             onDelete={STATIC_MODE ? null : remove}
             deleting={deleting}
