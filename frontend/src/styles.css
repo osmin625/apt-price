@@ -295,19 +295,10 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
 .map-fallback strong { color: var(--text-primary); font-size: 15px; }
 .map-fallback ol { margin: 4px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.8; }
 .map-fallback code { background: color-mix(in srgb, var(--text-primary) 7%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
-/* 지도 위에 얹는 도크.
- *
- * z-index 를 반드시 준다. `.map-canvas` 는 `position: relative` 지만 z-index 가
- * auto 라 **쌓임 맥락을 만들지 않는다.** 그래서 카카오가 그 안에 만드는 타일·오버레이
- * (z-index 1~2)가 도크와 같은 맥락에서 겨루고, 도크가 auto(=0)면 지도 뒤로 깔린다 —
- * 자리는 맞는데 화면에는 안 보이고 {
-  position: absolute; right: 12px; bottom: 12px; z-index: 10;
-  width: 372px; max-width: calc(100% - 24px);
-  background: color-mix(in srgb, var(--surface-1) 94%, transparent);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 12px 6px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.13);
-}
+/* 선택한 단지 상세. 도크(`.map-dock`)를 뺀 뒤에도 남은 부분이다 —
+   도크를 지울 때 주석 닫는 기호가 선택자와 함께 날아가, 이 두 규칙이 **주석
+   안에서 석 달쯤 죽어 있었다.** 지도 탭 상세 칸에 테두리와 간격이 없었는데 오류는
+   나지 않았다. z-index 사다리는 `.chart-tooltip` 위에 따로 적어 두었다. */
 .map-detail { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .map-detail-actions { display: flex; gap: 8px; }
 /* 마커는 CustomOverlay 의 DOM 노드라 CSS 변수를 그대로 상속한다 → 다크모드 자동 */
@@ -445,17 +436,6 @@ tr.is-current { background: color-mix(in srgb, var(--series-1) 9%, transparent);
   content: '!'; position: absolute; left: 0; top: 0;
   font-weight: 700; color: var(--warning);
 }
-/* 채워진 값 요약 — 접혀 있어도 상태는 항상 보여야 한다 */
-/* `:not(.is-empty)` 가 있어야 한다. `.cmp-side.is-b .cmp-summary` 쪽 특이도가
-   더 높아서 {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 9px 11px; border-radius: 8px;
-  background: color-mix(in srgb, var(--series-1) 7%, transparent);
-}
-.spec { display: flex; flex-direction: column; gap: 1px; }
-.spec.is-empty .spec-value { color: var(--text-muted); font-weight: 400; }
-.caret { display: inline-block; transition: transform 0.15s ease; font-size: 13px; }
-.caret.open { transform: rotate(90deg); }
 .cmp-actions {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 16px;
   padding-top: 14px; border-top: 1px solid var(--border);

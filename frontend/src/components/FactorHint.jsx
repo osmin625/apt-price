@@ -29,13 +29,13 @@ export default function FactorHint({ parts, cx }) {
         {rows.map(([title, list]) => (
           <span key={title} className="fh-group">
             <span className="fh-title">{title}</span>
-            {list.map((p, i) => (
+            {list.map((row, i) => (
               <span key={i} className="fh-row">
-                <span className="fh-label">{p.label}</span>
-                {p.value && <span className="fh-value">{p.value}</span>}
-                <span className={`fh-pct ${p.pct > 0 ? 'tone-pos' : 'tone-neg'}`}>
-                  {p.pct > 0 ? '+' : ''}
-                  {fmt(p.pct, 1)}%
+                <span className="fh-label">{row.label}</span>
+                {row.value && <span className="fh-value">{row.value}</span>}
+                <span className={`fh-pct ${row.pct > 0 ? 'tone-pos' : 'tone-neg'}`}>
+                  {row.pct > 0 ? '+' : ''}
+                  {fmt(row.pct, 1)}%
                 </span>
               </span>
             ))}

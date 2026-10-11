@@ -72,9 +72,19 @@ CASES = [
     ("이름 — 문서에 옛 탭 이름", "docs/performance.md",
      lambda s: s + "\n옛 이름 시장 분석 을 적어 본다.\n", "시장 분석"),
     ("계약 — 프론트가 없는 키를 읽음", "frontend/src/components/FactorHint.jsx",
-     lambda s: s.replace("parts.premium_pct", "parts.없는키", 1), "없는키", True),
+     # 순위 payload 를 단지/유닛 두 조각으로 나누면서 `premium_pct` 가 사라졌다.
+     # 이 시험이 "못 바꿨다" 로 죽어서 알았다 — 시험도 같이 뒤처진다.
+     lambda s: s.replace("p.complex", "p.없는키", 1), "없는키", True),
     ("죽은 API — 호출을 지움", "frontend/src/api.js",
      lambda s: s.replace("/model/groups", "/model/groups_DISABLED", 1), "groups"),
+    # 실제로 겪은 모양 그대로 — 닫는 `*/` 가 선택자와 함께 지워지면 뒤따르는
+    # 규칙들이 주석에 먹힌다. 호가 분석 탭 버튼이 이렇게 죽었다.
+    ("CSS — 주석을 닫지 않음", "frontend/src/styles.css",
+     lambda s: s.replace("/* 자동 계산 중 표시 — 버튼이 없으니 진행 상태가 보여야 한다 */",
+                         "/* 자동 계산 중 표시 — 버튼이 없으니 진행 상태가 보여야 한다", 1),
+     "주석이"),  # 파일 끝까지 열리든(1) 규칙을 먹든(2) 둘 중 하나로 잡힌다
+    ("CSS — 선택자 자리에 산문", "frontend/src/styles.css",
+     lambda s: s.replace(".chip {", "더 높아서 {", 1), "선택자 자리에"),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
     ("조사 — 받침에 안 맞는 조사", "docs/performance.md",

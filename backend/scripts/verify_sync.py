@@ -251,7 +251,11 @@ def check_endpoints(r: Result) -> None:
 # (프론트 파일, 접근자 변수, 페이로드를 만드는 함수 이름)
 CONTRACTS = [
     ("views/MarketView.jsx", "f", "factor_payload.factors[]"),
-    ("components/FactorHint.jsx", "parts", "ranking.factor_parts"),
+    # 변수는 `parts` 가 아니라 **합친 `p`** 다. 순위 payload 를 단지/유닛 두 조각으로
+    # 나누면서 컴포넌트가 `parts.xxx` 를 더는 읽지 않게 됐고, 그래서 이 검사가
+    # **읽는 키 0개**로 조용히 비어 있었다. 계약 검사가 아무것도 안 보고 통과하는
+    # 것이 제일 나쁘다 — verify_sync_guard 가 "못 잡음" 을 내서 알았다.
+    ("components/FactorHint.jsx", "p", "ranking.factor_parts"),
 ]
 
 
@@ -412,6 +416,85 @@ def _str_of(node) -> str:
     return ""
 
 
+def check_css(r: Result) -> None:
+    """CSS 가 **구문으로** 성한가.
+
+    죽은 규칙을 지우다 주석을 깨뜨린 적이 두 번 있다. 지운 범위가 주석 중간에서
+    시작해 닫는 `*/` 를 같이 데려갔고, 남은 선택자가 주석 안으로 빨려 들어갔다.
+
+        /* `:not(.is-empty)` 가 있어야 한다. ... 특이도가
+           더 높아서 {              <- `*/` 와 `.cmp-summary` 가 함께 지워졌다
+          display: flex; ...
+
+    그 뒤 `.spec` `.caret` `.cmp-actions` `.chip` 까지 **열두 규칙이 주석 안에서**
+    조용히 죽었다. 호가 분석 탭의 알약 버튼이 브라우저 기본 버튼으로 돌아갔는데
+    오류는 하나도 나지 않았다 — 사용자가 "버튼이 못생겨졌다" 고 말해 줘서 알았다.
+
+    죽은 CSS 검사는 이것을 못 잡는다. 주석을 벗기고 세므로 **주석에 먹힌 규칙은
+    애초에 없는 것처럼 보인다.** 그래서 구문을 따로 본다.
+    """
+    header("CSS — 구문이 성한가")
+    import re as _re
+
+    css_files = sorted(FRONT.rglob("*.css"))
+    hits = 0
+    for p in css_files:
+        text = p.read_text(encoding="utf-8")
+        rel = p.relative_to(ROOT).as_posix()
+
+        # 1) 닫히지 않은 주석. 여는 것과 닫는 것을 **순서대로** 따라간다 —
+        #    개수만 세면 주석 본문에 적힌 `/*` 에 속는다(실제로 있다).
+        pos, open_at = 0, None
+        while True:
+            o, c = text.find("/*", pos), text.find("*/", pos)
+            if o == -1 and c == -1:
+                break
+            if o != -1 and (c == -1 or o < c):
+                open_at = o if open_at is None else open_at
+                pos = o + 2
+            else:
+                open_at, pos = None, c + 2
+        if open_at is not None:
+            hits += 1
+            r.bad(f"{rel}:{text[:open_at].count(chr(10)) + 1} — 주석이 닫히지 "
+                  f"않았습니다. 뒤따르는 규칙이 통째로 죽습니다")
+
+        # 2) 주석이 **규칙을 통째로 먹은** 경우. 닫는 기호가 뒤쪽 주석의 것으로
+        #    이어져 버리면 파일 끝까지 열려 있지는 않으므로 1)로는 안 잡힌다.
+        #    주석 본문에 선언 블록(`{` 뒤 `prop: value;` 두 줄 이상)이 있으면
+        #    설명이 아니라 먹힌 CSS 다. 지금 저장소의 주석 65개 중 걸리는 것은 0개다.
+        for cm in _re.finditer(r"/\*.*?\*/", text, flags=_re.S):
+            body = cm.group(0)
+            if "{" not in body:
+                continue
+            tail = body[body.index("{"):]
+            # 줄머리로 고정하면 안 된다 — 이 저장소 CSS 는 한 줄 규칙이 많아
+            # `.live { animation: ...; }` 같은 것을 통째로 놓친다(시험에서 걸렸다).
+            if len(_re.findall(r"[a-z-]+\s*:\s*[^;{}]{1,60};", tail)) >= 2:
+                hits += 1
+                r.bad(f"{rel}:{text[:cm.start()].count(chr(10)) + 1} — 주석이 "
+                      f"규칙을 먹었습니다. 그 안의 CSS 는 적용되지 않습니다")
+
+        clean = _re.sub(r"/\*.*?\*/", "", text, flags=_re.S)
+
+        # 2) 중괄호 수지
+        if clean.count("{") != clean.count("}"):
+            hits += 1
+            r.bad(f"{rel} — 중괄호가 맞지 않습니다 "
+                  f"({clean.count('{')} 열고 {clean.count('}')} 닫음)")
+
+        # 3) 선택자 자리에 한국어 산문. 잘린 주석이 선택자가 된 모양이다.
+        for m in _re.finditer(r"([^{}]+)\{", clean):
+            sel = m.group(1).strip()
+            if not sel or sel.startswith("@") or sel.endswith(")"):
+                continue
+            if _re.search(r"[가-힣]", sel) or ";" in sel:
+                hits += 1
+                r.bad(f"{rel} — 선택자 자리에 '{sel[:40]}' 가 있습니다. "
+                      f"지우다 만 주석으로 보입니다")
+    print(f"  CSS {len(css_files)}개 검사 · 깨진 곳 {hits}")
+
+
 def check_dead_components(r: Result) -> None:
     """아무 데서도 import 하지 않는 컴포넌트.
 
@@ -456,6 +539,7 @@ def main() -> int:
     check_endpoints(r)
     check_dead_components(r)
     check_markdown(r)
+    check_css(r)
     check_data(r)
     if args.no_model:
         header("계약 — 프론트가 읽는 키를 백엔드가 보내나")
