@@ -46,7 +46,7 @@ const TONE = {
  *
  * 호버가 없는 기기라 `Hint` 류는 탭으로 열린다(`tabIndex`/`focus` 로 이미 동작한다).
  */
-export default function RankCards({ items, basis, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
+export default function RankCards({ items, basis, cxParts, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
   /* 표와 **같은 규칙**을 쓴다. 각자 고르면 같은 매물이 표와 카드에서 다른 판정을
      달게 된다 — 화면 폭에 따라 답이 달라지는 셈이다. */
   const isFactor = basis === 'factor'
@@ -150,7 +150,7 @@ export default function RankCards({ items, basis, onDelete, deleting, onSelect, 
                 {isFactor ? '요인' : '실거래'}{' '}
                 {isFactor ? (i.factor_price ? eok(i.factor_price) : '—') : eok(i.fair_price)}
                 <em> {gapText(isFactor ? i.gap_factor_pct : i.gap_pct)}</em>
-                {isFactor && <FactorHint parts={i.factor_parts} />}
+                {isFactor && <FactorHint parts={i.factor_parts} cx={cxParts?.[i.complex_id]} />}
               </span>
               <span className="rc-other muted small">{otherOf(i, isFactor)}</span>
             </div>

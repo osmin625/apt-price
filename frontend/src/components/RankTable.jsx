@@ -102,7 +102,7 @@ function Sortable({ k, sort, onSort, children, title }) {
   )
 }
 
-export default function RankTable({ items, basis, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
+export default function RankTable({ items, basis, cxParts, onDelete, deleting, onSelect, onScope, onNoteSaved }) {
   const narrow = useNarrow()
   const isFactor = basis === 'factor'
   /* 정렬은 **표 안에 둔다.** 매물 순위와 붙여넣기 결과가 같은 표를 쓰므로 양쪽이
@@ -168,6 +168,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
         <RankCards
           items={rows}
           basis={basis}
+          cxParts={cxParts}
           onDelete={onDelete}
           deleting={deleting}
           onSelect={onSelect}
@@ -324,7 +325,7 @@ export default function RankTable({ items, basis, onDelete, deleting, onSelect, 
                       ? eok(i.factor_price)
                       : '—'
                     : eok(i.fair_price)}
-                  {isFactor && <FactorHint parts={i.factor_parts} />}
+                  {isFactor && <FactorHint parts={i.factor_parts} cx={cxParts?.[i.complex_id]} />}
                 </td>
                 <td
                   className="num is-sort"

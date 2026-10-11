@@ -244,6 +244,8 @@ def payload_keys(months: int = 12):
     # 순위표가 호버로 띄우는 분해. `ranking.py` 가 model_price 결과를 추려
     # 담으므로 **model_price 의 키와 다르다** — 그 차이를 모르고 비교하면
     # 멀쩡한 필드를 없다고 잡는다.
+    # `FactorHint` 는 행의 유닛 몫과 단지 몫을 **합쳐서** 읽는다. 둘을 합친 키가
+    # 그 컴포넌트가 기대하는 모양이다.
     parts = {
         "complex": None, "unit": None, "premium_pct": None,
         "market_count": m.get("market_count"), "trade_count": m.get("trade_count"),

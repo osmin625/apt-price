@@ -46,6 +46,8 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
     dong_effects = (fit or {}).get("dong_effects")
 
     items, skipped = [], []
+    # 단지 id → 단지 수준 요인 분해. 행마다 같은 것을 되풀이해 보내지 않는다.
+    complex_parts: dict[int, dict] = {}
     for r in rows:
         cid = r.get("complex_id")
         area = r.get("exclusive_area")
@@ -99,15 +101,20 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
                 item["verdict_factor"] = verdict_of(item["gap_factor_pct"])
                 # 요인 분해도 같이 보낸다. 표에서 행에 호버하면 "왜 이 값인지" 를
                 # 바로 볼 수 있어야 한다 — 순위만 보고는 납득할 수 없다.
-                item["factor_parts"] = {
-                    "complex": m.get("complex_parts"),
-                    "unit": m.get("unit_parts"),
-                    "premium_pct": m.get("complex_premium_pct"),
-                    # 이 시세가 **몇 건의 중개거래에 얹혀 있는지.** 직거래는 Stage 1
-                    # 에서 할인을 걷어내지만 단지 수준을 관측해 주지는 않는다.
-                    "market_count": m.get("market_count"),
-                    "trade_count": m.get("trade_count"),
-                }
+                # 유닛 몫만 행에 싣는다. 단지 몫은 **같은 단지면 같은 값**이라
+                # 아래 `complex_parts` 로 한 번만 보낸다(매물 1,018건이 단지
+                # 39곳에 몰려 있어 스냅샷의 0.79MB 가 0.03MB 가 된다).
+                item["factor_parts"] = {"unit": m.get("unit_parts")}
+                if cid not in complex_parts:
+                    complex_parts[cid] = {
+                        "complex": m.get("complex_parts"),
+                        "premium_pct": m.get("complex_premium_pct"),
+                        # 이 시세가 **몇 건의 중개거래에 얹혀 있는지.** 직거래는
+                        # Stage 1 에서 할인을 걷어내지만 단지 수준을 관측해 주지는
+                        # 않는다.
+                        "market_count": m.get("market_count"),
+                        "trade_count": m.get("trade_count"),
+                    }
 
         items.append(item)
 
@@ -128,6 +135,8 @@ def evaluate_many(db, rows: list[dict], months: int, basis: str = "market") -> d
         "basis": basis,
         "basis_label": "요인 기준" if basis == "factor" else "실거래 기준",
         "items": ranked + rest,
+        # 단지 수준 분해. 행의 `complex_id` 로 찾아 쓴다.
+        "complex_parts": complex_parts,
         "skipped": skipped,
     }
 

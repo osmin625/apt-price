@@ -17,7 +17,8 @@
   적재 · 적합 · 매물 붙여넣기
         │
         │  export_static.py   화면이 부르는 요청을 실제 ASGI 앱으로 실행해
-        │                     응답을 JSON 파일로 떨어뜨린다 (80개 파일 · 8.2MB · 50초)
+        │                     응답을 JSON 파일로 떨어뜨린다
+        │                     (크기는 `python -m scripts.checkup` 이 찍는다)
         ▼
   frontend/public/snapshot/
         │
@@ -45,6 +46,29 @@
 cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 ```
 
+## 크기는 문서에 적지 않는다
+
+예전에는 흐름도에 "80개 파일 · 8.2MB" 라고 적어 뒀다. 재 보니 **2,160개 · 38.3MB**
+였다. 단지 상세와 도보 경로가 단지 수만큼 늘어난 뒤로 자릿수가 달라졌는데 문서만
+그대로였다.
+
+지금 크기는 `python -m scripts.checkup` 이 찍는다. 임계값도 거기 있다 — 넘으면
+`[!]` 로 알려 준다.
+
+### 무엇이 무거운가 — 재서 고쳤다
+
+순위 스냅샷 하나가 2.19MB 였고 그중 **47%가 `factor_parts`** 였다. 단지 요인 분해를
+매물마다 실어 보냈기 때문인데, **같은 단지면 값이 같다** — 매물 1,018건이 단지
+39곳에 몰려 있었다.
+
+단지 몫을 payload 꼭대기의 `complex_parts` 로 한 번만 보내고 행에서는 `complex_id`
+로 찾아 쓴다. 행에는 그 집 몫(`unit`)만 남는다.
+
+    순위 스냅샷 24개   31MB → 19MB
+    그중 하나         2.19MB → 1.35MB
+    factor_parts      1.02MB → 0.19MB (행 0.16 + 단지 분해 0.03)
+    전체 dist         38.3MB → 26.4MB
+
 ## 정적 사이트에 실리는 것
 
 `App.jsx` 의 `TABS` 에서 `static: true` 인 것만 보인다.
@@ -68,7 +92,8 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 | `/map/stations` | 10KB · 파라미터 없어 한 개 |
 | `/map/walk-path/{id}` | 365바이트 × 1,851 ≈ 0.7MB |
 
-그래서 데이터 비용은 8.2MB → 8.9MB 뿐이다. 막는 것은 **카카오 JS 키 하나**다.
+그래서 지도를 켜도 **데이터가 늘지 않는다** — 도보 경로는 어차피 내보낸다.
+막는 것은 **카카오 JS 키 하나**다.
 
 지도를 띄우려면 키가 번들에 들어가야 한다. `App.jsx` 가 `MapView` 를 정적
 import 하므로 `kakaoMap.js` 의 `import.meta.env.VITE_KAKAO_JS_KEY` 가 인라인된다 —
@@ -160,7 +185,7 @@ JS 키는 원래 클라이언트에 노출되는 키다(카카오 지도를 쓰�
 
 ## 왜 고아 커밋으로 강제 푸시하나
 
-스냅샷은 8.2MB 이고 내보낼 때마다 거의 전부 달라진다(적정가가 그 기간 실거래로
+스냅샷은 수십 MB 이고 내보낼 때마다 거의 전부 달라진다(적정가가 그 기간 실거래로
 다시 계산되므로). 그걸 `gh-pages` 에 쌓으면 이력이 **하루 8MB 씩** 불어난다.
 한 달이면 240MB 다.
 
