@@ -60,9 +60,15 @@ ARCH_SKIP = {
 # 여기 안 적으면 그 이름 변경을 못 잡을 뿐이고(검사가 조용해짐), architecture.md
 # 목록은 안 적으면 **문서가 거짓말을 한다.** 후자가 훨씬 나쁘다.
 RETIRED_LABELS = {
-    "시장 분석": "미시 분석",
-    "매물 분석": "매물 관리",
-    "매크로 탭": "거시 분석 탭",
+    # '시장 분석' → '미시 분석' → '매물 분석' 으로 두 번 옮겼다. 중간 이름도
+    # 남겨 둬야 그 단계에서 쓴 문서가 잡힌다.
+    "시장 분석": "매물 분석",
+    "미시 분석": "매물 분석",
+    "매크로 탭": "가격 분석 탭",
+    "거시 분석": "가격 분석",
+    # '매물 관리'/'매물 순위' 는 짝이라 같이 옮겼다. 붙여넣는 쪽과 보는 쪽이다.
+    "매물 관리": "호가 입력",
+    "매물 순위": "호가 분석",
 }
 LABEL_EXEMPT = {"ui-log.md"}
 
@@ -156,6 +162,42 @@ def check_labels(r: Result) -> None:
                 r.bad(f"{d.relative_to(ROOT).as_posix()} 에 옛 이름 '{old}' {n}곳 "
                       f"(지금은 '{new}')")
     print(f"  폐기된 이름 {len(RETIRED_LABELS)}개 검사 · 남은 곳 {hits}")
+    check_particles(r, live, docs)
+
+
+# 받침에 따라 갈리는 조사. 바꾼 이름의 끝 글자가 달라지면 **조사도 틀린다.**
+# '매물 순위' → '호가 분석' 으로 바꿨더니 "순위는" 자리에 "분석는" 이 남았고
+# ('위' 는 받침이 없고 '석' 은 있다), 문서 넷과 CLAUDE.md 에서 다섯 곳이 그랬다.
+# 눈으로는 잘 안 보인다 — 뜻은 통하니까.
+_WRONG_AFTER_JONG = {"는": "은", "와": "과", "가": "이", "나": "이나"}
+_WRONG_AFTER_VOWEL = {"은": "는", "과": "와", "이": "가", "으로": "로"}
+
+
+def check_particles(r: Result, live: set[str], docs: list) -> None:
+    """바뀐 탭 이름 뒤의 조사가 받침과 맞나.
+
+    `로`/`으로` 는 ㄹ 받침이 예외다('모델로' 가 맞다). 그래서 받침 있는 이름 뒤의
+    `로` 는 **ㄹ 받침일 때만** 통과시킨다.
+    """
+    hits = 0
+    targets = [*docs, *sorted(FRONT.rglob("*.jsx"))]
+    for d in targets:
+        text = d.read_text(encoding="utf-8")
+        for label in live:
+            jong = (ord(label[-1]) - 0xAC00) % 28 if "가" <= label[-1] <= "힣" else 0
+            wrong = dict(_WRONG_AFTER_JONG) if jong else dict(_WRONG_AFTER_VOWEL)
+            if jong and jong != 8:
+                wrong["로"] = "으로"
+            for bad_p, good in wrong.items():
+                # `**호가 분석**는` 처럼 강조가 끼어도 잡는다.
+                for mid in ("", "**"):
+                    needle = label + mid + bad_p
+                    n = text.count(needle)
+                    if n:
+                        hits += n
+                        r.bad(f"{d.relative_to(ROOT).as_posix()} 의 "
+                              f"'{needle}' {n}곳 — '{label}{mid}{good}' 가 맞습니다")
+    print(f"  조사 — 탭 이름 {len(live)}개 뒤를 검사 · 어긋난 곳 {hits}")
 
 
 # ──────────────────────────────────────────────────────────
@@ -312,6 +354,64 @@ def check_data(r: Result) -> None:
         r.bad(f"{w} 없는 단지 {n}곳 → python -m {c}")
 
 
+# 화면에 **평문으로** 나가는 문자열 필드. 여기에 마크다운을 쓰면 `**` 가 글자
+# 그대로 보인다. React 가 문자열을 그대로 렌더하기 때문이고, 툴팁(title 속성)은
+# 더 말할 것도 없다.
+PLAIN_TEXT_KEYS = ("note", "joint_note", "reason", "note:", "label")
+
+
+def check_markdown(r: Result) -> None:
+    """사용자에게 평문으로 나가는 문구에 마크다운이 섞였나.
+
+    **세 번 같은 실수를 했다** — 학원 요인 노트, `joint_note`, 공급 탭 note. 매번
+    브라우저에서 별표를 눈으로 보고서야 알았다. 사람이 발견하기를 기다리는 구조다.
+
+    찾는 방법: 백엔드 소스에서 `"note": "..."` 처럼 평문으로 나가는 키에 붙은
+    문자열 리터럴을 모아 `**` 가 있는지 본다. 주석과 독스트링은 화면에 안 나가므로
+    제외한다 — 거기서는 강조를 쓰는 것이 이 저장소의 방식이다.
+    """
+    header("문구 — 평문으로 나가는 곳에 마크다운이 있나")
+    import ast
+
+    hits = 0
+    files = 0
+    for p in sorted((BACKEND / "app").rglob("*.py")):
+        if "__pycache__" in str(p):
+            continue
+        files += 1
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            # {"note": "...**...**..."} 형태
+            if isinstance(node, ast.Dict):
+                for k, v in zip(node.keys, node.values):
+                    if not (isinstance(k, ast.Constant) and k.value in PLAIN_TEXT_KEYS):
+                        continue
+                    text = _str_of(v)
+                    if text and "**" in text:
+                        hits += 1
+                        r.bad(f"{p.relative_to(ROOT).as_posix()}:{getattr(v, 'lineno', '?')} "
+                              f"— '{k.value}' 에 마크다운(**)이 있습니다. "
+                              f"이 문구는 평문으로 렌더됩니다")
+    print(f"  파일 {files}개 검사 · 마크다운 섞인 문구 {hits}개")
+
+
+def _str_of(node) -> str:
+    """상수 문자열과 이어 붙인 리터럴만 본다. f-string·변수는 건너뛴다."""
+    import ast
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(v.value for v in node.values
+                       if isinstance(v, ast.Constant) and isinstance(v.value, str))
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _str_of(node.left) + _str_of(node.right)
+    return ""
+
+
 def check_dead_components(r: Result) -> None:
     """아무 데서도 import 하지 않는 컴포넌트.
 
@@ -355,6 +455,7 @@ def main() -> int:
     check_labels(r)
     check_endpoints(r)
     check_dead_components(r)
+    check_markdown(r)
     check_data(r)
     if args.no_model:
         header("계약 — 프론트가 읽는 키를 백엔드가 보내나")

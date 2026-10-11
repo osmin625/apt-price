@@ -17,11 +17,14 @@ backend/
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)
     services/model_view.py  적합 결과 → 지도 마커·등가격 링·참값 오버레이
+    services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
+                            (docs/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
     clients/molit.py        국토교통부 실거래가 API
     clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
     clients/tmap.py         보행자 경로안내
     clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
-    routers/                complexes / analysis / listings / model / map
+    routers/                complexes / analysis / listings / quotes / model / map
+                            / macro(공표 통계) / supply(공급)
   scripts/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
     validate_model.py       참값 복원 + 커버리지 검증
@@ -35,6 +38,7 @@ backend/
     verify_name_match.py    단지명 매칭 규칙 변경 전후 전수 대조
     migrate.py              모델에 있는데 DB 에 없는 컬럼 추가
     ingest_reb.py           한국부동산원 공표 통계
+    ingest_supply.py        공급 통계(인허가·착공·준공·멸실·가구수) — 시도 단위
     ingest_kapt.py          K-apt 단지 상세(세대수 등)
     export_static.py        정적 사이트용 스냅샷
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
@@ -48,7 +52,8 @@ backend/
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
-  src/views/                미시 분석 / 단지 상세 / 매물 관리 / 매물 순위 / 지도 / 분해 모델
+  src/views/                매물 분석 / 가격 분석 / 공급 분석 / 단지 상세
+                            / 호가 입력 / 호가 분석 / 지도 / 분해 모델
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)

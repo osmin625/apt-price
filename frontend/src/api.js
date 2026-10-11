@@ -230,6 +230,8 @@ export const api = {
   // 매크로 — 한국부동산원 공표 통계
   macroMetrics: () => request('/macro/metrics'),
   macroSeries: (params) => request(`/macro/series${qs(params)}`),
+  // 공급은 카드 네 장이 같은 적재를 본다. 따로 부르면 화면이 네 번 깜빡인다.
+  supplyOverview: () => request('/supply/overview'),
   macroLatest: () => request('/macro/latest'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 

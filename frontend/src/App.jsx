@@ -8,6 +8,7 @@ import MapView from './views/MapView'
 import ModelView from './views/ModelView'
 import CompareView from './views/CompareView'
 import RankingView from './views/RankingView'
+import SupplyView from './views/SupplyView'
 
 /**
  * `static: true` 인 탭만 정적 사이트에 실린다.
@@ -27,14 +28,21 @@ const TABS = [
   // 한 탭 안에 섹션으로 합쳐 봤다가 **되돌렸다.** 둘은 같은 질문의 두 축이지만,
   // 각자 카드가 예닐곱 장이라 한 화면에 올리면 좌우 2단으로 쪼개도 빽빽했다.
   // 겹쳐 봐야 하는 것은 '모델과 어긋나는 곳' 한 장뿐이고, 그건 거시 쪽에 이미 있다.
-  { id: 'micro', label: '미시 분석', static: true },
-  { id: 'macro', label: '거시 분석', static: true },
+  // 이름을 두 번 바꿨다. '시장 분석' → '미시 분석' → '매물 분석' 이고,
+  // '매크로' → '거시 분석' → '가격 분석' 이다. 바꾼 이유는 같다 — '미시/거시' 가
+  // 무엇을 보는 탭인지 말해 주지 않았다. 지금 이름은 **대상**을 가리킨다.
+  { id: 'micro', label: '매물 분석', static: true },
+  { id: 'macro', label: '가격 분석', static: true },
+  // 공급은 2~3년 전에 정해져 지금 나타난다. 가격 추이와 같은 축에 놓으면
+  // 둘 다 안 읽혀서 탭을 따로 뒀다.
+  { id: 'supply', label: '공급 분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
   // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
-  { id: 'compare', label: '매물 관리' },
-  { id: 'ranking', label: '매물 순위', static: true },
+  // 둘은 짝이다 — 한쪽에 붙여넣고 다른 쪽에서 본다. 이름도 짝으로 맞췄다.
+  { id: 'compare', label: '호가 입력' },
+  { id: 'ranking', label: '호가 분석', static: true },
 ]
 
 const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
@@ -163,6 +171,8 @@ export default function App() {
         <MarketView filters={filters} setFilters={setFilters} meta={meta} />
       ) : tab === 'macro' ? (
         <MacroView />
+      ) : tab === 'supply' ? (
+        <SupplyView />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (
