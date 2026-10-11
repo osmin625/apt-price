@@ -200,6 +200,139 @@ def table_meta() -> dict[str, dict]:
     return out
 
 
+# ──────────────────────────────────────────────────────────
+# 공급 통계 — 시도 단위
+# ──────────────────────────────────────────────────────────
+# 가격 표는 시군구까지 오지만 공급 표는 **대부분 시도까지만** 온다(미분양만 예외).
+# 그래서 서울·경기 두 줄로 본다. 서울을 넣는 이유는 붙여 주신 대로 — 수도권 공급이
+# 넘치면 서울 외곽부터 빠지므로 둘을 같이 봐야 한다.
+SIDO: dict[str, str] = {"11": "서울", "41": "경기"}
+
+# (통계표, 항목ID, 주기, 지표이름). 항목ID 는 `region_codes` 의 ITM_TAG=='항목'.
+#
+# 표를 고른 경위는 docs/supply.md 에 있다. 738개를 훑어 '입주/준공/착공/인허가/
+# 분양/멸실/보급률' 로 걸렀고, **미래 입주 예정 물량은 R-ONE 에 없다**(민간 집계다).
+SUPPLY_TABLES: dict[str, tuple[str, int, str]] = {
+    # 공급 파이프라인. 인허가 → 착공 → 준공 순으로 2~3년씩 흐른다.
+    #
+    # **인허가만 연 누계로 온다.** 2024년 서울이
+    # 2517 → 5055 → 6654 → ... → 51792 로 12월까지 계속 커진다. 착공·준공은 월별이다
+    # (준공 2024: 3407, 1930, 1282, ... 로 오르내린다).
+    #
+    # 모르고 12개월을 더했다가 서울 인허가가 282,599호로 나왔다 — 준공이 4만인데
+    # 7배다. 숫자가 들어오긴 하므로 **오류가 아니라 그럴듯한 거짓**이었다.
+    # 적재할 때 월별로 되돌린다. 화면마다 기억할 일이 아니다.
+    "T235263129553687": ("permit", 10001, "MM"),     # 주택건설인허가실적(연 누계)
+    "T233033129823134": ("start", 10001, "MM"),      # 주택착공실적
+    "T237273130004614": ("done", 10001, "MM"),       # 주택준공실적(사용검사)
+    # 적정 공급량의 두 조각. 둘 다 연 단위다.
+    "T234153129852136": ("households", 10001, "YY"),  # 주택보급률 > 가구수(등록센서스)
+    "T246383134037612": ("demolish", 10001, "YY"),    # 주택멸실현황 > 계
+    # 아파트만 따로. 멸실의 성격을 보려면 필요하다(단독 철거와 다르다).
+    "T246383134037612#apt": ("demolish_apt", 10006, "YY"),
+}
+
+# 연 누계로 공표되는 지표. 적재할 때 차분해서 월별로 되돌린다.
+CUMULATIVE_YTD = {"permit"}
+
+# 표마다 지역 경로 모양이 다르다. **짐작하지 않고** 이 순서로 찾아 첫 번째를 쓴다.
+#   준공·착공   서울>총계
+#   인허가      서울>합계(가구수기준)
+#   멸실·보급률  서울
+#   분양        수도권>서울
+_SIDO_PATH_PREFS = ("{s}", "{s}>총계", "{s}>계", "{s}>합계(가구수기준)", "수도권>{s}")
+
+
+def sido_cls_id(table_id: str, sido: str) -> str:
+    """이 표에서 시도의 `CLS_ID`.
+
+    경로 모양이 표마다 달라서 선호 순서로 찾는다. **후보가 없으면 실패시킨다** —
+    엉뚱한 지역을 집으면 남의 공급량이 섞이는데, 그건 빈 줄보다 나쁘다
+    (`district_cls_ids` 와 같은 원칙).
+    """
+    rows = [r for r in region_codes(table_id.split("#")[0])
+            if r.get("ITM_TAG") == "분류"]
+    by_path = {str(r.get("ITM_FULLNM") or ""): str(r["ITM_ID"]) for r in rows}
+    for pref in _SIDO_PATH_PREFS:
+        want = pref.format(s=sido)
+        if want in by_path:
+            return by_path[want]
+    raise RebError(
+        f"{table_id} 에서 '{sido}' 경로를 찾지 못했습니다. "
+        f"있는 경로 예: {sorted(by_path)[:6]}"
+    )
+
+
+def fetch_sido(table_id: str, sgg_cd: str, *, page_size: int = 1000) -> list[RebPoint]:
+    """한 (공급표·시도)의 전체 시계열.
+
+    연 단위 표는 `ym` 을 `YYYY00` 으로 둔다 — 6자리 자리수를 맞추면서 월과 섞이지
+    않고, 문자열 정렬이 그대로 시간 순서가 된다.
+    """
+    metric, itm_id, cycle = SUPPLY_TABLES[table_id]
+    sido = SIDO[sgg_cd]
+    cls_id = sido_cls_id(table_id, sido)
+    real_id = table_id.split("#")[0]
+
+    data = _get("SttsApiTblData.do", {
+        "STATBL_ID": real_id, "DTACYCLE_CD": cycle,
+        "CLS_ID": cls_id, "ITM_ID": itm_id, "pSize": page_size,
+    })
+    _, rows = _unwrap(data, "SttsApiTblData")
+
+    out: list[RebPoint] = []
+    for r in rows:
+        val = r.get("DTA_VAL")
+        if val is None:
+            continue
+        t = str(r.get("WRTTIME_IDTFR_ID") or "")
+        if cycle == "YY":
+            if len(t) != 4:
+                continue
+            t = t + "00"
+        elif len(t) != 6:
+            continue
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        out.append(RebPoint(
+            table_id=real_id, metric=metric, sgg_cd=sgg_cd,
+            cls_id=str(cls_id), region_name=sido, ym=t, value=v,
+            unit=str(r.get("UI_NM") or ""),
+        ))
+
+    if metric in CUMULATIVE_YTD:
+        out = _undo_ytd(out)
+    return out
+
+
+def _undo_ytd(points: list[RebPoint]) -> list[RebPoint]:
+    """연 누계를 월별로 되돌린다. 1월은 그대로, 그 뒤는 전월과의 차.
+
+    **그 해 1월이 없으면 그 해를 통째로 버린다.** 2월부터 시작하는 해에서 2월 값을
+    그대로 쓰면 1~2월 두 달치가 한 달로 들어간다. 줄이 하나 비는 것이 낫다.
+    """
+    by_year: dict[str, list[RebPoint]] = {}
+    for p in points:
+        by_year.setdefault(p.ym[:4], []).append(p)
+
+    out: list[RebPoint] = []
+    for year, ps in by_year.items():
+        ps.sort(key=lambda p: p.ym)
+        if ps[0].ym[4:] != "01":
+            continue
+        prev = 0.0
+        for p in ps:
+            out.append(RebPoint(
+                table_id=p.table_id, metric=p.metric, sgg_cd=p.sgg_cd,
+                cls_id=p.cls_id, region_name=p.region_name, ym=p.ym,
+                value=p.value - prev, unit=p.unit,
+            ))
+            prev = p.value
+    return out
+
+
 def region_codes(table_id: str) -> list[dict]:
     """표의 항목·분류 목록. 지역은 `ITM_TAG == "분류"` 로 온다.
 

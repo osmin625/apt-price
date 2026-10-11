@@ -138,6 +138,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         # 매크로 — 한국부동산원 공표 통계. 기간·지표 조합이 작아 전부 내보낸다.
         Req("/api/macro/metrics", {}),
         Req("/api/macro/latest", {}),
+        # 공급 — 파라미터가 없다. 시도 2곳 × 연 15행이라 한 응답에 다 들어간다.
+        Req("/api/supply/overview", {}),
     ]
 
     # 매크로 인사이트.
@@ -338,7 +340,8 @@ def main() -> int:
         "months": list(MONTHS),
         # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
         # 프론트의 탭 id 와 같아야 한다. 합쳤다가 다시 나누면서 market -> micro 가 됐다.
-        "tabs": ["micro", "macro", "map"] + (["ranking"] if with_quotes else []),
+        "tabs": (["micro", "macro", "supply", "map"]
+                 + (["ranking"] if with_quotes else [])),
         "includes_quotes": with_quotes,
         "data": data_counts(),
         "files": ok,

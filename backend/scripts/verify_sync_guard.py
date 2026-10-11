@@ -75,6 +75,15 @@ CASES = [
      lambda s: s.replace("parts.premium_pct", "parts.없는키", 1), "없는키", True),
     ("죽은 API — 호출을 지움", "frontend/src/api.js",
      lambda s: s.replace("/model/groups", "/model/groups_DISABLED", 1), "groups"),
+    ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
+     lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
+    ("조사 — 받침에 안 맞는 조사", "docs/performance.md",
+     lambda s: s.replace("**호가 분석**은 쌓인", "**호가 분석**는 쌓인", 1),
+     "호가 분석**는"),
+    # **걸리지 말아야 할 때** — ㄹ 받침은 '로' 가 맞다('분해 모델로'). 이것까지
+    # 잡으면 조사 검사는 전부 잡아 놓고 통과했다고 하는 셈이 된다.
+    ("조사 — ㄹ 받침 '로' 는 그냥 둔다(통과해야 함)", "docs/performance.md",
+     lambda s: s.replace("모델링 경로,", "분해 모델로 가는 모델링 경로,", 1), None),
 ]
 
 
@@ -92,6 +101,15 @@ def main() -> int:
         p, before = edit(rel, fn)
         try:
             code, out = run(with_model)
+            if needle is None:
+                # **걸리면 안 되는** 경우. 통과해야 맞다.
+                good = code == 0
+                ok &= good
+                print(f"  {name:<34} {'통과' if good else '잘못 잡음'}")
+                if not good:
+                    tail = [l for l in out.splitlines() if l.startswith("[X]")]
+                    print(f"      종료 {code} · 보고 {tail[:2]}")
+                continue
             caught = code != 0 and needle in out
             ok &= caught
             print(f"  {name:<34} {'잡음' if caught else '못 잡음'}")
