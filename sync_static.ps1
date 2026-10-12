@@ -13,6 +13,7 @@
       .\sync_static.ps1 -NoPublish      배포 없이 로컬 확인용 빌드까지만
       .\sync_static.ps1 -NoQuotes       호가(매물 순위·단지 상세)를 뺀다
       .\sync_static.ps1 -Quiet          스케줄러용. 요약만 남긴다
+      .\sync_static.ps1 -AllowAnyBranch main 이 아니거나 더러운 트리에서도 배포
 
     UTF-8 with BOM 으로 저장해야 한다 — setup.ps1 의 주석 참조.
 #>
@@ -21,6 +22,7 @@ param(
     [switch]$NoPublish,
     [switch]$NoQuotes,
     [switch]$Quiet,
+    [switch]$AllowAnyBranch,
     [string]$Branch = 'gh-pages'
 )
 
@@ -74,6 +76,64 @@ Say '=== 동기화 시작 ==='
 
 if (-not (Test-Path $VPy)) { Die "가상환경이 없습니다: $Backend\.venv — setup.bat 을 먼저 실행하세요." }
 if (-not (Test-Path (Join-Path $Frontend 'node_modules'))) { Die '프론트엔드 의존성이 없습니다 — setup.bat 을 먼저 실행하세요.' }
+
+# ------------------------------------------------------------ 0) 배포해도 되는 상태인가
+<#
+    스케줄러가 **작업 트리를 그대로** 올린다.
+
+    실제로 그랬다. 2026-10-12 10:19 배포의 소스가 6cf9898 인데, 그것은 거시 분석
+    탭을 만들다 만 브랜치의 중간 커밋이다 — 화면이 아직 없던 상태가 공개 사이트로
+    나갔다. 이번엔 해가 없었지만(탭이 아직 목록에 없었다) 구조가 문제다. 하루 한 번
+    도는 작업이 **그 순간 체크아웃된 것**을 올린다.
+
+    그래서 올리기 전에 셋을 본다. 내보내기·빌드는 막지 않는다 — 로컬에서 확인하는
+    것은 언제나 되어야 한다. 막는 것은 **공개되는 행위**뿐이다.
+
+      · 브랜치가 main 인가           (브랜치 작업물이 공개되지 않도록)
+      · 커밋되지 않은 변경이 없는가    (올린 것을 나중에 재현할 수 있도록)
+      · origin/main 에 다 올라갔는가  (커밋 메시지에 적는 소스 해시가 떠돌지 않도록)
+
+    **실패가 아니라 생략이다.** 종료 코드 0 으로 끝낸다 — 스케줄러에 거짓 실패를
+    남기면 진짜 실패와 구분할 수 없게 된다(이 파일 Run 함수의 주석과 같은 이유).
+    알고도 올릴 때는 -AllowAnyBranch 를 준다. 못 하게 막는 것이 아니라 **의도적인
+    행위로 만드는 것**이 목적이다.
+#>
+function GitOut ([string[]]$argList) {
+    # native 명령은 stderr 한 줄마다 ErrorRecord 를 만든다. 잠시 Continue 로 둔다.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $out = (& git -C $Root @argList 2>&1 | Out-String) } finally { $ErrorActionPreference = $prev }
+    return $out.Trim()
+}
+
+if (-not $NoPublish -and -not $AllowAnyBranch) {
+    $why = @()
+
+    $branchNow = GitOut @('rev-parse', '--abbrev-ref', 'HEAD')
+    if ($branchNow -ne 'main') { $why += "지금 브랜치가 '$branchNow' 입니다 (main 이어야 합니다)" }
+
+    $dirty = GitOut @('status', '--porcelain')
+    if ($dirty) {
+        $n = @($dirty -split "`r?`n" | Where-Object { $_.Trim() }).Count
+        $why += "커밋되지 않은 변경이 $n 개 있습니다"
+    }
+
+    $ahead = GitOut @('rev-list', '--count', 'origin/main..HEAD')
+    if ($ahead -match '^[0-9]+$') {
+        if ([int]$ahead -gt 0) { $why += "origin/main 에 없는 커밋이 $ahead 개 있습니다" }
+    } else {
+        $why += "origin/main 을 읽지 못했습니다 ($ahead)"
+    }
+
+    if ($why.Count) {
+        Say '배포를 건너뜁니다 — 공개 사이트에 올릴 상태가 아닙니다.'
+        foreach ($w in $why) { Say "  · $w" }
+        Say '  로컬 확인만 하려면 -NoPublish, 알고도 올리려면 -AllowAnyBranch 를 줍니다.'
+        Say '=== 완료(배포 생략) ==='
+        exit 0
+    }
+    Say '배포 전제 확인 — main · 변경 없음 · origin 과 같음'
+}
 
 # ------------------------------------------------------------ 1) 내보내기
 <#
