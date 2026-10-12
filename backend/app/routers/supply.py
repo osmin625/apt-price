@@ -48,6 +48,7 @@ def overview(db: Session = Depends(get_db)):
         ],
         "age_pressure": sp.age_pressure(db),
         "unsold": sp.unsold(db),
+        "south_supply": sp.south_supply(db),
         "note": (
             # `{data.note}` 로 **평문** 렌더된다. 마크다운을 쓰면 별표가 그대로 보인다
             # — 학원 노트·joint_note 에서 이미 두 번 겪었다.
