@@ -516,6 +516,53 @@ MACRO_TABLES: dict[str, tuple[str, int, dict[str, str]]] = {
 }
 
 
+# 우리가 보는 '경기 남부'. **코드가 아니라 이름으로 맞춘다** — 미분양 표는
+# `경기>수원시` 처럼 시 단위 이름만 주고 법정동코드를 주지 않는다. 시 코드를
+# 기억으로 적었다가 틀리면 남의 지역 미분양이 섞이는데, 그건 빈 줄보다 나쁘다.
+#
+# 목록은 `molit.DISTRICTS` 의 구 이름에서 **파생**한다('수원시 영통구' -> '수원시').
+# 대상 지역을 넓히면 저절로 따라온다 — 손으로 유지하는 목록을 하나 더 만들지 않는다.
+SOUTH_GG_CODE = "41S"  # 법정동코드가 아니다. 우리가 정의한 묶음이라는 표시다.
+
+
+def south_gg_cities() -> list[str]:
+    return sorted({name.split()[0] for name in DISTRICTS.values()})
+
+
+def fetch_unsold_south(*, page_size: int = 1000) -> list[RebPoint]:
+    """경기 남부 8개 시 미분양의 월별 합.
+
+    **한 시라도 경로를 못 찾으면 실패시킨다.** 일곱 개만 더해 놓고 '경기 남부'
+    라고 부르면 조용히 작은 값이 된다 — 빠진 줄은 오류를 내지 않는다.
+    """
+    table_id, itm_id, _ = MACRO_TABLES["unsold"]
+    total: dict[str, float] = {}
+    unit = ""
+    for city in south_gg_cities():
+        cls_id = macro_cls_id(table_id, f"경기>{city}")
+        data = _get("SttsApiTblData.do", {
+            "STATBL_ID": table_id, "DTACYCLE_CD": "MM",
+            "CLS_ID": cls_id, "ITM_ID": itm_id, "pSize": page_size,
+        })
+        _, rows = _unwrap(data, "SttsApiTblData")
+        got = 0
+        for r in rows:
+            v = r.get("DTA_VAL")
+            t = str(r.get("WRTTIME_IDTFR_ID") or "")
+            if v is None or len(t) != 6:
+                continue
+            total[t] = total.get(t, 0.0) + float(v)
+            unit = unit or str(r.get("UI_NM") or "")
+            got += 1
+        if not got:
+            raise RebError(f"미분양: '경기>{city}' 가 0행입니다.")
+
+    name = "경기 남부 " + "·".join(c[:-1] for c in south_gg_cities())
+    return [RebPoint(table_id=table_id, metric="unsold", sgg_cd=SOUTH_GG_CODE,
+                     cls_id="", region_name=name[:60], ym=t, value=v, unit=unit)
+            for t, v in sorted(total.items())]
+
+
 def macro_cls_id(table_id: str, path: str) -> str:
     """경로 문자열 그대로 `CLS_ID` 를 찾는다. 없으면 실패시킨다.
 

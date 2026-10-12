@@ -76,6 +76,20 @@ def main() -> int:
             print(f"      {metric:<13} 00   {n:>4}행  {pts[0].ym}~{pts[-1].ym}"
                   f"  {time.perf_counter() - t0:.1f}s")
 
+        if "unsold" in metrics:
+            # 경기 남부 8개 시 합. 공급 표는 시도까지만 오지만 **미분양만 시 단위가
+            # 있다** — 738개를 훑어 확인했다. 우리가 보는 지역에 가장 가까운 줄이다.
+            t0 = time.perf_counter()
+            try:
+                pts = reb.fetch_unsold_south()
+                n = upsert(db, pts)
+                db.commit()
+                print(f"      {'unsold':<13} {reb.SOUTH_GG_CODE}  {n:>4}행  "
+                      f"{pts[0].ym}~{pts[-1].ym}  {time.perf_counter() - t0:.1f}s")
+            except reb.RebError as exc:
+                print(f"  [X] unsold        {reb.SOUTH_GG_CODE}  {exc}")
+                bad += 1
+
         for metric in sorted(set(metrics) & set(reb.MACRO_TABLES)):
             for sgg_cd in reb.MACRO_TABLES[metric][2]:
                 t0 = time.perf_counter()

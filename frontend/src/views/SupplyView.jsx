@@ -26,6 +26,17 @@ import PanelCard from '../components/PanelCard'
  * 시차 0에서 +0.693 이고 시차가 늘수록 떨어진다. 그래서 경기만 가늠하고 서울은
  * **왜 못 하는지를 적는다.** 빈 카드보다 낫고, 억지로 낸 숫자보다는 훨씬 낫다.
  */
+/**
+ * 공표 통계의 '경기' 는 **북부를 포함한다.** 공급 표에 시 단위 분류가 하나도 없어
+ * (준공·착공·인허가·가구수·멸실 전부 0개) 좁힐 수가 없다. 화면에 그렇게 적는다 —
+ * 경기 전체를 경기 남부처럼 부르지 않는다.
+ *
+ * 얼마나 다른지는 미분양에서 보인다(그것만 시 단위가 있다). 2026-06 기준 경기
+ * 전체가 14,509호인데 **경기 남부 8개 시는 834호**다. 17배 차이다.
+ */
+const REGION_LABEL = { 서울: '서울', 경기: '경기 전체' }
+const regionName = (r) => REGION_LABEL[r] || r
+
 export default function SupplyView() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -75,18 +86,23 @@ export default function SupplyView() {
       </section>
 
       <section className="card">
-        <h2>공급 과부족</h2>
+        <h2>적정보다 더 지었나, 덜 지었나</h2>
         <p className="sub">
           <b>적정 공급</b>과 <b>준공</b>을 같은 축에 겹쳤습니다. 준공이 아래로 내려가
-          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 덜 지은
-          해입니다. 차이만 그리면 적정이 커진 것인지 준공이 준 것인지 알 수 없어
-          두 선을 같이 둡니다.
+          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 <b>덜 지은 해</b>
+          이고, 파랗게 칠해진 해는 <b>더 지은 해</b>입니다. 차이만 그리면 적정이 커진
+          것인지 준공이 준 것인지 알 수 없어 두 선을 같이 둡니다.
+        </p>
+        <p className="sub">
+          점선은 <b>해마다의 차이를 더해 온 값</b>입니다(오른쪽 축). 더 지은 해에는
+          올라가고 <b>덜 지은 해에는 내려갑니다</b> — 한 방향으로만 쌓이는 값이
+          아닙니다. 0 아래로 내려가면 그 기간 전체로 덜 지었다는 뜻입니다.
         </p>
         <div className="macro-grid">
           {data.regions.map((r) => (
             <PanelCard
               key={r.sgg_cd}
-              title={`${r.region} 과부족`}
+              title={`${regionName(r.region)} — 적정 대비 공급`}
               sub={gapSub(r)}
               onOpen={() => setOpen({ kind: 'balance', r })}
             >
@@ -96,7 +112,7 @@ export default function SupplyView() {
           {data.regions.map((r) => (
             <PanelCard
               key={`p-${r.sgg_cd}`}
-              title={`${r.region} 파이프라인`}
+              title={`${regionName(r.region)} 파이프라인`}
               sub="인허가 → 착공 → 준공 (12개월 누적)"
               onOpen={() => setOpen({ kind: 'pipeline', r })}
             >
@@ -104,7 +120,7 @@ export default function SupplyView() {
             </PanelCard>
           ))}
           <PanelCard
-            title="2~3년 뒤 입주 (경기)"
+            title="2~3년 뒤 입주 (경기 전체)"
             sub={gg?.lead?.available
               ? `착공 ${gg.lead.lag_months}개월 뒤 · 상관 ${gg.lead.corr?.toFixed(3)}`
               : '가늠할 수 없음'}
@@ -123,13 +139,40 @@ export default function SupplyView() {
         <p className="muted small">{data.note}</p>
       </section>
 
+      <section className="card">
+        <h2>미분양 — 지어 놓고 안 팔린 집</h2>
+        <p className="sub">
+          공급 지표 가운데 <b>시 단위가 있는 것은 미분양뿐</b>입니다. 그래서 여기서만
+          경기 남부를 따로 낼 수 있습니다. 지역마다 자릿수가 달라 한 축에 겹치지 않고
+          카드를 나눴습니다.
+        </p>
+        <div className="macro-grid">
+          {data.unsold.regions.map((u) => (
+            <PanelCard
+              key={u.sgg_cd}
+              title={u.region}
+              sub={unsoldSub(u)}
+              onOpen={() => setOpen({ kind: 'unsold' })}
+            >
+              <UnsoldLine u={u} />
+            </PanelCard>
+          ))}
+        </div>
+        <p className="muted small">{data.unsold.note}</p>
+      </section>
+
+      {open?.kind === 'unsold' && (
+        <Modal title="미분양" onClose={() => setOpen(null)} wide>
+          <UnsoldTable d={data.unsold} />
+        </Modal>
+      )}
       {open?.kind === 'balance' && (
-        <Modal title={`${open.r.region} — 공급 과부족`} onClose={() => setOpen(null)} wide>
+        <Modal title={`${regionName(open.r.region)} — 적정 대비 공급`} onClose={() => setOpen(null)} wide>
           <BalanceTable r={open.r} />
         </Modal>
       )}
       {open?.kind === 'pipeline' && (
-        <Modal title={`${open.r.region} — 공급 파이프라인`} onClose={() => setOpen(null)} wide>
+        <Modal title={`${regionName(open.r.region)} — 공급 파이프라인`} onClose={() => setOpen(null)} wide>
           <PipeTable r={open.r} />
         </Modal>
       )}
@@ -151,7 +194,10 @@ function gapSub(r) {
   const last = [...r.rows].reverse().find((x) => x.gap != null)
   if (!last) return '—'
   const short = r.rows.filter((x) => x.gap != null && x.gap < 0).length
-  return `${last.year}년 ${last.gap > 0 ? '+' : ''}${fmt(last.gap)}호 · 부족했던 해 ${short}번`
+  // '과부족 +7,997호' 는 읽는 사람이 부호의 뜻을 외워야 한다. 말로 적는다 —
+  // "과부족이 부족한 물량 아니냐" 는 물음을 실제로 받았다.
+  const word = last.gap >= 0 ? '더 지음' : '덜 지음'
+  return `${last.year}년 ${fmt(Math.abs(last.gap))}호 ${word} · 덜 지은 해 ${short}번`
 }
 
 /**
@@ -189,9 +235,13 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   const line = (key) =>
     list.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
 
-  // 누계는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가 납작해져
-  // 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
-  // 0 을 반드시 축에 포함한다 — 누계가 음수로 돌아섰는지가 이 선의 요점이다.
+  // 누적 차이는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가
+  // 납작해져 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
+  // 0 을 반드시 축에 포함한다 — 음수로 돌아섰는지가 이 선의 요점이다.
+  //
+  // **'누계' 라고 적었다가 물음을 받았다** — "누계라는데 내려간다". 맞는 지적이다.
+  // 더한 값이 아니라 **더한 것에서 뺀 것**이라 덜 지은 해에는 내려간다(서울·경기
+  // 각각 14년 중 6년). 계산은 맞았고 이름이 틀렸다.
   const cums = list.map((r) => r.gap_cum).filter((v) => v != null)
   const c2 = cums.length
     ? { lo: Math.min(0, ...cums) * 1.1, hi: Math.max(0, ...cums) * 1.1 }
@@ -286,11 +336,11 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
                   <div className="t-row">적정 {fmt(r.adequate)}호</div>
                   <div className="t-row">준공 {fmt(r.done)}호</div>
                   <div className="t-row">
-                    과부족 {r.gap > 0 ? '+' : ''}{fmt(r.gap)}호
+                    {r.gap >= 0 ? '더 지음' : '덜 지음'} {fmt(Math.abs(r.gap))}호
                   </div>
                   {r.gap_cum != null && (
                     <div className="t-row">
-                      누계 {r.gap_cum > 0 ? '+' : ''}{fmt(r.gap_cum)}호
+                      누적 차이 {r.gap_cum >= 0 ? '+' : '−'}{fmt(Math.abs(r.gap_cum))}호
                     </div>
                   )}
                 </>,
@@ -319,12 +369,12 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
         </span>
         <span className="key">
           <span className="swatch" style={{ background: 'var(--neg)', opacity: 0.3 }} />
-          부족한 해
+          덜 지은 해
         </span>
         {c2 && (
           <span className="key">
             <span className="swatch dash" style={{ background: 'var(--text-secondary)' }} />
-            과부족 누계{cumFrom ? ` (${cumFrom}년~, 오른쪽 축)` : ''}
+            누적 차이{cumFrom ? ` (${cumFrom}년~, 오른쪽 축)` : ''}
           </span>
         )}
       </div>
@@ -412,6 +462,81 @@ function AgeBars({ bands }) {
   )
 }
 
+function unsoldSub(u) {
+  const y = u.yoy == null ? '' : ` · 전년비 ${u.yoy > 0 ? '+' : ''}${u.yoy}%`
+  return `${fmtYm(u.latest.ym)} ${fmt(u.latest.value)}호${y}`
+}
+
+/** 한 지역의 미분양 추이. 최고점을 같이 찍어 지금이 어느 수준인지 보이게 한다. */
+function UnsoldLine({ u }) {
+  const [ref, width] = useMeasure()
+  const s = u.series
+  if (!s.length) return <p className="empty">값이 없습니다</p>
+  const H = 110
+  const W = Math.max(width, 240)
+  const hi = Math.max(...s.map((d) => d.value)) * 1.08 || 1
+  const x = (i) => (i / Math.max(s.length - 1, 1)) * W
+  const y = (v) => H - (v / hi) * (H - 10) - 4
+  const d = s.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ')
+  const pi = s.findIndex((p) => p.ym === u.peak.ym)
+  return (
+    <div ref={ref}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img"
+           aria-label={`${u.region} 미분양 추이`}>
+        <path d={`${d} L${x(s.length - 1)},${H} L0,${H} Z`} fill="var(--series-1)" opacity="0.1" />
+        <path d={d} fill="none" stroke="var(--series-1)" strokeWidth="1.8" />
+        {pi >= 0 && <circle cx={x(pi)} cy={y(u.peak.value)} r="3" fill="var(--neg)" />}
+        <circle cx={x(s.length - 1)} cy={y(s[s.length - 1].value)} r="3" fill="var(--series-1)" />
+      </svg>
+      <div className="muted small">
+        최고 {fmtYm(u.peak.ym)} {fmt(u.peak.value)}호
+      </div>
+    </div>
+  )
+}
+
+function UnsoldTable({ d }) {
+  return (
+    <>
+      <p className="sub">{d.note}</p>
+      <div className="table-wrap">
+        <table className="coef">
+          <thead>
+            <tr>
+              <th>지역</th>
+              <th className="num">최근</th>
+              <th className="num">전년비</th>
+              <th className="num">최고</th>
+              <th className="num">최고 대비</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.regions.map((u) => (
+              <tr key={u.sgg_cd}>
+                <td>{u.region}</td>
+                <td className="num">
+                  {fmt(u.latest.value)}호<span className="muted"> ({fmtYm(u.latest.ym)})</span>
+                </td>
+                <td className={`num ${u.yoy == null ? '' : u.yoy > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                  {u.yoy == null ? '—' : `${u.yoy > 0 ? '+' : ''}${u.yoy}%`}
+                </td>
+                <td className="num muted">
+                  {fmt(u.peak.value)}호 ({fmtYm(u.peak.ym)})
+                </td>
+                <td className="num">{Math.round((u.latest.value / u.peak.value) * 100)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">
+        경기 남부는 수원·용인·화성·안양·오산·의왕·군포·과천 8개 시의 합입니다.
+        시 단위는 전체보다 한두 달 늦게 공표됩니다.
+      </p>
+    </>
+  )
+}
+
 function BalanceTable({ r }) {
   return (
     <>
@@ -434,7 +559,7 @@ function BalanceTable({ r }) {
               <th className="num">적정 공급</th>
               <th className="num">적정(3년평균)</th>
               <th className="num">준공</th>
-              <th className="num">과부족</th>
+              <th className="num">더(+)·덜(−) 지음</th>
             </tr>
           </thead>
           <tbody>
