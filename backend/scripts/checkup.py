@@ -56,6 +56,10 @@ STALE = {
     "reb_days": 75,
     # 소상공인 상가정보는 분기 갱신이다. 두 분기를 넘기지 않는다.
     "amenity_days": 180,
+    # 손으로 받는 CSV(경기도기본통계 주택 현황). **연 단위 통계**라 1년에 한 번
+    # 새 해가 붙는다. 400일을 넘겼으면 한 해를 통째로 놓쳤다는 뜻이다.
+    # API 가 없어 자동 갱신이 안 된다 — 사람이 받아야 하므로 알려 주는 것이 전부다.
+    "manual_csv_days": 400,
 }
 DEAD_CSS_WARN_PCT = 15.0
 
@@ -160,6 +164,22 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     amen_age = days_since(oldest_amen.date() if oldest_amen else None, today)
     say("입지 수집", amen_age, STALE["amenity_days"],
         f"python -m scripts.ingest_amenity --older-than {STALE['amenity_days']}")
+
+    # 손으로 받은 자료. 파일 이름의 날짜를 본다 — 파일 수정 시각은 복사할 때마다
+    # 바뀌어서 '언제 받은 자료인가' 를 말해 주지 않는다.
+    manual = sorted((ROOT / "backend" / "data" / "manual").glob("gg_housing_*.csv"))
+    if not manual:
+        rep.add("!", "신선도", "손으로 받은 주택 현황 CSV 가 없습니다 "
+                             "(backend/data/manual/README.md 참조)")
+        print("  손으로 받은 CSV        없음")
+    else:
+        stamp = manual[-1].stem.split("_")[-1]
+        try:
+            got = dt.date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
+        except ValueError:
+            got = None
+        say("주택 현황 CSV", days_since(got, today), STALE["manual_csv_days"],
+            "backend/data/manual/README.md 의 주소에서 다시 받는다")
 
 
 # ──────────────────────────────────────────────────────────

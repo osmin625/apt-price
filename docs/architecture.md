@@ -45,6 +45,7 @@ backend/
     ingest_macro.py         거시 요인(미분양·심리·가계대출·금리·M2·기준금리)
     ingest_kapt.py          K-apt 단지 상세(세대수 등) — 우리 단지에 붙인다
     ingest_kapt_all.py      K-apt 시군구 전수 — 붙이지 않고 담는다(경기 남부 공급)
+    ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
     export_static.py        정적 사이트용 스냅샷
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)

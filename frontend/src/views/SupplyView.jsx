@@ -147,6 +147,11 @@ export default function SupplyView() {
           — 소규모 단지와 비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게
           잡힙니다. <b>적정 공급에서 빼지 않고 추세만 봅니다.</b>
         </p>
+        <p className="sub">
+          짝이 되는 <b>가구 증가</b>도 경기도기본통계에서 시 단위로 받아 나란히 둡니다.
+          다만 <b>빼지 않습니다</b> — 가구 증가는 모든 주택 유형의 수요이고, 위 값은
+          아파트만이라 1:1 로 맞물리지 않습니다.
+        </p>
         <div className="macro-grid">
           <PanelCard
             title="경기 남부 아파트 입주 물량"
@@ -491,7 +496,11 @@ function southSub(d) {
   const done = d.years.filter((y) => y.year < d.partial_from)
   const last = done[done.length - 1]
   if (!last) return `단지 ${fmt(d.coverage.units)}곳`
-  return `${last.year}년 ${fmt(last.households)}세대 · 단지 ${fmt(d.coverage.units)}곳 전수`
+  const g = last.household_growth
+  return (
+    `${last.year}년 ${fmt(last.households)}세대 입주`
+    + (g != null ? ` · 가구 ${g > 0 ? '+' : ''}${fmt(g)}` : '')
+  )
 }
 
 /**
@@ -546,12 +555,24 @@ function SouthBars({ d }) {
 
 function SouthTable({ d }) {
   const c = d.coverage
+  const x = d.cross_check
   return (
     <>
       <p className="sub">{d.note}</p>
+      {x && (
+        <p className="sub">
+          <b>다른 자료와 맞춰 봤습니다.</b> {x.from}~{x.to}년 아파트 재고가{' '}
+          {fmt(x.stock_delta)}호 늘었고(주택총조사), 같은 기간 입주 물량 합은{' '}
+          {fmt(x.kapt_sum)}세대입니다(K-apt). 차이 {x.gap_pct}% — 기관도 방식도 다른 두
+          자료가 이만큼 맞으면 위 숫자를 믿을 근거가 됩니다. 남는 차이는 멸실분과 연말
+          기준 시차로 설명됩니다.
+        </p>
+      )}
       <p className="muted small">
         전수 {fmt(c.units)}곳 가운데 세대수가 있는 단지 {fmt(c.with_households)}곳,
-        사용승인 연도가 있는 단지 {fmt(c.with_year)}곳입니다.
+        사용승인 연도가 있는 단지 {fmt(c.with_year)}곳입니다. 가구 증가는 시군구 값이
+        있는 2021년부터만 냅니다 — 2015~2020 은 공표 자료에 시군구가 비어 있고,
+        2021년에 주택수 출처가 바뀌어 그 앞과 이어지지 않습니다.
       </p>
       <div className="table-wrap">
         <table className="coef">
@@ -559,7 +580,8 @@ function SouthTable({ d }) {
             <tr>
               <th>연도</th>
               <th className="num">단지</th>
-              <th className="num">세대</th>
+              <th className="num">입주 세대</th>
+              <th className="num">가구 증가</th>
               <th />
             </tr>
           </thead>
@@ -569,6 +591,11 @@ function SouthTable({ d }) {
                 <td>{y.year}</td>
                 <td className="num">{y.complexes}</td>
                 <td className="num">{fmt(y.households)}</td>
+                <td className="num muted">
+                  {y.household_growth == null
+                    ? '—'
+                    : `${y.household_growth > 0 ? '+' : ''}${fmt(y.household_growth)}`}
+                </td>
                 <td className="muted">
                   {d.partial_from && y.year >= d.partial_from ? '덜 찬 값' : ''}
                 </td>
