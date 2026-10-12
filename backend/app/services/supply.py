@@ -174,6 +174,36 @@ def south_supply(db: Session, since: int = 2005) -> dict:
     years = [{"year": str(y), "complexes": int(n), "households": int(hh or 0)}
              for y, n, hh in rows]
 
+    # 가구 증가 — 공급의 짝이다. 경기도기본통계 CSV 에서 온다(시군구별 일반가구수).
+    # **빼지 않는다.** 가구 증가는 모든 주택 유형의 수요이고 위 값은 아파트만이다.
+    # 나란히 두고 사람이 견주게 한다.
+    hh_series = _series(db, SOUTH_GG, "households_south")
+    growth: dict[str, int] = {}
+    ks = sorted(hh_series)
+    for i in range(1, len(ks)):
+        growth[ks[i][:4]] = int(hh_series[ks[i]] - hh_series[ks[i - 1]])
+    for y in years:
+        y["household_growth"] = growth.get(y["year"])
+        y["households_total"] = (int(hh_series.get(y["year"] + "00"))
+                                 if y["year"] + "00" in hh_series else None)
+
+    # 교차검증 — 아파트 재고 증가와 K-apt 입주 합이 맞는가.
+    # 기관도 방식도 다른 두 자료다(주택총조사 재고 vs 단지별 사용승인). 맞으면
+    # 위의 입주 물량을 믿을 근거가 되고, 벌어지면 화면이 그렇게 말해야 한다.
+    apt = _series(db, SOUTH_GG, "houses_apt_south")
+    cross = None
+    if len(apt) >= 2:
+        aks = sorted(apt)
+        first, last = aks[0][:4], aks[-1][:4]
+        stock = int(apt[aks[-1]] - apt[aks[0]])
+        moved = sum(y["households"] for y in years
+                    if first < y["year"] <= last)
+        cross = {
+            "from": first, "to": last,
+            "stock_delta": stock, "kapt_sum": moved,
+            "gap_pct": round((moved / stock - 1) * 100, 1) if stock else None,
+        }
+
     # 마지막 두 해는 아직 들어오는 중이라 따로 표시한다. '0' 이 아니라 '덜 찼다'.
     partial_from = years[-2]["year"] if len(years) >= 2 else None
 
@@ -183,11 +213,14 @@ def south_supply(db: Session, since: int = 2005) -> dict:
         "coverage": {"units": total, "with_households": with_hh,
                      "with_year": with_yr},
         "partial_from": partial_from,
+        "cross_check": cross,
         "note": ("K-apt 의무관리대상 공동주택을 17개 구 전수로 받아 사용승인 연도별로 "
                  "모은 값입니다. 공급 통계의 '준공' 과 다릅니다 — 소규모 단지와 "
                  "비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게 잡힙니다. "
                  "적정 공급에서 이 값을 빼지 않고 추세만 견줍니다. "
-                 "최근 두 해는 사용승인이 아직 안 난 단지가 있어 덜 찬 값입니다."),
+                 "최근 두 해는 사용승인이 아직 안 난 단지가 있어 덜 찬 값입니다. "
+                 "가구 증가는 경기도기본통계의 시군구별 일반가구수에서 왔고, "
+                 "모든 주택 유형의 수요라 아파트 입주와 빼서 쓰지 않습니다."),
     }
 
 
