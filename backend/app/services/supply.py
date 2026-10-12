@@ -41,6 +41,10 @@ from ..models import RebStat
 # 가구수는 '천' 단위로 공표된다(라벨이 뒤바뀌어 있다 — 위 주석 참조).
 HH_SCALE = 1000.0
 
+# 경기 남부 8개 시 묶음. 법정동코드가 아니라 **우리가 정의한 묶음**이다
+# (`clients/reb.py` 의 SOUTH_GG_CODE 참조).
+SOUTH_GG = "41S"
+
 # 착공이 준공으로 나타나기까지. **재서 정했다**(상관 최대 지점).
 # 서울은 선행성이 성립하지 않아 넣지 않는다.
 LEAD_MONTHS: dict[str, int] = {"41": 27}
@@ -124,6 +128,44 @@ def balance(db: Session, sgg_cd: str) -> dict:
     first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
     return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
             "cum_from": first}
+
+
+def unsold(db: Session) -> dict:
+    """미분양 — **공급 표 중 유일하게 시 단위가 있다.**
+
+    적정 공급·준공·착공·인허가는 전부 시도까지만 와서 경기 남부로 좁힐 수 없다
+    (738개 표를 훑어 확인했다). 미분양만 예외라, 우리가 보는 지역에 가장 가까운
+    공급 지표다. 그래서 따로 카드를 둔다.
+
+    세 줄을 같이 낸다 — 서울·경기 전체·경기 남부 8개 시. 남부만 보면 수도권 전체가
+    어느 쪽인지 모르고, 경기 전체만 보면 북부가 섞인다.
+    """
+    out = []
+    for cd, label in (("11", "서울"), ("41", "경기 전체"), (SOUTH_GG, "경기 남부 8개 시")):
+        s = _series(db, cd, "unsold")
+        if not s:
+            continue
+        ks = sorted(s)
+        last = ks[-1]
+        # 전년 같은 달 대비. 미분양은 계절성이 있어 전월 대비는 흔들린다.
+        prev = f"{int(last[:4]) - 1}{last[4:]}"
+        out.append({
+            "sgg_cd": cd,
+            "region": label,
+            "latest": {"ym": last, "value": round(s[last])},
+            "yoy": (round((s[last] / s[prev] - 1) * 100, 1)
+                    if s.get(prev) else None),
+            "peak": {"ym": max(s, key=lambda k: s[k]),
+                     "value": round(max(s.values()))},
+            "series": [{"ym": k, "value": round(s[k])} for k in ks],
+        })
+    return {
+        "regions": out,
+        "note": ("미분양은 지은 뒤 안 팔린 집입니다. 늘면 수요가 식었다는 뜻이고, "
+                 "다음 공급을 줄이는 쪽으로도 작용합니다. "
+                 "공급 지표 가운데 시 단위가 있는 것은 미분양뿐이라 "
+                 "경기 남부를 따로 낼 수 있습니다."),
+    }
 
 
 def pipeline(db: Session, sgg_cd: str, months: int = 12) -> dict:
