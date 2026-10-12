@@ -78,9 +78,14 @@ export default function SupplyView() {
         <h2>적정보다 더 지었나, 덜 지었나</h2>
         <p className="sub">
           <b>적정 공급</b>과 <b>준공</b>을 같은 축에 겹쳤습니다. 준공이 아래로 내려가
-          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 <b>덜 지은</b>
-          해이고, 파랗게 칠해진 해는 <b>더 지은</b> 해입니다. 차이만 그리면 적정이 커진
+          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 <b>덜 지은 해</b>
+          이고, 파랗게 칠해진 해는 <b>더 지은 해</b>입니다. 차이만 그리면 적정이 커진
           것인지 준공이 준 것인지 알 수 없어 두 선을 같이 둡니다.
+        </p>
+        <p className="sub">
+          점선은 <b>해마다의 차이를 더해 온 값</b>입니다(오른쪽 축). 더 지은 해에는
+          올라가고 <b>덜 지은 해에는 내려갑니다</b> — 한 방향으로만 쌓이는 값이
+          아닙니다. 0 아래로 내려가면 그 기간 전체로 덜 지었다는 뜻입니다.
         </p>
         <div className="macro-grid">
           {data.regions.map((r) => (
@@ -192,9 +197,13 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   const line = (key) =>
     list.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
 
-  // 누계는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가 납작해져
-  // 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
-  // 0 을 반드시 축에 포함한다 — 누계가 음수로 돌아섰는지가 이 선의 요점이다.
+  // 누적 차이는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가
+  // 납작해져 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
+  // 0 을 반드시 축에 포함한다 — 음수로 돌아섰는지가 이 선의 요점이다.
+  //
+  // **'누계' 라고 적었다가 물음을 받았다** — "누계라는데 내려간다". 맞는 지적이다.
+  // 더한 값이 아니라 **더한 것에서 뺀 것**이라 덜 지은 해에는 내려간다(서울·경기
+  // 각각 14년 중 6년). 계산은 맞았고 이름이 틀렸다.
   const cums = list.map((r) => r.gap_cum).filter((v) => v != null)
   const c2 = cums.length
     ? { lo: Math.min(0, ...cums) * 1.1, hi: Math.max(0, ...cums) * 1.1 }
@@ -293,7 +302,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
                   </div>
                   {r.gap_cum != null && (
                     <div className="t-row">
-                      누계 {r.gap_cum >= 0 ? '+' : '−'}{fmt(Math.abs(r.gap_cum))}호
+                      누적 차이 {r.gap_cum >= 0 ? '+' : '−'}{fmt(Math.abs(r.gap_cum))}호
                     </div>
                   )}
                 </>,
@@ -327,7 +336,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
         {c2 && (
           <span className="key">
             <span className="swatch dash" style={{ background: 'var(--text-secondary)' }} />
-            더 지은 양 누계{cumFrom ? ` (${cumFrom}년~, 오른쪽 축)` : ''}
+            누적 차이{cumFrom ? ` (${cumFrom}년~, 오른쪽 축)` : ''}
           </span>
         )}
       </div>
