@@ -45,7 +45,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import RebStat
-from .policy import POLICY
+from .policy import COVERS_FROM, POLICY
 
 # 방향을 말할 수 있는 최소 세기. 이보다 약하면 '거의 없음' 으로 적고 화살표를
 # 띄우지 않는다. 0.15 는 재 본 값들의 분포에서 정했다 — 기준금리(-0.09)와
@@ -379,7 +379,80 @@ def policy_rows(db: Session) -> list[dict]:
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
+def policy_summary(rows: list[dict]) -> list[dict]:
+    """종류별로 **그 뒤 12개월에 실제로 무슨 일이 있었나.**
+
+    재 보면 상식과 반대다 — 규제강화 뒤가 더 올랐고 완화 뒤가 떨어졌다
+    (12·16 +15.3%, 6·17 +17.4%, 7·10 +19.0% / 2022-11 -9.2%, 1·3 -2.7%).
+    **정책이 거꾸로 작동해서가 아니라 오르니까 규제가 나왔기 때문이다.** 이걸
+    적지 않으면 보는 사람이 "규제하면 오른다" 로 읽는다. 그래서 숫자와 함께
+    왜 그렇게 보이는지를 같이 낸다.
+    """
+    out = []
+    for kind in ("규제강화", "규제완화", "공급확대", "세제강화", "세제완화"):
+        vals = sorted(r["fwd12"] for r in rows
+                      if r["kind"] == kind and r["fwd12"] is not None)
+        if not vals:
+            continue
+        mid = (vals[len(vals) // 2] if len(vals) % 2
+               else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2)
+        out.append({"kind": kind, "n": len(vals), "median": round(mid, 2),
+                    "min": vals[0], "max": vals[-1]})
+    return out
+
+
+def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
+    """그룹 한 줄로 접는다 — '한 눈에' 가 이 탭의 목적이다.
+
+    방향은 **세기로 가중한 합**이다. 한 그룹 안에서 요인들이 엇갈리면(금리는
+    기준금리와 대출금리가 같이 가지만 공급은 준공과 미분양이 엇갈릴 수 있다)
+    합이 0 쪽으로 가고 '엇갈림' 으로 적는다.
+
+    정책·세금은 **방향을 내지 않는다.** 사건 수가 열몇 개뿐이고 내생적이다 —
+    오르니까 규제가 나온다. 최근 조치와 측정된 사후 변화만 보여 준다.
+    """
+    out = []
+    for g in GROUP_ORDER:
+        mine = [f for f in factors if f["group"] == g]
+        if mine:
+            score = sum((1 if f["pressure"]["dir"] == "up" else
+                         -1 if f["pressure"]["dir"] == "down" else 0)
+                        * abs(f["measured"]["r"] or 0) for f in mine)
+            named = [f for f in mine if f["pressure"]["dir"] != "none"]
+            if not named:
+                dirn, label = "none", "방향 없음"
+            elif abs(score) < 0.05:
+                dirn, label = "none", "엇갈림"
+            else:
+                dirn = "up" if score > 0 else "down"
+                label = "상승 쪽" if score > 0 else "하락 쪽"
+            out.append({
+                "group": g, "kind": "measured", "dir": dirn, "label": label,
+                "score": round(score, 3),
+                "members": [{"label": f["label"], "dir": f["pressure"]["dir"],
+                             "strength": f["pressure"]["strength"],
+                             "r": f["measured"]["r"],
+                             "percentile": f["percentile"]} for f in mine],
+            })
+            continue
+
+        # 정책·세금
+        want = ("세제강화", "세제완화") if g == "세금" else ("규제강화", "규제완화", "공급확대")
+        mine_p = [p for p in policy if p["kind"] in want]
+        latest = mine_p[0] if mine_p else None
+        out.append({
+            "group": g, "kind": "policy", "dir": "none", "label": "방향을 내지 않음",
+            "latest": latest,
+            "aftermath": [a for a in policy_summary(policy) if a["kind"] in want],
+            "why": ("사건이 열몇 개뿐이고 내생적입니다 — 오르니까 규제가 나옵니다. "
+                    "방향 대신 최근 조치와 그 뒤 실제 변화를 적습니다."),
+        })
+    return out
+
+
 def overview(db: Session) -> dict:
+    factors = factor_rows(db)
+    policy = policy_rows(db)
     price = price_series(db)
     yms = sorted(price)
     last = yms[-1]
@@ -393,8 +466,11 @@ def overview(db: Session) -> dict:
             "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(price.items())],
         },
         "groups": list(GROUP_ORDER),
-        "factors": factor_rows(db),
-        "policy": policy_rows(db),
+        "factors": factors,
+        "groups_detail": group_rows(factors, policy),
+        "policy": policy,
+        "policy_covers_from": COVERS_FROM,
+        "policy_aftermath": policy_summary(policy),
         "history": history(db),
         "similar": similar_months(db),
         "note": ("요인마다 가격과의 상관을 재서 방향을 정합니다. 가장 센 것도 "

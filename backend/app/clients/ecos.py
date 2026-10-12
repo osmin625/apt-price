@@ -31,12 +31,13 @@ TMAP 키가 없을 때 직선거리로 폴백하는 것과 같은 생각이다. 
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+
+from ..config import settings
 
 BASE = "https://ecos.bok.or.kr/api"
 
@@ -65,7 +66,10 @@ TABLES: dict[str, tuple[str, str, str]] = {
 
 
 def api_key() -> str:
-    return os.getenv("ECOS_API_KEY", "").strip()
+    # **`os.getenv` 가 아니라 `settings`** 다. 이 저장소는 pydantic Settings 가
+    # `.env` 를 읽는다 — 처음에 os.getenv 로 썼다가 키를 넣어도 `available()` 이
+    # False 였다. 다른 클라이언트(reb·kakao·tmap)와 같은 길을 쓴다.
+    return (getattr(settings, "ecos_api_key", "") or "").strip()
 
 
 def available() -> bool:

@@ -19,6 +19,7 @@
 | [docs/data.md](docs/data.md) | 공공 API 적재, 파싱 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
 | [docs/reb.md](docs/reb.md) | 한국부동산원 공표 통계 (가격 분석 탭) | 공표 통계를 건드릴 때 |
 | [docs/supply.md](docs/supply.md) | 적정 공급량·파이프라인·노후 압력 (공급 분석 탭) | 공급을 건드릴 때 |
+| [docs/macro.md](docs/macro.md) | 여섯 요인의 압력과 과거 국면 (거시 분석 탭) | 요인을 더하거나 방향을 바꿀 때 |
 | [docs/architecture.md](docs/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
 | [docs/performance.md](docs/performance.md) | 느린 곳을 찾아 고친 기록 | 다시 느려졌을 때 |
 | [docs/deploy.md](docs/deploy.md) | 결과를 정적 사이트로 내보내 올리는 방법 | 로컬 밖에서 보게 할 때 |

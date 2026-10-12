@@ -17,6 +17,7 @@
 | 데이터를 채우거나 지역을 넓힌다 | [docs/data.md](docs/data.md) |
 | 공표 통계(한국부동산원)를 건드린다 | [docs/reb.md](docs/reb.md) |
 | 공급량 분석을 건드린다 | [docs/supply.md](docs/supply.md) |
+| 거시 요인(수요·통화·금리·정책)을 건드린다 | [docs/macro.md](docs/macro.md) |
 | 코드 위치를 찾는다 | [docs/architecture.md](docs/architecture.md) |
 | 느려진 것을 고친다 | [docs/performance.md](docs/performance.md) |
 | 정적 사이트를 내보내거나 배포한다 | [docs/deploy.md](docs/deploy.md) |
