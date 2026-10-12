@@ -32,11 +32,11 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..clients.reb import SIDO
-from ..models import RebStat
+from ..models import KaptUnit, RebStat
 
 # 가구수는 '천' 단위로 공표된다(라벨이 뒤바뀌어 있다 — 위 주석 참조).
 HH_SCALE = 1000.0
@@ -128,6 +128,67 @@ def balance(db: Session, sgg_cd: str) -> dict:
     first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
     return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
             "cum_from": first}
+
+
+def south_supply(db: Session, since: int = 2005) -> dict:
+    """경기 남부 아파트 입주 물량 — **공표 통계가 못 주는 것을 전수 집계로 메운다.**
+
+    공급 표에는 시 단위 분류가 하나도 없다(준공·착공·인허가·가구수·멸실 전부 0개).
+    그래서 R-ONE 으로는 경기 남부 공급을 낼 수 없다. 대신 K-apt 의 의무관리대상
+    공동주택을 17개 구 전수로 받아(`scripts/ingest_kapt_all`) 사용승인 연도별
+    세대수를 더한다.
+
+    ## 이것은 '준공' 이 아니다
+
+    이름을 똑바로 붙여야 한다. 나오는 값은 **'지금 남아 있는 의무관리대상 아파트를
+    사용승인 연도로 모은 것'** 이다.
+
+    - 의무관리대상만 — 소규모 단지·빌라·단독은 빠진다
+    - **지금 존재하는 단지만** — 철거된 단지가 없어 과거일수록 과소집계된다
+    - 아파트만 — R-ONE 의 주택 준공(주택 전체)과 **직접 뺄 수 없다**
+
+    그래서 적정 공급(가구 증가+멸실)에서 이 값을 빼지 않는다. 추세만 견준다.
+    화면에도 그렇게 적는다 — 빼서 '경기 남부 부족분' 을 내면 그럴듯한 거짓이 된다.
+
+    ## 최근 연도는 아직 덜 찼다
+
+    사용승인이 안 난 단지는 K-apt 에 안 들어온다. 올해·내년 값이 작게 보이는 것은
+    공급이 준 것이 아니라 **아직 안 들어온 것**이다. `partial_from` 으로 어느
+    해부터 그런지 알려 준다.
+    """
+    rows = db.execute(
+        select(KaptUnit.build_year,
+               func.count(KaptUnit.id),
+               func.sum(func.coalesce(KaptUnit.household_count, 0)))
+        .where(KaptUnit.build_year.isnot(None), KaptUnit.build_year >= since)
+        .group_by(KaptUnit.build_year)
+        .order_by(KaptUnit.build_year)
+    ).all()
+
+    total = db.scalar(select(func.count()).select_from(KaptUnit)) or 0
+    with_hh = db.scalar(select(func.count()).select_from(KaptUnit)
+                        .where(KaptUnit.household_count.isnot(None))) or 0
+    with_yr = db.scalar(select(func.count()).select_from(KaptUnit)
+                        .where(KaptUnit.build_year.isnot(None))) or 0
+
+    years = [{"year": str(y), "complexes": int(n), "households": int(hh or 0)}
+             for y, n, hh in rows]
+
+    # 마지막 두 해는 아직 들어오는 중이라 따로 표시한다. '0' 이 아니라 '덜 찼다'.
+    partial_from = years[-2]["year"] if len(years) >= 2 else None
+
+    return {
+        "region": "경기 남부 17개 구",
+        "years": years,
+        "coverage": {"units": total, "with_households": with_hh,
+                     "with_year": with_yr},
+        "partial_from": partial_from,
+        "note": ("K-apt 의무관리대상 공동주택을 17개 구 전수로 받아 사용승인 연도별로 "
+                 "모은 값입니다. 공급 통계의 '준공' 과 다릅니다 — 소규모 단지와 "
+                 "비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게 잡힙니다. "
+                 "적정 공급에서 이 값을 빼지 않고 추세만 견줍니다. "
+                 "최근 두 해는 사용승인이 아직 안 난 단지가 있어 덜 찬 값입니다."),
+    }
 
 
 def unsold(db: Session) -> dict:

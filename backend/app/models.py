@@ -364,6 +364,52 @@ class RebStat(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class KaptUnit(Base):
+    """K-apt 의 **의무관리대상 공동주택 전수**. 우리 단지와 별개로 통째로 받는다.
+
+    ## 왜 `Complex` 에 붙이지 않나
+
+    `ingest_kapt` 는 K-apt 세대수를 **우리가 가진 단지에 붙인다.** 이름이 정확히
+    맞는 것만 붙이므로(잘못 붙이면 모델이 조용히 틀어진다) 2,472곳 중 847곳(34%)
+    만 채워져 있다. 그 구멍은 매칭의 한계이지 K-apt 의 한계가 아니다.
+
+    **공급량을 세는 데는 매칭이 필요 없다.** 시군구 코드로 목록을 통째로 받아
+    사용승인 연도별 세대수를 더하면 된다. 그래서 받은 것을 그대로 담는 표를 따로
+    둔다 — 집계값만 저장하면 나중에 다시 나눠 볼 수 없다.
+
+    ## 이것으로 재는 것과 못 재는 것
+
+    경기 남부 17개 구에 1,945곳이 있다(재서 확인했다). 여기서 나오는 것은
+    **'경기 남부 아파트 입주 물량(의무관리대상 기준)'** 이지 '준공' 이 아니다.
+
+    - 의무관리대상만 — 소규모 단지·빌라·단독은 빠진다
+    - **지금 존재하는 단지만** — 철거된 단지가 없어 과거 연도가 과소집계된다
+    - 아파트만 — R-ONE 의 주택 준공(주택 전체)과 직접 뺄 수 없다
+
+    그래서 적정 공급(가구 증가+멸실)에서 이 값을 빼지 않는다. 추세만 견준다.
+    """
+
+    __tablename__ = "kapt_units"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # K-apt 단지 코드(A10022542 꼴). 이름이 아니라 이것으로 중복을 막는다 —
+    # 같은 이름 단지가 한 구에 여럿 있다.
+    kapt_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    sgg_cd: Mapped[str] = mapped_column(String(5), index=True)
+    name: Mapped[str] = mapped_column(String(80), default="")
+
+    # 세대수·사용승인연도가 **없을 수 있다.** 분양 중이거나 자료가 덜 들어간
+    # 단지가 있다(과천포레하임 2026년이 0세대로 온다). 0 으로 채우지 않고 비워
+    # 두고, 집계할 때 몇 곳이 비었는지 같이 센다.
+    household_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dong_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    build_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    apt_type: Mapped[str] = mapped_column(String(20), default="")
+    address: Mapped[str] = mapped_column(String(160), default="")
+
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class MemoTagPref(Base):
     """메모 키워드를 **비고에 띄울지** 여부. 사전 자체가 아니라 그 사전의 표시 설정이다.
 

@@ -140,6 +140,31 @@ export default function SupplyView() {
       </section>
 
       <section className="card">
+        <h2>경기 남부는 얼마나 지어졌나</h2>
+        <p className="sub">
+          공급 통계가 시 단위로 오지 않아, <b>K-apt 의무관리대상 아파트를 17개 구
+          전수로 받아</b> 사용승인 연도별로 모았습니다. 위의 '준공' 과는 다른 값입니다
+          — 소규모 단지와 비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게
+          잡힙니다. <b>적정 공급에서 빼지 않고 추세만 봅니다.</b>
+        </p>
+        <div className="macro-grid">
+          <PanelCard
+            title="경기 남부 아파트 입주 물량"
+            sub={southSub(data.south_supply)}
+            onOpen={() => setOpen({ kind: 'south' })}
+          >
+            <SouthBars d={data.south_supply} />
+          </PanelCard>
+        </div>
+      </section>
+
+      {open?.kind === 'south' && (
+        <Modal title="경기 남부 아파트 입주 물량" onClose={() => setOpen(null)} wide>
+          <SouthTable d={data.south_supply} />
+        </Modal>
+      )}
+
+      <section className="card">
         <h2>미분양 — 지어 놓고 안 팔린 집</h2>
         <p className="sub">
           공급 지표 가운데 <b>시 단위가 있는 것은 미분양뿐</b>입니다. 그래서 여기서만
@@ -459,6 +484,100 @@ function AgeBars({ bands }) {
         </div>
       ))}
     </div>
+  )
+}
+
+function southSub(d) {
+  const done = d.years.filter((y) => y.year < d.partial_from)
+  const last = done[done.length - 1]
+  if (!last) return `단지 ${fmt(d.coverage.units)}곳`
+  return `${last.year}년 ${fmt(last.households)}세대 · 단지 ${fmt(d.coverage.units)}곳 전수`
+}
+
+/**
+ * 연도별 입주 세대수. **최근 두 해는 흐리게** 그린다.
+ *
+ * 사용승인이 안 난 단지는 K-apt 에 안 들어온다. 그 해 막대가 짧은 것은 공급이
+ * 준 것이 아니라 아직 안 들어온 것인데, 똑같이 그리면 '최근 급감' 으로 읽힌다.
+ */
+function SouthBars({ d }) {
+  const tip = useTooltip()
+  const list = d.years
+  if (!list.length) return <p className="empty">아직 적재되지 않았습니다</p>
+  const max = Math.max(...list.map((y) => y.households)) || 1
+  return (
+    <div className="pbar">
+      {list.slice(-16).map((y) => {
+        const partial = d.partial_from && y.year >= d.partial_from
+        return (
+          <div
+            className="pbar-row"
+            key={y.year}
+            onMouseMove={(e) =>
+              tip.show(
+                e,
+                <>
+                  <div className="t-title">{y.year}년</div>
+                  <div className="t-row">{fmt(y.households)}세대 · 단지 {y.complexes}곳</div>
+                  {partial && <div className="t-row">아직 덜 찬 값입니다</div>}
+                </>,
+              )
+            }
+            onMouseLeave={tip.hide}
+          >
+            <div className="pbar-label">{y.year.slice(2)}</div>
+            <div className="pbar-track">
+              <div
+                className="pbar-fill pos"
+                style={{
+                  left: 0,
+                  width: `${(y.households / max) * 100}%`,
+                  opacity: partial ? 0.35 : 1,
+                }}
+              />
+            </div>
+          </div>
+        )
+      })}
+      {tip.node}
+    </div>
+  )
+}
+
+function SouthTable({ d }) {
+  const c = d.coverage
+  return (
+    <>
+      <p className="sub">{d.note}</p>
+      <p className="muted small">
+        전수 {fmt(c.units)}곳 가운데 세대수가 있는 단지 {fmt(c.with_households)}곳,
+        사용승인 연도가 있는 단지 {fmt(c.with_year)}곳입니다.
+      </p>
+      <div className="table-wrap">
+        <table className="coef">
+          <thead>
+            <tr>
+              <th>연도</th>
+              <th className="num">단지</th>
+              <th className="num">세대</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {[...d.years].reverse().map((y) => (
+              <tr key={y.year}>
+                <td>{y.year}</td>
+                <td className="num">{y.complexes}</td>
+                <td className="num">{fmt(y.households)}</td>
+                <td className="muted">
+                  {d.partial_from && y.year >= d.partial_from ? '덜 찬 값' : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 

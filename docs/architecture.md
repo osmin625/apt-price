@@ -12,7 +12,7 @@ backend/
     models.py               단지·거래·호가·역·입지·메모 등 12개 테이블
                             (Complex / ComplexDong / ComplexStation / ComplexAmenity /
                              Station / Trade / Listing / Quote / QuoteNote /
-                             MemoTagPref / DongTag / RebStat)
+                             MemoTagPref / DongTag / RebStat / KaptUnit)
     services/analysis.py    DB → 기술통계 (구간 기반, 기존 3개 탭)
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)
@@ -43,7 +43,8 @@ backend/
     ingest_reb.py           한국부동산원 공표 통계
     ingest_supply.py        공급 통계(인허가·착공·준공·멸실·가구수) — 시도 단위
     ingest_macro.py         거시 요인(미분양·심리·가계대출·금리·M2·기준금리)
-    ingest_kapt.py          K-apt 단지 상세(세대수 등)
+    ingest_kapt.py          K-apt 단지 상세(세대수 등) — 우리 단지에 붙인다
+    ingest_kapt_all.py      K-apt 시군구 전수 — 붙이지 않고 담는다(경기 남부 공급)
     export_static.py        정적 사이트용 스냅샷
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)
