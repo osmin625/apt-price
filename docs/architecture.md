@@ -12,7 +12,7 @@ backend/
     models.py               단지·거래·호가·역·입지·메모 등 12개 테이블
                             (Complex / ComplexDong / ComplexStation / ComplexAmenity /
                              Station / Trade / Listing / Quote / QuoteNote /
-                             MemoTagPref / DongTag / RebStat / KaptUnit)
+                             MemoTagPref / DongTag / RebStat / KaptUnit / KaptRun)
     services/analysis.py    DB → 기술통계 (구간 기반, 기존 3개 탭)
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)

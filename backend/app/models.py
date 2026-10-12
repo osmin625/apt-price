@@ -407,6 +407,47 @@ class KaptUnit(Base):
     apt_type: Mapped[str] = mapped_column(String(20), default="")
     address: Mapped[str] = mapped_column(String(160), default="")
 
+    # 언제 처음 봤고 **마지막으로 언제 봤나**(YYYYMMDD).
+    #
+    # 멸실이 시군구로 공표되지 않아서 넣는다. R-ONE·KOSIS·통계누리를 다 뒤졌는데
+    # 주택멸실현황은 셋 다 시도 단위다(통계누리 내부 JSON 을 직접 열어 20행 =
+    # 전국·수도권·지방 + 시도 17개인 것을 확인했다).
+    #
+    # 그래서 **우리가 직접 관측한다.** 전수를 해마다 받아 두면, 지난번에 있었는데
+    # 이번에 없는 단지가 그 사이 사라진 단지다. 공표값은 아니지만 경기 전체 멸실을
+    # 비중으로 안분하는 **추정보다 낫다** — 안분은 무엇으로 나누느냐에 따라 값이
+    # 달라지고 어느 쪽도 근거가 없다.
+    #
+    # 행을 스냅샷마다 쌓지 않고 두 날짜만 갱신하는 이유: 1,945곳 × 해마다 쌓으면
+    # 같은 값이 되풀이되는데, 우리가 묻는 것은 "언제 사라졌나" 하나뿐이다.
+    # 유니크 키(`kapt_code`)를 그대로 둘 수 있어 `migrate.py` 의 ADD COLUMN 으로
+    # 끝나는 것도 이유다 — SQLite 는 유니크 제약을 바꾸려면 표를 다시 만들어야 한다.
+    first_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    last_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class KaptRun(Base):
+    """K-apt 전수를 **언제 어느 시군구까지 받았나.**
+
+    이것이 없으면 `last_seen` 이 옛 날짜인 단지를 보고 '사라졌다' 고 할 수 없다.
+    그 시군구를 아예 안 돌렸을 수도 있기 때문이다. 둘은 전혀 다른 뜻인데 표에서는
+    똑같이 보인다 — 이 저장소가 가장 경계하는 모양이다.
+
+    그래서 **돌린 사실 자체를 기록한다.** 사라진 단지는 '그 시군구를 실제로 두 번
+    돌렸고, 뒤쪽 실행에서 안 보인 단지' 로만 센다.
+    """
+
+    __tablename__ = "kapt_runs"
+    __table_args__ = (
+        UniqueConstraint("sgg_cd", "taken_on", name="uq_kapt_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sgg_cd: Mapped[str] = mapped_column(String(5), index=True)
+    taken_on: Mapped[str] = mapped_column(String(8), index=True)  # YYYYMMDD
+    units: Mapped[int] = mapped_column(Integer, default=0)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

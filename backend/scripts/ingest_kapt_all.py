@@ -36,6 +36,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import sys
 import time
 from pathlib import Path
@@ -47,7 +48,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert  # noqa: E402
 from app.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
 from app.clients.molit import DISTRICTS  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import KaptUnit  # noqa: E402
+from app.models import KaptRun, KaptUnit  # noqa: E402
 
 # 목록 한 페이지. K-apt 가 100을 넘겨도 받아 주지만 100으로 끊어 받는 쪽이
 # 끊겼을 때 다시 받는 양이 적다.
@@ -69,12 +70,19 @@ def fetch_list(sgg_cd: str) -> list[dict]:
     return out
 
 
-def upsert_list(db, sgg_cd: str, items: list[dict]) -> int:
+def upsert_list(db, sgg_cd: str, items: list[dict], today: str) -> int:
+    """목록을 넣고 **이번에 본 것들의 `last_seen` 을 오늘로** 올린다.
+
+    이번에 안 보인 단지는 `last_seen` 이 옛 날짜로 남는다 — 그것이 곧 '그 사이
+    사라졌다' 는 뜻이다. 멸실이 시군구로 공표되지 않아 이렇게 직접 관측한다.
+    """
     rows = [
         {
             "kapt_code": str(it.get("kaptCode") or "").strip(),
             "sgg_cd": sgg_cd,
             "name": str(it.get("kaptName") or "").strip()[:80],
+            "first_seen": today,
+            "last_seen": today,
         }
         for it in items
         if it.get("kaptCode")
@@ -82,14 +90,30 @@ def upsert_list(db, sgg_cd: str, items: list[dict]) -> int:
     if not rows:
         return 0
     stmt = sqlite_insert(KaptUnit).values(rows)
-    # 이름만 갱신한다. 기본정보(세대수 등)는 아래에서 따로 채우므로 여기서
-    # 덮어쓰면 **이미 받아 둔 값을 지운다.**
+    # 이름과 `last_seen` 만 갱신한다. 기본정보(세대수 등)는 아래에서 따로 채우므로
+    # 여기서 덮어쓰면 **이미 받아 둔 값을 지운다.** `first_seen` 도 건드리지 않는다 —
+    # 처음 본 날이 바뀌면 언제부터 있었는지를 잃는다.
     stmt = stmt.on_conflict_do_update(
         index_elements=["kapt_code"],
-        set_={"sgg_cd": stmt.excluded.sgg_cd, "name": stmt.excluded.name},
+        set_={"sgg_cd": stmt.excluded.sgg_cd, "name": stmt.excluded.name,
+              "last_seen": stmt.excluded.last_seen},
     )
     db.execute(stmt)
     return len(rows)
+
+
+def record_run(db, sgg_cd: str, taken_on: str, units: int) -> None:
+    """돌린 사실을 남긴다.
+
+    이게 없으면 `last_seen` 이 옛 날짜인 단지를 보고 사라졌다고 할 수 없다 —
+    그 시군구를 아예 안 돌렸을 수도 있기 때문이다. 둘은 전혀 다른 뜻인데 표에서는
+    똑같이 보인다.
+    """
+    stmt = sqlite_insert(KaptRun).values(
+        [{"sgg_cd": sgg_cd, "taken_on": taken_on, "units": units}])
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["sgg_cd", "taken_on"], set_={"units": stmt.excluded.units})
+    db.execute(stmt)
 
 
 def fill_basis(db, codes: list[str], quiet: bool = False) -> tuple[int, int]:
@@ -138,6 +162,7 @@ def main() -> int:
     codes = args.district or list(DISTRICTS)
     t0 = time.perf_counter()
     listed = 0
+    today = dt.date.today().strftime("%Y%m%d")
 
     with SessionLocal() as db:
         for sgg in codes:
@@ -149,7 +174,8 @@ def main() -> int:
             except KaptError as exc:
                 print(f"[X] {DISTRICTS.get(sgg, sgg)}: {exc}")
                 return 1
-            n = upsert_list(db, sgg, items)
+            n = upsert_list(db, sgg, items, today)
+            record_run(db, sgg, today, n)
             db.commit()
             listed += n
             print(f"  {DISTRICTS.get(sgg, sgg):<16} {n:>4}곳")
@@ -178,6 +204,22 @@ def main() -> int:
         yr = db.query(KaptUnit).filter(
             KaptUnit.sgg_cd.in_(codes), KaptUnit.build_year.isnot(None)).count()
         print(f"세대수 있는 단지 {have}/{listed} · 사용승인연도 있는 단지 {yr}/{listed}")
+
+        # 지난 스냅샷에는 있었는데 이번에 안 보인 단지 = 그 사이 사라진 것.
+        # **그 시군구를 전에도 돌린 적이 있을 때만** 센다.
+        before = {c for (c,) in db.query(KaptRun.sgg_cd)
+                  .filter(KaptRun.sgg_cd.in_(codes), KaptRun.taken_on < today)
+                  .distinct().all()}
+        if before:
+            gone = db.query(KaptUnit).filter(
+                KaptUnit.sgg_cd.in_(before), KaptUnit.last_seen < today).all()
+            seats = sum(u.household_count or 0 for u in gone)
+            print(f"\n  지난번에 있었는데 이번에 안 보인 단지 {len(gone)}곳 "
+                  f"· {seats:,}세대")
+            for u in gone[:5]:
+                print(f"    {u.name} ({u.sgg_cd}) 마지막 {u.last_seen}")
+        else:
+            print("\n  첫 스냅샷입니다 — 사라진 단지는 다음 실행부터 셉니다.")
         # 둘 다 70% 를 못 넘으면 집계를 믿을 수 없다. 조용히 작은 값을 내느니 말한다.
         if listed and (have / listed < 0.7 or yr / listed < 0.7):
             print("[X] 채워진 비율이 낮습니다 — 이 값으로 공급량을 세면 과소집계됩니다.")
