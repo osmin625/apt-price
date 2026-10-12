@@ -8,6 +8,7 @@ import MapView from './views/MapView'
 import ModelView from './views/ModelView'
 import CompareView from './views/CompareView'
 import RankingView from './views/RankingView'
+import RegimeView from './views/RegimeView'
 import SupplyView from './views/SupplyView'
 
 /**
@@ -36,6 +37,10 @@ const TABS = [
   // 공급은 2~3년 전에 정해져 지금 나타난다. 가격 추이와 같은 축에 놓으면
   // 둘 다 안 읽혀서 탭을 따로 뒀다.
   { id: 'supply', label: '공급 분석', static: true },
+  // 공급은 여섯 요인 중 하나다. 나머지(수요·통화량·금리·정책·세금)까지 한 화면에
+  // 놓고 **어느 쪽으로 미는지**를 본다. 공급 탭과 겹치는 것은 준공·미분양뿐이고,
+  // 거기서는 '얼마나 모자라나', 여기서는 '그래서 어느 쪽인가' 를 묻는다.
+  { id: 'regime', label: '거시 분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   { id: 'model', label: '분해 모델' },
   // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
@@ -173,6 +178,8 @@ export default function App() {
         <MacroView />
       ) : tab === 'supply' ? (
         <SupplyView />
+      ) : tab === 'regime' ? (
+        <RegimeView />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (

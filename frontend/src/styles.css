@@ -863,3 +863,57 @@ tr.is-deleting td { opacity: 0.4; }
   .guide-quad li { display: block; }
   .guide-quad b { display: block; min-width: 0; margin-bottom: 1px; }
 }
+
+/* 거시 분석 — 요인별 압력과 과거 국면 */
+.rg-groups { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.rg-group {
+  display: grid; grid-template-columns: 22px 64px 78px 1fr; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 11px; text-align: left; cursor: pointer;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  color: inherit; font-size: 13px;
+}
+.rg-group:hover { border-color: var(--series-1); }
+/* 방향은 **색만으로 말하지 않는다** — 화살표 글자가 같이 있어야 흑백에서도, 색각
+   이상에서도 읽힌다. 세기는 옆 칸의 글자가 맡는다. */
+.rg-dir { font-size: 15px; text-align: center; }
+.rg-dir.is-up { color: var(--good); }
+.rg-dir.is-down { color: var(--neg); }
+.rg-dir.is-none { color: var(--text-muted); }
+.rg-name { font-weight: 600; }
+.rg-label { color: var(--text-secondary); }
+.rg-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rg-after { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 14px; }
+.rg-after-cell {
+  flex: 1 1 120px; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-1);
+}
+.rg-after-cell strong { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+
+.rg-similar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.rg-sim {
+  min-width: 72px; padding: 6px 9px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-1); text-align: center;
+}
+.rg-sim strong { font-variant-numeric: tabular-nums; }
+
+.rg-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.rg-timeline li { padding-left: 12px; border-left: 2px solid var(--border); }
+.rg-tl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.rg-tl-after { margin-left: auto; font-variant-numeric: tabular-nums; }
+.rg-kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.rg-kind.is-tight { background: color-mix(in srgb, var(--neg) 16%, transparent); color: var(--neg); }
+.rg-kind.is-loose { background: color-mix(in srgb, var(--series-1) 16%, transparent); color: var(--series-1); }
+.rg-kind.is-supply { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+
+.rg-hist td, .rg-hist th { white-space: nowrap; }
+.rg-state { font-size: 11.5px; padding: 1px 6px; border-radius: 4px; }
+.rg-state.is-hi { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
+.rg-state.is-lo { background: color-mix(in srgb, var(--series-1) 14%, transparent); color: var(--series-1); }
+.rg-state.is-mid { color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  /* 좁은 화면에서는 근거 줄을 아래로 내린다. 한 줄에 네 칸은 각 30px 가 된다 */
+  .rg-group { grid-template-columns: 22px 1fr; row-gap: 4px; }
+  .rg-label, .rg-why { grid-column: 2; white-space: normal; }
+}

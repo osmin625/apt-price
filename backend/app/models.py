@@ -299,7 +299,7 @@ class Quote(Base):
 
 
 class RebStat(Base):
-    """한국부동산원 공표 통계 — 시군구·월 단위.
+    """공표 통계 — 지역·월 단위. 한국부동산원이 대부분이고 한국은행이 둘이다.
 
     ## 왜 우리 DB 에 넣나
 
@@ -353,6 +353,13 @@ class RebStat(Base):
     # 기준을 옮기므로(리베이스) 기억으로 적으면 언젠가 거짓이 된다. 받아서 저장하면
     # 리베이스될 때 다음 적재에서 저절로 따라간다.
     base: Mapped[str] = mapped_column(String(40), default="")
+
+    # 어디서 받은 값인가. 표 이름은 `reb_stats` 지만 **한국은행(ECOS) 값도 들어
+    # 있다** — M2 와 기준금리만 R-ONE 에 없어서다. 출처를 안 적으면 나중에 단위나
+    # 기준시점을 따질 때 어느 기관 규칙을 봐야 할지 알 수 없다.
+    # 표 이름을 바꾸지 않은 이유: SQLite 테이블 이름 변경은 `migrate.py` 가 하는
+    # ADD COLUMN 으로 안 되고, 이름보다 출처가 적혀 있는 쪽이 실제로 쓸모 있다.
+    source: Mapped[str] = mapped_column(String(8), default="REB", index=True)
 
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

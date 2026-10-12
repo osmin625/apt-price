@@ -232,6 +232,7 @@ export const api = {
   macroSeries: (params) => request(`/macro/series${qs(params)}`),
   // 공급은 카드 네 장이 같은 적재를 본다. 따로 부르면 화면이 네 번 깜빡인다.
   supplyOverview: () => request('/supply/overview'),
+  regimeOverview: () => request('/regime/overview'),
   macroLatest: () => request('/macro/latest'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 

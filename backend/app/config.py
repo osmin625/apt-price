@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # scripts/probe_reb.py 의 코드 대조는 그대로 돈다.
     reb_service_key: str = ""
 
+    # 한국은행 ECOS 인증키. https://ecos.bok.or.kr > 오픈API > 인증키 신청
+    # M2 와 기준금리만 여기서 받는다(나머지 거시 지표는 R-ONE 에 있다).
+    # 없으면 `sample` 키로 10행씩 받아 느리지만 돌기는 한다 — clients/ecos.py 참조.
+    ecos_api_key: str = ""
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @property

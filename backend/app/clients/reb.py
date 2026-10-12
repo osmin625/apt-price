@@ -489,3 +489,68 @@ def fetch_district(
         if why:
             raise RebError(f"지역 대조 실패 — {why}")
     return points
+
+
+# ──────────────────────────────────────────────────────────
+# 거시 요인 — 수요·통화·금리
+# ──────────────────────────────────────────────────────────
+# 공급 표를 찾느라 738개를 훑다가 **금리·대출·심리·미분양이 전부 R-ONE 안에**
+# 있는 것을 봤다. 한국은행 ECOS 키를 따로 받아야 하는 줄 알았는데 아니었다
+# (M2 와 기준금리만 ECOS 에 있다 — `clients/ecos.py`).
+#
+# 지역 경로를 여기 **직접 적는다.** `sido_cls_id` 의 선호 순서로는 못 고른다 —
+# 미분양은 `경기>계`, 심리는 `수도권>경기`, 금리는 지역이 아니라 `대출평균>가계대출`
+# 이라는 **대출 종류**다. 모양이 제각각이라 짐작할 수 있는 규칙이 없다.
+# 적은 경로가 맞는지는 `scripts/probe_reb.py --macro` 가 매번 대조한다.
+MACRO_TABLES: dict[str, tuple[str, int, dict[str, str]]] = {
+    # 수요 — 안 팔린 집. 늘면 수요가 식었다는 뜻이다.
+    "unsold": ("T237973129847263", 10001, {"11": "서울>계", "41": "경기>계"}),
+    # 수요 — 국토연구원 부동산시장 소비자 심리조사. 100 이 중립이다.
+    "sentiment": ("T232543129897499", 10001,
+                  {"00": "전국>소계", "11": "수도권>서울", "41": "수도권>경기"}),
+    # 통화 — 예금취급기관 가계대출 잔액(십억원). M2 보다 집값에 닿는 경로가 짧다.
+    "loan_balance": ("T231283129942110", 10001, {"00": "예금취급기관"}),
+    # 금리 — 예금은행 가계대출 금리(신규취급액 기준, %). 기준금리가 아니라 **실제로
+    # 무는 금리**다. 기준금리는 ECOS 에서 받아 따로 둔다.
+    "loan_rate": ("T233453129931506", 10001, {"00": "대출평균>가계대출"}),
+}
+
+
+def macro_cls_id(table_id: str, path: str) -> str:
+    """경로 문자열 그대로 `CLS_ID` 를 찾는다. 없으면 실패시킨다.
+
+    표가 갈아 치워지면 경로가 안 맞아 **빈 결과**가 돌아오는데, 그건 오류로 보이지
+    않는다. 여기서 끊는 쪽이 낫다 — `sido_cls_id` 와 같은 원칙이다.
+    """
+    rows = [r for r in region_codes(table_id) if r.get("ITM_TAG") == "분류"]
+    by_path = {str(r.get("ITM_FULLNM") or ""): str(r["ITM_ID"]) for r in rows}
+    if path not in by_path:
+        near = [p for p in by_path if path.split(">")[-1] in p][:5]
+        raise RebError(
+            f"{table_id} 에 '{path}' 경로가 없습니다. 비슷한 것: {near or '없음'}"
+        )
+    return by_path[path]
+
+
+def fetch_macro(metric: str, sgg_cd: str, *, page_size: int = 1000) -> list[RebPoint]:
+    """한 (거시지표·지역)의 월별 전체 시계열."""
+    table_id, itm_id, paths = MACRO_TABLES[metric]
+    path = paths[sgg_cd]
+    data = _get("SttsApiTblData.do", {
+        "STATBL_ID": table_id, "DTACYCLE_CD": "MM",
+        "CLS_ID": macro_cls_id(table_id, path), "ITM_ID": itm_id,
+        "pSize": page_size,
+    })
+    _, rows = _unwrap(data, "SttsApiTblData")
+
+    out: list[RebPoint] = []
+    for r in rows:
+        v = r.get("DTA_VAL")
+        t = str(r.get("WRTTIME_IDTFR_ID") or "")
+        if v is None or len(t) != 6:
+            continue
+        out.append(RebPoint(
+            table_id=table_id, metric=metric, sgg_cd=sgg_cd, cls_id="",
+            region_name=path, ym=t, value=float(v), unit=str(r.get("UI_NM") or ""),
+        ))
+    return out

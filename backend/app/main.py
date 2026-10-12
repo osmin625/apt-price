@@ -17,6 +17,7 @@ from .routers import (
     map as map_router,
     model,
     quotes,
+    regime,
     supply,
 )
 from .services import fit_worker, hedonic, model_view
@@ -47,6 +48,7 @@ app.include_router(map_router.router)
 app.include_router(quotes.router)
 app.include_router(macro.router)
 app.include_router(supply.router)
+app.include_router(regime.router)
 
 
 @app.on_event("startup")
