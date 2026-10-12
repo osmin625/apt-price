@@ -68,17 +68,19 @@ export default function SupplyView() {
       <section className="card">
         <h2>공급이 가격을 어디로 미나</h2>
         <p className="sub">
-          <b>적정 공급 = 가구 증가 + 멸실</b> 로 계산합니다. 흔히 쓰는 '서울 연 5만 호'
-          같은 상수를 쓰지 않았습니다 — 해마다 달라지는 값이기 때문입니다. 공급은 2~3년
-          전에 정해져 지금 나타나므로, 지금 부족하면 그 영향은 몇 해 더 갑니다.
+          <b>적정 공급 = 가구 증가 + 멸실</b> 로 계산합니다. 해마다 달라지는 값이라
+          고정된 목표치를 두지 않았습니다. 공급은 2~3년 전에 정해져 지금 나타나므로,
+          지금 부족하면 그 영향은 몇 해 더 갑니다.
         </p>
       </section>
 
       <section className="card">
         <h2>공급 과부족</h2>
         <p className="sub">
-          준공에서 적정 공급을 뺀 값입니다. 음수면 그해 새로 생긴 가구와 없어진 집을
-          합친 것보다 덜 지었다는 뜻입니다.
+          <b>적정 공급</b>과 <b>준공</b>을 같은 축에 겹쳤습니다. 준공이 아래로 내려가
+          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 덜 지은
+          해입니다. 차이만 그리면 적정이 커진 것인지 준공이 준 것인지 알 수 없어
+          두 선을 같이 둡니다.
         </p>
         <div className="macro-grid">
           {data.regions.map((r) => (
@@ -88,7 +90,7 @@ export default function SupplyView() {
               sub={gapSub(r)}
               onOpen={() => setOpen({ kind: 'balance', r })}
             >
-              <GapBars rows={r.rows} />
+              <GapLines rows={r.rows} cumFrom={r.cum_from} />
             </PanelCard>
           ))}
           {data.regions.map((r) => (
@@ -152,21 +154,130 @@ function gapSub(r) {
   return `${last.year}년 ${last.gap > 0 ? '+' : ''}${fmt(last.gap)}호 · 부족했던 해 ${short}번`
 }
 
-/** 0을 기준으로 좌우로 뻗는 막대. 과부족은 부호가 전부다. */
-function GapBars({ rows }) {
+/**
+ * 적정 공급과 준공을 **같은 축에 두 선**으로 겹친다.
+ *
+ * 처음에는 과부족(준공 - 적정) 하나만 좌우 막대로 그렸다. 부호는 바로 보였지만
+ * **무엇과 무엇의 차이인지가 안 보였다** — "2020년 -36,994호" 를 보고도 적정이
+ * 커진 것인지 준공이 준 것인지 알 수 없었다. 실제로 서울 2020년은 둘 다다
+ * (적정 115,912 = 가구 증가가 85,900 으로 뛰었고, 준공은 78,918 로 평년 수준).
+ *
+ * 두 선을 겹치고 사이를 칠한다. 칠한 색이 부족/과잉을 말하고, 선의 높이가
+ * 그 이유를 말한다. 막대로는 둘 중 하나밖에 못 했다.
+ */
+function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom }) {
   const tip = useTooltip()
-  const list = rows.filter((r) => r.gap != null)
+  const [ref, width] = useMeasure()
+  const list = rows.filter((r) => r.adequate != null && r.done != null)
   if (!list.length) return <p className="empty">값이 없습니다</p>
-  const span = Math.max(...list.map((r) => Math.abs(r.gap))) * 1.1 || 1
+
+  const H = height
+  const W = Math.max(width, 240)
+  // 왼쪽에 눈금 자리를 둔다. 축소판은 숫자를 안 쓰므로 0 이다.
+  const PAD_L = axis ? 46 : 0
+  const PAD_R = axis ? 44 : 0
+  const PAD_B = axis ? 18 : 10
+  const PAD_T = 8
+  const vals = list.flatMap((r) => [r.adequate, r.done])
+  // **0 에서 시작하지 않는다.** 적정과 준공은 둘 다 수만 호대라 0 부터 그리면
+  // 두 선이 붙어 버려 차이가 안 보인다. 차이를 보려고 그리는 그림이다.
+  const lo = Math.min(...vals) * 0.9
+  const hi = Math.max(...vals) * 1.05
+  const span = hi - lo || 1
+  const x = (i) => PAD_L + (i / Math.max(list.length - 1, 1)) * (W - PAD_L - PAD_R)
+  const y = (v) => PAD_T + (1 - (v - lo) / span) * (H - PAD_T - PAD_B)
+  const line = (key) =>
+    list.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+
+  // 누계는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가 납작해져
+  // 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
+  // 0 을 반드시 축에 포함한다 — 누계가 음수로 돌아섰는지가 이 선의 요점이다.
+  const cums = list.map((r) => r.gap_cum).filter((v) => v != null)
+  const c2 = cums.length
+    ? { lo: Math.min(0, ...cums) * 1.1, hi: Math.max(0, ...cums) * 1.1 }
+    : null
+  const y2 = (v) =>
+    PAD_T + (1 - (v - c2.lo) / (c2.hi - c2.lo || 1)) * (H - PAD_T - PAD_B)
+  const cumLine = c2
+    ? list
+        .filter((r) => r.gap_cum != null)
+        .map((r, i) => `${i ? 'L' : 'M'}${x(list.indexOf(r)).toFixed(1)},${y2(r.gap_cum).toFixed(1)}`)
+        .join(' ')
+    : ''
+
+  // 부족 구간과 과잉 구간을 따로 칠한다. 한 덩어리로 칠하면 부호가 섞인 해에서
+  // 색이 거짓말을 한다.
+  const bands = []
+  for (let i = 0; i < list.length - 1; i += 1) {
+    const a = list[i]
+    const b = list[i + 1]
+    const short = a.done < a.adequate
+    bands.push({
+      key: a.year,
+      short,
+      d: `M${x(i)},${y(a.adequate)} L${x(i + 1)},${y(b.adequate)} `
+        + `L${x(i + 1)},${y(b.done)} L${x(i)},${y(a.done)} Z`,
+    })
+  }
+
   return (
-    <div className="pbar">
-      {list.map((r) => {
-        const pos = r.gap >= 0
-        const w = (Math.abs(r.gap) / span) * 50
-        return (
-          <div
-            className="pbar-row"
+    <div ref={ref}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img"
+           aria-label="적정 공급과 준공 비교">
+        {bands.map((b) => (
+          <path key={b.key} d={b.d} fill={b.short ? 'var(--neg)' : 'var(--series-1)'}
+                opacity="0.14" />
+        ))}
+        {c2 && (
+          <>
+            {/* 누계 0 선. 여기를 넘나드는 것이 '쌓였다/까먹었다' 다 */}
+            <line x1={PAD_L} x2={W - PAD_R} y1={y2(0)} y2={y2(0)}
+                  stroke="var(--text-muted)" strokeDasharray="2 4" opacity="0.6" />
+            <path d={cumLine} fill="none" stroke="var(--text-secondary)" strokeWidth="1.8"
+                  strokeDasharray="6 3" strokeLinejoin="round" />
+          </>
+        )}
+        {axis && c2 && [c2.hi, 0, c2.lo].map((v) => (
+          <text key={`c${v}`} x={W - PAD_R + 6} y={y2(v) + 4} fontSize="10"
+                fill="var(--text-muted)">
+            {v > 0 ? '+' : ''}{Math.round(v / 1000)}천
+          </text>
+        ))}
+        {axis && [hi, (hi + lo) / 2, lo].map((v) => (
+          <g key={v}>
+            <line x1={PAD_L} x2={W - PAD_R} y1={y(v)} y2={y(v)} stroke="var(--border)" />
+            <text x={PAD_L - 6} y={y(v) + 4} textAnchor="end" fontSize="10"
+                  fill="var(--text-muted)">
+              {Math.round(v / 1000)}천
+            </text>
+          </g>
+        ))}
+        <path d={line('adequate')} fill="none" stroke="var(--series-2)" strokeWidth="2"
+              strokeLinejoin="round" />
+        <path d={line('done')} fill="none" stroke="var(--series-1)" strokeWidth="2"
+              strokeLinejoin="round" />
+        {smooth && (
+          <path
+            d={list.filter((r) => r.adequate_smooth != null)
+              .map((r, i) => {
+                const idx = list.indexOf(r)
+                return `${i ? 'L' : 'M'}${x(idx).toFixed(1)},${y(r.adequate_smooth).toFixed(1)}`
+              })
+              .join(' ')}
+            fill="none" stroke="var(--series-2)" strokeWidth="1.2" strokeDasharray="4 3"
+            opacity="0.8"
+          />
+        )}
+        {/* 연도마다 투명한 띠를 깔아 **어디에 올려도** 그 해 값이 뜨게 한다.
+            선 위에만 반응하게 두면 두 선 사이에서는 아무것도 안 뜬다. */}
+        {list.map((r, i) => (
+          <rect
             key={r.year}
+            x={x(i) - (W - PAD_L - PAD_R) / list.length / 2}
+            y={0}
+            width={(W - PAD_L - PAD_R) / list.length}
+            height={H}
+            fill="transparent"
             onMouseMove={(e) =>
               tip.show(
                 e,
@@ -177,22 +288,46 @@ function GapBars({ rows }) {
                   <div className="t-row">
                     과부족 {r.gap > 0 ? '+' : ''}{fmt(r.gap)}호
                   </div>
+                  {r.gap_cum != null && (
+                    <div className="t-row">
+                      누계 {r.gap_cum > 0 ? '+' : ''}{fmt(r.gap_cum)}호
+                    </div>
+                  )}
                 </>,
               )
             }
             onMouseLeave={tip.hide}
-          >
-            <div className="pbar-label">{r.year.slice(2)}</div>
-            <div className="pbar-track">
-              <div className="pbar-zero" />
-              <div
-                className={`pbar-fill ${pos ? 'pos' : 'neg'}`}
-                style={{ left: `${pos ? 50 : 50 - w}%`, width: `${w}%` }}
-              />
-            </div>
-          </div>
-        )
-      })}
+          />
+        ))}
+        {axis && list.map((r, i) => (
+          i % 2 === 0 ? (
+            <text key={r.year} x={x(i)} y={H - 4} textAnchor="middle" fontSize="10"
+                  fill="var(--text-muted)">
+              {r.year.slice(2)}
+            </text>
+          ) : null
+        ))}
+      </svg>
+      <div className="legend">
+        <span className="key">
+          <span className="swatch" style={{ background: 'var(--series-2)' }} />
+          적정 공급
+        </span>
+        <span className="key">
+          <span className="swatch" style={{ background: 'var(--series-1)' }} />
+          준공
+        </span>
+        <span className="key">
+          <span className="swatch" style={{ background: 'var(--neg)', opacity: 0.3 }} />
+          부족한 해
+        </span>
+        {c2 && (
+          <span className="key">
+            <span className="swatch dash" style={{ background: 'var(--text-secondary)' }} />
+            과부족 누계{cumFrom ? ` (${cumFrom}년~, 오른쪽 축)` : ''}
+          </span>
+        )}
+      </div>
       {tip.node}
     </div>
   )
@@ -280,6 +415,9 @@ function AgeBars({ bands }) {
 function BalanceTable({ r }) {
   return (
     <>
+      {/* 창에서는 3년 이동평균까지 셋을 그린다. 축소판은 둘만 — 카드가 답하는
+          질문은 '볼 만한가' 하나다(PanelCard 주석). */}
+      <GapLines rows={r.rows} height={210} smooth axis cumFrom={r.cum_from} />
       <p className="muted small">
         적정 공급은 <b>가구 증가 + 멸실</b>입니다. 가구수는 '천' 단위로 공표되어
         1,000을 곱했습니다. 단년 증가분은 등록센서스 집계가 바뀐 해에 튀므로

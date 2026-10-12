@@ -217,6 +217,8 @@ tbody tr.clickable { cursor: pointer; }
 .legend .swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--series-1); }
 .legend .swatch.wash { background: var(--series-1-wash); }
 .legend .swatch.dot { border-radius: 50%; }
+/* 점선으로 그린 계열의 범례. 색만으로는 실선과 구분되지 않는다 */
+.legend .swatch.dash { height: 3px; border-radius: 0; background-image: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); }
 /* 구간별 평당가 (IQR 범위 + 중앙값 점) */
 .rdc-row {
   display: grid;

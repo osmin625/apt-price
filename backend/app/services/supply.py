@@ -93,6 +93,12 @@ def balance(db: Session, sgg_cd: str) -> dict:
     grow_s = _roll(grow, SMOOTH_YEARS)
 
     rows = []
+    # 과부족 **누계**. 한 해씩 보면 들쭉날쭉해서 "모자란 상태가 쌓였나" 를 못 본다.
+    # 경기는 2016~2018 에 +15만을 쌓았다가 2019~2021 에 −16만을 까먹는다 —
+    # 단년만 보면 2022년이 거의 균형(-5,814)으로 보이지만 누계로는 여전히 깊다.
+    # 시작점은 **데이터가 있는 첫 해**다. 절대 수준이 아니라 그 뒤의 기울기를
+    # 보는 선이므로 화면에 "몇 년부터 누계" 를 적는다.
+    cum = 0.0
     for y in sorted(grow):
         need = grow[y] + dem[y]
         need_s = (grow_s[y] + dem[y]) if y in grow_s else None
@@ -108,10 +114,16 @@ def balance(db: Session, sgg_cd: str) -> dict:
             "adequate_smooth": round(need_s) if need_s is not None else None,
             "done": round(got) if got is not None else None,
             "gap": round(got - need) if got is not None else None,
+            "gap_cum": None,  # 아래에서 채운다
             "gap_smooth": (round(got - need_s)
                            if got is not None and need_s is not None else None),
         })
-    return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows}
+        if got is not None:
+            cum += got - need
+            rows[-1]["gap_cum"] = round(cum)
+    first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
+    return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
+            "cum_from": first}
 
 
 def pipeline(db: Session, sgg_cd: str, months: int = 12) -> dict:
