@@ -60,6 +60,11 @@ STALE = {
     # 새 해가 붙는다. 400일을 넘겼으면 한 해를 통째로 놓쳤다는 뜻이다.
     # API 가 없어 자동 갱신이 안 된다 — 사람이 받아야 하므로 알려 주는 것이 전부다.
     "manual_csv_days": 400,
+    # 멸실을 재는 전수 스냅샷(K-apt·건축물대장). **이것만은 안 뜨면 영영 못 센다.**
+    # 다른 적재는 늦게 돌려도 과거 값이 그대로 오지만, 스냅샷은 '그때 무엇이
+    # 있었나' 라서 지나가면 복구할 수 없다. 1년에 한 번 뜨면 되므로 400일로 두되,
+    # 넘기면 그해 멸실은 **영구히 빈칸**이 된다는 뜻이다.
+    "snapshot_days": 400,
 }
 DEAD_CSS_WARN_PCT = 15.0
 
@@ -132,7 +137,7 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     from sqlalchemy import func, select
 
     from app.db import SessionLocal
-    from app.models import ComplexAmenity, RebStat, Trade
+    from app.models import BldRun, ComplexAmenity, KaptRun, RebStat, Trade
 
     with SessionLocal() as db:
         last_trade = db.scalar(select(func.max(Trade.deal_date)))
@@ -180,6 +185,30 @@ def check_fresh(rep: Report, today: dt.date) -> None:
             got = None
         say("주택 현황 CSV", days_since(got, today), STALE["manual_csv_days"],
             "backend/data/manual/README.md 의 주소에서 다시 받는다")
+
+    # 전수 스냅샷. 두 번째를 떠야 비로소 멸실이 나온다.
+    for label, model, cmd in (
+        ("K-apt 스냅샷", KaptRun, "python -m scripts.ingest_kapt_all"),
+        ("건축물대장 스냅샷", BldRun, "python -m scripts.ingest_bldrgst"),
+    ):
+        last = db.scalar(select(func.max(model.taken_on)))
+        got = None
+        if last and len(last) == 8:
+            try:
+                got = dt.date(int(last[:4]), int(last[4:6]), int(last[6:8]))
+            except ValueError:
+                got = None
+        if got is None:
+            rep.add("!", "신선도", f"{label} 이 아직 없습니다 — {cmd}")
+            print(f"  {label:<18} 없음")
+            continue
+        say(label, days_since(got, today), STALE["snapshot_days"], cmd)
+        # 스냅샷이 하나뿐이면 멸실을 아직 못 센다. 고쳐야 할 것은 아니지만
+        # **왜 숫자가 없는지**는 보여야 한다.
+        runs = db.scalar(select(func.count(func.distinct(model.taken_on)))) or 0
+        if runs < 2:
+            print(f"      스냅샷이 {runs}개뿐이라 멸실은 아직 셀 수 없습니다 "
+                  f"(두 번째부터 나옵니다)")
 
 
 # ──────────────────────────────────────────────────────────

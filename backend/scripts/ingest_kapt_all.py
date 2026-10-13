@@ -207,9 +207,20 @@ def main() -> int:
 
         # 지난 스냅샷에는 있었는데 이번에 안 보인 단지 = 그 사이 사라진 것.
         # **그 시군구를 전에도 돌린 적이 있을 때만** 센다.
-        before = {c for (c,) in db.query(KaptRun.sgg_cd)
-                  .filter(KaptRun.sgg_cd.in_(codes), KaptRun.taken_on < today)
-                  .distinct().all()}
+        # **두 번 돌린 시군구에서만 센다.** 전에 돌린 적이 있는 것만으로는 모자라고
+        # 오늘도 돌렸어야 한다 — 오늘 안 돌린 시군구의 단지는 `last_seen` 이
+        # 당연히 옛 날짜인데, 그것을 사라졌다고 하면 **안 돌린 것이 멸실로
+        # 둔갑한다.** `--district` 로 일부만 돌릴 때 바로 그렇게 된다.
+        prior = {c for (c,) in db.query(KaptRun.sgg_cd)
+                 .filter(KaptRun.sgg_cd.in_(codes), KaptRun.taken_on < today)
+                 .distinct().all()}
+        now = {c for (c,) in db.query(KaptRun.sgg_cd)
+               .filter(KaptRun.sgg_cd.in_(codes), KaptRun.taken_on == today)
+               .distinct().all()}
+        before = prior & now
+        skipped = prior - now
+        if skipped:
+            print(f"\n  오늘 안 돌린 시군구 {len(skipped)}곳은 비교에서 뺍니다")
         if before:
             gone = db.query(KaptUnit).filter(
                 KaptUnit.sgg_cd.in_(before), KaptUnit.last_seen < today).all()
