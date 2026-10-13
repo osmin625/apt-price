@@ -244,7 +244,13 @@ function gapSub(r) {
 function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom }) {
   const tip = useTooltip()
   const [ref, width] = useMeasure()
-  const list = rows.filter((r) => r.adequate != null && r.done != null)
+  // **3년 평균을 기준으로 쓴다.** 단년 적정은 집계 기준이 바뀐 해에 튄다 —
+  // 서울 2016년 가구 증가가 +200 이라 그해만 '공급 과잉 +45,764' 로 혼자 솟는다.
+  // 그 한 점 때문에 화면을 읽는 사람이 없는 사건을 보게 된다.
+  // 단년은 지우지 않고 옅은 선으로 남긴다. 평균은 2년을 끌고 다니므로 원래 값이
+  // 어디였는지 볼 수 있어야 한다.
+  const list = rows.filter(
+    (r) => r.adequate_smooth != null && r.done != null)
   if (!list.length) return <p className="empty">값이 없습니다</p>
 
   const H = height
@@ -254,7 +260,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   const PAD_R = axis ? 44 : 0
   const PAD_B = axis ? 18 : 10
   const PAD_T = 8
-  const vals = list.flatMap((r) => [r.adequate, r.done])
+  const vals = list.flatMap((r) => [r.adequate_smooth, r.adequate, r.done])
   // **0 에서 시작하지 않는다.** 적정과 준공은 둘 다 수만 호대라 0 부터 그리면
   // 두 선이 붙어 버려 차이가 안 보인다. 차이를 보려고 그리는 그림이다.
   const lo = Math.min(...vals) * 0.9
@@ -263,7 +269,11 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   const x = (i) => PAD_L + (i / Math.max(list.length - 1, 1)) * (W - PAD_L - PAD_R)
   const y = (v) => PAD_T + (1 - (v - lo) / span) * (H - PAD_T - PAD_B)
   const line = (key) =>
-    list.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+    list
+      .map((r, i) => (r[key] == null ? null : `${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`))
+      .filter(Boolean)
+      .map((p, i) => `${i ? 'L' : 'M'}${p}`)
+      .join(' ')
 
   // 누적 차이는 **다른 종류의 양**이다(호 × 해). 같은 축에 올리면 둘 중 하나가
   // 납작해져 둘 다 못 읽는다. 오른쪽 축을 따로 두고 선도 점선으로 구분한다.
@@ -272,7 +282,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   // **'누계' 라고 적었다가 물음을 받았다** — "누계라는데 내려간다". 맞는 지적이다.
   // 더한 값이 아니라 **더한 것에서 뺀 것**이라 덜 지은 해에는 내려간다(서울·경기
   // 각각 14년 중 6년). 계산은 맞았고 이름이 틀렸다.
-  const cums = list.map((r) => r.gap_cum).filter((v) => v != null)
+  const cums = list.map((r) => r.gap_cum_smooth).filter((v) => v != null)
   const c2 = cums.length
     ? { lo: Math.min(0, ...cums) * 1.1, hi: Math.max(0, ...cums) * 1.1 }
     : null
@@ -280,8 +290,9 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
     PAD_T + (1 - (v - c2.lo) / (c2.hi - c2.lo || 1)) * (H - PAD_T - PAD_B)
   const cumLine = c2
     ? list
-        .filter((r) => r.gap_cum != null)
-        .map((r, i) => `${i ? 'L' : 'M'}${x(list.indexOf(r)).toFixed(1)},${y2(r.gap_cum).toFixed(1)}`)
+        .filter((r) => r.gap_cum_smooth != null)
+        .map((r, i) =>
+          `${i ? 'L' : 'M'}${x(list.indexOf(r)).toFixed(1)},${y2(r.gap_cum_smooth).toFixed(1)}`)
         .join(' ')
     : ''
 
@@ -291,11 +302,11 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   for (let i = 0; i < list.length - 1; i += 1) {
     const a = list[i]
     const b = list[i + 1]
-    const short = a.done < a.adequate
+    const short = a.done < a.adequate_smooth
     bands.push({
       key: a.year,
       short,
-      d: `M${x(i)},${y(a.adequate)} L${x(i + 1)},${y(b.adequate)} `
+      d: `M${x(i)},${y(a.adequate_smooth)} L${x(i + 1)},${y(b.adequate_smooth)} `
         + `L${x(i + 1)},${y(b.done)} L${x(i)},${y(a.done)} Z`,
     })
   }
@@ -332,22 +343,18 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
             </text>
           </g>
         ))}
-        <path d={line('adequate')} fill="none" stroke="var(--series-2)" strokeWidth="2"
-              strokeLinejoin="round" />
+        {/* 단년 적정 — 옅게. 평균이 어디서 왔는지 보이라고 둔다 */}
+        <path d={line('adequate')} fill="none" stroke="var(--series-2)" strokeWidth="1"
+              strokeLinejoin="round" opacity="0.35" />
+        <path d={line('adequate_smooth')} fill="none" stroke="var(--series-2)"
+              strokeWidth="2" strokeLinejoin="round" />
         <path d={line('done')} fill="none" stroke="var(--series-1)" strokeWidth="2"
               strokeLinejoin="round" />
-        {smooth && (
-          <path
-            d={list.filter((r) => r.adequate_smooth != null)
-              .map((r, i) => {
-                const idx = list.indexOf(r)
-                return `${i ? 'L' : 'M'}${x(idx).toFixed(1)},${y(r.adequate_smooth).toFixed(1)}`
-              })
-              .join(' ')}
-            fill="none" stroke="var(--series-2)" strokeWidth="1.2" strokeDasharray="4 3"
-            opacity="0.8"
-          />
-        )}
+        {/* 집계가 튄 해. 점을 찍어 두고 까닭은 호버와 창에서 말한다 */}
+        {list.map((r, i) => (r.growth_odd ? (
+          <circle key={`odd-${r.year}`} cx={x(i)} cy={y(r.adequate)} r="3.5"
+                  fill="none" stroke="var(--warning)" strokeWidth="2" />
+        ) : null))}
         {/* 연도마다 투명한 띠를 깔아 **어디에 올려도** 그 해 값이 뜨게 한다.
             선 위에만 반응하게 두면 두 선 사이에서는 아무것도 안 뜬다. */}
         {list.map((r, i) => (
@@ -363,14 +370,20 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
                 e,
                 <>
                   <div className="t-title">{r.year}년</div>
-                  <div className="t-row">적정 {fmt(r.adequate)}호</div>
+                  <div className="t-row">적정(3년평균) {fmt(r.adequate_smooth)}호</div>
+                  <div className="t-row">적정(단년) {fmt(r.adequate)}호</div>
                   <div className="t-row">준공 {fmt(r.done)}호</div>
                   <div className="t-row">
-                    {r.gap >= 0 ? '더 지음' : '덜 지음'} {fmt(Math.abs(r.gap))}호
+                    {r.gap_smooth >= 0 ? '더 지음' : '덜 지음'}{' '}
+                    {fmt(Math.abs(r.gap_smooth ?? r.gap))}호
                   </div>
+                  {r.growth_odd && (
+                    <div className="t-row">가구 증가가 앞뒤와 크게 어긋난 해입니다</div>
+                  )}
                   {r.gap_cum != null && (
                     <div className="t-row">
-                      누적 차이 {r.gap_cum >= 0 ? '+' : '−'}{fmt(Math.abs(r.gap_cum))}호
+                      누적 차이 {r.gap_cum_smooth >= 0 ? '+' : '−'}
+                      {fmt(Math.abs(r.gap_cum_smooth ?? r.gap_cum))}호
                     </div>
                   )}
                 </>,
@@ -391,7 +404,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
       <div className="legend">
         <span className="key">
           <span className="swatch" style={{ background: 'var(--series-2)' }} />
-          적정 공급
+          적정 공급(3년평균)
         </span>
         <span className="key">
           <span className="swatch" style={{ background: 'var(--series-1)' }} />
@@ -691,8 +704,10 @@ function BalanceTable({ r }) {
       <GapLines rows={r.rows} height={210} smooth axis cumFrom={r.cum_from} />
       <p className="muted small">
         적정 공급은 <b>가구 증가 + 멸실</b>입니다. 가구수는 '천' 단위로 공표되어
-        1,000을 곱했습니다. 단년 증가분은 등록센서스 집계가 바뀐 해에 튀므로
-        <b> 3년 이동평균</b>도 같이 둡니다.
+        1,000을 곱했습니다. 단년 증가분은 집계 기준이 바뀐 해에 튀므로 그림에서는{' '}
+        <b>3년 이동평균을 기준선으로</b> 쓰고 단년은 옅게 겹칩니다. 중위 증가의 25%
+        에 못 미치는 해를 '튄 해' 로 보아 표시합니다 — 서울 2016년이 그렇습니다
+        (가구 증가 +200, 앞뒤는 +28,300과 +28,600).
       </p>
       <div className="table-wrap">
         <table className="coef">
@@ -706,6 +721,7 @@ function BalanceTable({ r }) {
               <th className="num">적정(3년평균)</th>
               <th className="num">준공</th>
               <th className="num">더(+)·덜(−) 지음</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -721,6 +737,7 @@ function BalanceTable({ r }) {
                 <td className={`num ${x.gap == null ? '' : x.gap < 0 ? 'tone-neg' : 'tone-pos'}`}>
                   {x.gap == null ? '—' : `${x.gap > 0 ? '+' : ''}${fmt(x.gap)}`}
                 </td>
+                <td className="muted">{x.growth_odd ? '집계 기준 변경으로 보임' : ''}</td>
               </tr>
             ))}
           </tbody>
