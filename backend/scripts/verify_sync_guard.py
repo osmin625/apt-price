@@ -85,6 +85,9 @@ CASES = [
      "주석이"),  # 파일 끝까지 열리든(1) 규칙을 먹든(2) 둘 중 하나로 잡힌다
     ("CSS — 선택자 자리에 산문", "frontend/src/styles.css",
      lambda s: s.replace(".chip {", "더 높아서 {", 1), "선택자 자리에"),
+    # 준공선이 통째로 사라졌던 모양. 쓰는 쪽의 이름을 없는 것으로 바꿔 본다.
+    ("CSS 변수 — 없는 것을 쓴다", "frontend/src/components/Charts.jsx",
+     lambda s: s.replace("var(--series-1)", "var(--없는변수)", 1), "없는변수"),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
     ("조사 — 받침에 안 맞는 조사", "docs/performance.md",

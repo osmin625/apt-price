@@ -53,6 +53,10 @@ LEAD_CORR: dict[str, float] = {"41": 0.895}
 # 단년 증가분이 집계 변경에 흔들려서 함께 낸다.
 SMOOTH_YEARS = 3
 
+# 중위 증가의 이 비율에 못 미치는 해는 '집계가 튄 해' 로 본다. 서울 2016 이
+# 0.7%, 다음으로 낮은 해가 63.2% 라 0.25 는 어느 쪽에도 가깝지 않다.
+ODD_GROWTH_RATIO = 0.25
+
 
 def _series(db: Session, sgg_cd: str, metric: str) -> dict[str, float]:
     rows = db.execute(
@@ -102,7 +106,18 @@ def balance(db: Session, sgg_cd: str) -> dict:
     # 단년만 보면 2022년이 거의 균형(-5,814)으로 보이지만 누계로는 여전히 깊다.
     # 시작점은 **데이터가 있는 첫 해**다. 절대 수준이 아니라 그 뒤의 기울기를
     # 보는 선이므로 화면에 "몇 년부터 누계" 를 적는다.
-    cum = 0.0
+    # 단년 증가분이 **집계 기준이 바뀐 해에 튄다.** 서울 2016년이 +200 인데
+    # 앞뒤가 +28,300·+28,600 이다 — 2015년 인구주택총조사가 등록센서스로 바뀐
+    # 자국으로 보인다. 그해만 '공급 과잉 +45,764' 로 혼자 솟는다.
+    #
+    # **연도를 코드에 박지 않는다.** 중위 증가의 25% 에 못 미치는 해를 튄 해로
+    # 본다. 재 보니 서울 2016 이 0.7% 이고 다음으로 낮은 해가 63.2% 라 사이가
+    # 넉넉하다(경기는 걸리는 해가 없다). 지역을 넓혀도 규칙이 따라간다.
+    _gs = sorted(grow.values())
+    _med = _gs[len(_gs) // 2] if _gs else 0.0
+    odd_years = {y for y, v in grow.items() if _med and v < _med * ODD_GROWTH_RATIO}
+
+    cum = cum_s = 0.0
     for y in sorted(grow):
         need = grow[y] + dem[y]
         need_s = (grow_s[y] + dem[y]) if y in grow_s else None
@@ -118,13 +133,19 @@ def balance(db: Session, sgg_cd: str) -> dict:
             "adequate_smooth": round(need_s) if need_s is not None else None,
             "done": round(got) if got is not None else None,
             "gap": round(got - need) if got is not None else None,
-            "gap_cum": None,  # 아래에서 채운다
+            "gap_cum": None,      # 아래에서 채운다
+            "gap_cum_smooth": None,
+            # 집계가 튄 해. 화면이 점을 찍고 까닭을 적는다.
+            "growth_odd": y in odd_years,
             "gap_smooth": (round(got - need_s)
                            if got is not None and need_s is not None else None),
         })
         if got is not None:
             cum += got - need
             rows[-1]["gap_cum"] = round(cum)
+            if need_s is not None:
+                cum_s += got - need_s
+                rows[-1]["gap_cum_smooth"] = round(cum_s)
     first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
     return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
             "cum_from": first}
