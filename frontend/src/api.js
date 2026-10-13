@@ -184,7 +184,6 @@ export const api = {
   market: (params) => request(`/analysis/market${qs(params)}`),
   complexes: (params) => request(`/complexes${qs(params)}`),
   complex: (id, params) => request(`/complexes/${id}${qs(params)}`),
-  areaTypes: (id) => request(`/complexes/${id}/area-types`),
   dongs: (id) => request(`/complexes/${id}/dongs`),
   setDongRental: (id, dong, rental) =>
     request(`/complexes/${id}/dongs/${encodeURIComponent(dong)}/rental`, {
@@ -192,16 +191,9 @@ export const api = {
       body: JSON.stringify({ rental }),
     }),
   quotes: (id, params) => request(`/complexes/${id}/quotes${qs(params)}`),
-  evaluate: (body, params) =>
-    request(`/listings/evaluate${qs(params)}`, { method: 'POST', body: JSON.stringify(body) }),
-  saveListing: (body, params) =>
-    request(`/listings${qs(params)}`, { method: 'POST', body: JSON.stringify(body) }),
-  listings: (params) => request(`/listings${qs(params)}`),
-  deleteListing: (id) => request(`/listings/${id}`, { method: 'DELETE' }),
 
   // 역거리 연속 모델 + 지도
   modelFit: (params) => request(`/model/fit${qs(params)}`),
-  residuals: (params) => request(`/model/residuals${qs(params)}`),
   groups: (params) => request(`/model/groups${qs(params)}`),
   factors: (params) => request(`/model/factors${qs(params)}`),
   modelStatus: (params) => request(`/model/status${qs(params)}`),
@@ -222,18 +214,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text, ...params }),
     }),
-  parseListing: (text, complexId) =>
-    request('/model/parse-listing', {
-      method: 'POST',
-      body: JSON.stringify({ text, complex_id: complexId ?? null }),
-    }),
-  // 매크로 — 한국부동산원 공표 통계
   macroMetrics: () => request('/macro/metrics'),
   macroSeries: (params) => request(`/macro/series${qs(params)}`),
   // 공급은 카드 네 장이 같은 적재를 본다. 따로 부르면 화면이 네 번 깜빡인다.
   supplyOverview: () => request('/supply/overview'),
   regimeOverview: () => request('/regime/overview'),
-  macroLatest: () => request('/macro/latest'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),

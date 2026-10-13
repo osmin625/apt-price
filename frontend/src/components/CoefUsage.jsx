@@ -24,7 +24,7 @@ export default function CoefUsage() {
       what: 'Stage 1·2 계수를 그대로 보여 준다',
     },
     {
-      where: '시장 분석 — 요인별 보정계수',
+      where: '매물 분석 — 요인별 보정계수',
       uses: true,
       what: '같은 계수를 기준점 대비 %로 환산한 것',
     },

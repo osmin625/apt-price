@@ -115,19 +115,6 @@ def name_key(name: str) -> str:
     return s
 
 
-def name_digits(name: str) -> tuple[str, ...]:
-    """단지명 속 숫자열. '2단지', '1차' 처럼 단지를 **가르는** 정보다.
-
-    유사도 매칭의 안전장치로 쓴다. 이름이 길면 숫자 한 글자 차이는 유사도를
-    거의 떨어뜨리지 못해서('영통아이파크캐슬3단지' vs '...1단지' = 0.909)
-    전혀 다른 단지가 하나로 합쳐진다. 실제로 그렇게 합쳐졌었다.
-
-    숫자가 다르면 다른 단지로 본다. 틀려도 단지가 하나 더 생길 뿐이지만,
-    반대로 잘못 합치면 남의 거래가 섞여 시세가 통째로 망가진다.
-    """
-    return tuple(re.findall(r"\d+", name_key(name)))
-
-
 def rcs_basis(x: float, knots: Sequence[float]) -> list[float]:
     """제한 3차 스플라인(restricted cubic spline) 기저. Harrell 방식.
 

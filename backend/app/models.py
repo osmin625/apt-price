@@ -206,28 +206,6 @@ class Trade(Base):
     complex: Mapped[Complex] = relationship(back_populates="trades")
 
 
-class Listing(Base):
-    """사용자가 직접 입력한 매물(호가). 실거래 기반 적정가와 비교하는 대상."""
-
-    __tablename__ = "listings"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    complex_id: Mapped[int] = mapped_column(ForeignKey("complexes.id"), index=True)
-
-    label: Mapped[str] = mapped_column(String(120), default="")
-    exclusive_area: Mapped[float] = mapped_column(Float)
-    supply_area: Mapped[float | None] = mapped_column(Float)  # 참고용 — 전용률 표시에만 사용
-    floor: Mapped[int | None] = mapped_column(Integer)
-    # 동은 적정가를 바꾼다(역거리 + 동 프리미엄). 저장해 두지 않으면 나중에 다시
-    # 계산할 때 단지 중심점 기준으로 떨어져 저장 시점과 다른 값이 나온다.
-    dong: Mapped[str | None] = mapped_column(String(20))
-    asking_price: Mapped[int] = mapped_column(Integer)  # 만원
-    memo: Mapped[str | None] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-    complex: Mapped[Complex] = relationship()
-
-
 class Quote(Base):
     """붙여넣은 매물의 **호가 기록**. 실거래가 못 잡는 것을 잡으려고 쌓는다.
 

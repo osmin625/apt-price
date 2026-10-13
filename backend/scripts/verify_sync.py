@@ -147,12 +147,20 @@ def check_labels(r: Result) -> None:
     live = set(re.findall(r"label:\s*'([^']+)'", app))
     print(f"  지금 탭: {' · '.join(sorted(live))}")
 
-    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md"))]
+    # **문서만 보면 모자란다.** 탭 이름을 바꾸고도 화면 안의 제목은 그대로여서
+    # '호가 입력' 탭에 '매물 관리' 라고 적혀 있었다(아홉 곳). 보는 사람에게는
+    # 문서보다 화면이 먼저다. JSX 도 같이 본다 — 주석은 뺀다. 거기 적힌 옛 이름은
+    # '왜 바꿨나' 를 남긴 경위 기록이라 지우면 안 된다.
+    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md")),
+            *sorted(FRONT.rglob("*.jsx"))]
     hits = 0
     for d in docs:
         if d.name in LABEL_EXEMPT:
             continue
         text = d.read_text(encoding="utf-8")
+        if d.suffix == ".jsx":
+            text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+            text = re.sub(r"(?m)^\s*//.*$", " ", text)
         for old, new in RETIRED_LABELS.items():
             if old in live:
                 continue  # 되살아난 이름

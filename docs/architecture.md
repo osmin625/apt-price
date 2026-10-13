@@ -28,7 +28,7 @@ backend/
     clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
     clients/ecos.py         한국은행 ECOS — M2 와 기준금리만 (키 없으면 sample 폴백)
     clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
-    routers/                complexes / analysis / listings / quotes / model / map
+    routers/                complexes / analysis / quotes / model / map
                             / macro(공표 통계) / supply(공급) / regime(거시)
   scripts/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
