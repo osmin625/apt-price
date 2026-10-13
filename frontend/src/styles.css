@@ -12,6 +12,11 @@
   --series-1: #2a78d6;
   --series-1-wash: #cde2fb;
   --series-2: #eb6834;
+  /* 세 번째 계열. 공급 파이프라인(인허가·착공·준공)이 쓴다.
+     없는 채로 `var(--series-3)` 을 쓰다가 **준공선이 통째로 안 보였다** —
+     stroke 가 무효가 되면 SVG 기본값 none 으로 떨어져 조용히 사라진다.
+     파랑·주황과 구분되면서 --good(초록)·--neg(빨강)의 뜻과도 겹치지 않는 청록. */
+  --series-3: #1f9e8c;
   --neg: #e34948;
   --good: #0ca30c;
   --warning: #fab219;
@@ -35,6 +40,7 @@
     --series-1: #3987e5;
     --series-1-wash: #184f95;
     --series-2: #d95926;
+    --series-3: #35b7a2;
     --neg: #e66767;
   }
 }

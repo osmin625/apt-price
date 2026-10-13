@@ -493,6 +493,54 @@ def check_css(r: Result) -> None:
                 r.bad(f"{rel} — 선택자 자리에 '{sel[:40]}' 가 있습니다. "
                       f"지우다 만 주석으로 보입니다")
     print(f"  CSS {len(css_files)}개 검사 · 깨진 곳 {hits}")
+    check_css_vars(r)
+
+
+def check_css_vars(r: Result) -> None:
+    """화면이 `var(--무엇)` 을 쓰는데 그 변수가 정의되어 있나.
+
+    **없는 변수를 쓰면 선이 통째로 사라진다.** 공급 파이프라인의 준공선이 그랬다 —
+    `var(--series-3)` 으로 그렸는데 styles.css 에는 `--series-1`·`--series-2` 밖에
+    없었다. 값이 없으면 그 속성이 무효가 되고, SVG `stroke` 의 기본값은 `none` 이라
+    **오류 없이 안 그려진다.** 범례 색칠도 같이 비었다.
+
+    눈으로는 "선이 둘뿐이네" 로 보일 뿐이라 사용자가 말해 주기 전에는 모른다.
+    실제로 그렇게 알았다.
+
+    템플릿 문자열로 만드는 이름(`var(--series-${i})`)은 접두사까지만 보고 넘어간다 —
+    i 가 몇까지 갈지는 정적으로 알 수 없다. 대신 **고정된 이름**은 전부 본다.
+    """
+    header("CSS 변수 — 화면이 쓰는 것이 정의되어 있나")
+    import re as _re
+
+    css = "\n".join(p.read_text(encoding="utf-8") for p in sorted(FRONT.rglob("*.css")))
+    defined = set(_re.findall(r"(--[\w-]+)\s*:", css))
+
+    used: dict[str, list[str]] = {}
+    for p in sorted(FRONT.rglob("*.jsx")):
+        text = p.read_text(encoding="utf-8")
+        for m in _re.finditer(r"var\(\s*(--[\w-]+)\s*\)", text):
+            name = m.group(1)
+            # `--series-${ki + 1}` 처럼 만들다 만 이름은 건너뛴다.
+            if "$" in name or "{" in name:
+                continue
+            used.setdefault(name, []).append(
+                f"{p.relative_to(ROOT).as_posix()}:{text[:m.start()].count(chr(10)) + 1}")
+
+    missing = sorted(n for n in used if n not in defined)
+    for n in missing:
+        r.bad(f"{used[n][0]} 가 `var({n})` 를 쓰는데 CSS 에 없습니다 — "
+              f"그 속성은 무효가 되고 선·색이 조용히 사라집니다")
+    print(f"  정의 {len(defined)}개 · 화면이 쓰는 고정 이름 {len(used)}개 · "
+          f"없는 것 {len(missing)}개")
+
+    # 템플릿으로 만드는 이름은 접두사로 센다. `--series-` 를 쓰면서 3까지 가는데
+    # 2까지만 정의된 것이 이번 사고였다.
+    prefixes = {m.group(1) for p in sorted(FRONT.rglob("*.jsx"))
+                for m in _re.finditer(r"var\(\s*(--[\w-]+?)\$\{", p.read_text(encoding="utf-8"))}
+    for pre in sorted(prefixes):
+        n = len([d for d in defined if d.startswith(pre) and d[len(pre):].isdigit()])
+        print(f"  `{pre}*` 를 만들어 쓰는 곳이 있습니다 — 지금 정의된 번호 {n}개")
 
 
 def check_dead_components(r: Result) -> None:
