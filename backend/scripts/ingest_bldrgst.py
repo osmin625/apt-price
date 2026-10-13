@@ -176,13 +176,26 @@ def main() -> int:
         print(f"\n{total_units:,}동 · 어긋난 법정동 {mismatch}곳 · 실패 {failed}곳 "
               f"· {el / 60:.1f}분 · 호출 남음 {rem}")
 
-        prior = db.execute(
-            select(BldRun.taken_on).where(BldRun.taken_on < today).distinct()).all()
-        if prior and not args.count_only:
+        # **오늘도 돌린 법정동에서만 센다.** 오늘 안 돌린 곳의 건축물은
+        # `last_seen` 이 당연히 옛 날짜라, 그것을 멸실이라 하면 안 돌린 것이
+        # 멸실로 둔갑한다. 기대와 받은 수가 어긋난 법정동도 뺀다 — 반쯤 받은
+        # 법정동은 그 차이가 그대로 거짓 멸실이 된다.
+        prior = {(a, b) for a, b in db.execute(
+            select(BldRun.sigungu_cd, BldRun.bjdong_cd)
+            .where(BldRun.taken_on < today).distinct()).all()}
+        now_ok = {(a, b) for a, b in db.execute(
+            select(BldRun.sigungu_cd, BldRun.bjdong_cd)
+            .where(BldRun.taken_on == today,
+                   BldRun.expected == BldRun.fetched).distinct()).all()}
+        both = prior & now_ok
+        if both and not args.count_only:
             gone = db.execute(
-                select(BldUnit).where(BldUnit.sigungu_cd.in_(codes),
-                                      BldUnit.last_seen < today)).scalars().all()
-            print(f"  지난번에 있었는데 이번에 없는 건축물 {len(gone):,}동")
+                select(BldUnit).where(BldUnit.last_seen < today)).scalars().all()
+            gone = [u for u in gone if (u.sigungu_cd, u.bjdong_cd) in both]
+            seats = sum(u.hhld_cnt or 0 for u in gone)
+            house = [u for u in gone if u.main_purps in ("단독주택", "공동주택")]
+            print(f"  두 번 돌린 법정동 {len(both)}곳 기준 — 사라진 건축물 "
+                  f"{len(gone):,}동(그중 주택 {len(house):,}동 · {seats:,}세대)")
         else:
             print("  첫 스냅샷입니다 — 멸실은 다음 실행부터 셉니다.")
     return 1 if failed else 0
