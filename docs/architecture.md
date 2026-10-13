@@ -12,7 +12,8 @@ backend/
     models.py               단지·거래·호가·역·입지·메모 등 12개 테이블
                             (Complex / ComplexDong / ComplexStation / ComplexAmenity /
                              Station / Trade / Listing / Quote / QuoteNote /
-                             MemoTagPref / DongTag / RebStat / KaptUnit)
+                             MemoTagPref / DongTag / RebStat /
+                             KaptUnit / KaptRun / BldUnit / BldRun)
     services/analysis.py    DB → 기술통계 (구간 기반, 기존 3개 탭)
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)
@@ -26,6 +27,7 @@ backend/
     clients/tmap.py         보행자 경로안내
     clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
     clients/ecos.py         한국은행 ECOS — M2 와 기준금리만 (키 없으면 sample 폴백)
+    clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
     routers/                complexes / analysis / listings / quotes / model / map
                             / macro(공표 통계) / supply(공급) / regime(거시)
   scripts/
@@ -46,6 +48,7 @@ backend/
     ingest_kapt.py          K-apt 단지 상세(세대수 등) — 우리 단지에 붙인다
     ingest_kapt_all.py      K-apt 시군구 전수 — 붙이지 않고 담는다(경기 남부 공급)
     ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
+    ingest_bldrgst.py       건축물대장 법정동 전수 — 멸실을 직접 관측하려고
     export_static.py        정적 사이트용 스냅샷
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)

@@ -407,6 +407,108 @@ class KaptUnit(Base):
     apt_type: Mapped[str] = mapped_column(String(20), default="")
     address: Mapped[str] = mapped_column(String(160), default="")
 
+    # 언제 처음 봤고 **마지막으로 언제 봤나**(YYYYMMDD).
+    #
+    # 멸실이 시군구로 공표되지 않아서 넣는다. R-ONE·KOSIS·통계누리를 다 뒤졌는데
+    # 주택멸실현황은 셋 다 시도 단위다(통계누리 내부 JSON 을 직접 열어 20행 =
+    # 전국·수도권·지방 + 시도 17개인 것을 확인했다).
+    #
+    # 그래서 **우리가 직접 관측한다.** 전수를 해마다 받아 두면, 지난번에 있었는데
+    # 이번에 없는 단지가 그 사이 사라진 단지다. 공표값은 아니지만 경기 전체 멸실을
+    # 비중으로 안분하는 **추정보다 낫다** — 안분은 무엇으로 나누느냐에 따라 값이
+    # 달라지고 어느 쪽도 근거가 없다.
+    #
+    # 행을 스냅샷마다 쌓지 않고 두 날짜만 갱신하는 이유: 1,945곳 × 해마다 쌓으면
+    # 같은 값이 되풀이되는데, 우리가 묻는 것은 "언제 사라졌나" 하나뿐이다.
+    # 유니크 키(`kapt_code`)를 그대로 둘 수 있어 `migrate.py` 의 ADD COLUMN 으로
+    # 끝나는 것도 이유다 — SQLite 는 유니크 제약을 바꾸려면 표를 다시 만들어야 한다.
+    first_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    last_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class KaptRun(Base):
+    """K-apt 전수를 **언제 어느 시군구까지 받았나.**
+
+    이것이 없으면 `last_seen` 이 옛 날짜인 단지를 보고 '사라졌다' 고 할 수 없다.
+    그 시군구를 아예 안 돌렸을 수도 있기 때문이다. 둘은 전혀 다른 뜻인데 표에서는
+    똑같이 보인다 — 이 저장소가 가장 경계하는 모양이다.
+
+    그래서 **돌린 사실 자체를 기록한다.** 사라진 단지는 '그 시군구를 실제로 두 번
+    돌렸고, 뒤쪽 실행에서 안 보인 단지' 로만 센다.
+    """
+
+    __tablename__ = "kapt_runs"
+    __table_args__ = (
+        UniqueConstraint("sgg_cd", "taken_on", name="uq_kapt_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sgg_cd: Mapped[str] = mapped_column(String(5), index=True)
+    taken_on: Mapped[str] = mapped_column(String(8), index=True)  # YYYYMMDD
+    units: Mapped[int] = mapped_column(Integer, default=0)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class BldUnit(Base):
+    """건축물대장 표제부 전수. **멸실을 직접 관측하기 위한 스냅샷**이다.
+
+    `KaptUnit` 과 같은 구조이고 범위만 넓다 — K-apt 는 의무관리대상 아파트뿐이라
+    단독주택 멸실을 못 잡는다(2024년 전국 멸실 85,069호 중 단독이 39,169호, 46%).
+
+    해마다 전수를 떠서 `last_seen` 이 옛 날짜로 남은 건축물을 센다. 그것이 그 사이
+    대장에서 말소된 것이고, 멸실의 법적 정의가 바로 '건축물대장 말소' 다.
+
+    ## 0 을 조심한다
+
+    이 API 는 간헐적으로 빈 결과를 정상 응답으로 돌려준다(`clients/bldrgst.py`).
+    법정동 439개를 두 번 세었더니 265,799동과 295,324동이 나왔다 — 10% 차이다.
+    빈 결과를 성공으로 넘기면 **그만큼이 멸실로 잘못 세어진다.** 그래서 적재는
+    법정동마다 기대 건수를 먼저 받아 두고 대조한다.
+    """
+
+    __tablename__ = "bld_units"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # 관리건축물대장 PK. 주소가 바뀌어도 이것은 유지된다.
+    pk: Mapped[str] = mapped_column(String(24), unique=True, index=True)
+    sigungu_cd: Mapped[str] = mapped_column(String(5), index=True)
+    bjdong_cd: Mapped[str] = mapped_column(String(5), index=True)
+    plat_plc: Mapped[str] = mapped_column(String(160), default="")
+    bld_nm: Mapped[str] = mapped_column(String(80), default="")
+    # 주용도명. 단독주택·공동주택만 골라야 '주택 멸실' 이 된다.
+    main_purps: Mapped[str] = mapped_column(String(40), default="", index=True)
+    hhld_cnt: Mapped[int] = mapped_column(Integer, default=0)
+    tot_area: Mapped[float] = mapped_column(Float, default=0.0)
+    use_apr_day: Mapped[str] = mapped_column(String(8), default="")
+
+    first_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    last_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class BldRun(Base):
+    """건축물대장을 **언제 어느 법정동까지** 받았나.
+
+    `KaptRun` 과 같은 이유다 — 이게 없으면 `last_seen` 이 옛 날짜인 건축물을 보고
+    멸실이라고 할 수 없다. 그 법정동을 아예 안 돌렸을 수도 있다.
+
+    `expected` 는 그때 API 가 말한 총 건수다. `fetched` 와 다르면 중간에 빈 쪽이
+    섞인 것이므로 **그 법정동은 비교에서 뺀다.**
+    """
+
+    __tablename__ = "bld_runs"
+    __table_args__ = (
+        UniqueConstraint("sigungu_cd", "bjdong_cd", "taken_on", name="uq_bld_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sigungu_cd: Mapped[str] = mapped_column(String(5), index=True)
+    bjdong_cd: Mapped[str] = mapped_column(String(5), index=True)
+    taken_on: Mapped[str] = mapped_column(String(8), index=True)
+    expected: Mapped[int] = mapped_column(Integer, default=0)
+    fetched: Mapped[int] = mapped_column(Integer, default=0)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
