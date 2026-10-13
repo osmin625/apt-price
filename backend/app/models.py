@@ -451,6 +451,67 @@ class KaptRun(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class BldUnit(Base):
+    """건축물대장 표제부 전수. **멸실을 직접 관측하기 위한 스냅샷**이다.
+
+    `KaptUnit` 과 같은 구조이고 범위만 넓다 — K-apt 는 의무관리대상 아파트뿐이라
+    단독주택 멸실을 못 잡는다(2024년 전국 멸실 85,069호 중 단독이 39,169호, 46%).
+
+    해마다 전수를 떠서 `last_seen` 이 옛 날짜로 남은 건축물을 센다. 그것이 그 사이
+    대장에서 말소된 것이고, 멸실의 법적 정의가 바로 '건축물대장 말소' 다.
+
+    ## 0 을 조심한다
+
+    이 API 는 간헐적으로 빈 결과를 정상 응답으로 돌려준다(`clients/bldrgst.py`).
+    법정동 439개를 두 번 세었더니 265,799동과 295,324동이 나왔다 — 10% 차이다.
+    빈 결과를 성공으로 넘기면 **그만큼이 멸실로 잘못 세어진다.** 그래서 적재는
+    법정동마다 기대 건수를 먼저 받아 두고 대조한다.
+    """
+
+    __tablename__ = "bld_units"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # 관리건축물대장 PK. 주소가 바뀌어도 이것은 유지된다.
+    pk: Mapped[str] = mapped_column(String(24), unique=True, index=True)
+    sigungu_cd: Mapped[str] = mapped_column(String(5), index=True)
+    bjdong_cd: Mapped[str] = mapped_column(String(5), index=True)
+    plat_plc: Mapped[str] = mapped_column(String(160), default="")
+    bld_nm: Mapped[str] = mapped_column(String(80), default="")
+    # 주용도명. 단독주택·공동주택만 골라야 '주택 멸실' 이 된다.
+    main_purps: Mapped[str] = mapped_column(String(40), default="", index=True)
+    hhld_cnt: Mapped[int] = mapped_column(Integer, default=0)
+    tot_area: Mapped[float] = mapped_column(Float, default=0.0)
+    use_apr_day: Mapped[str] = mapped_column(String(8), default="")
+
+    first_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    last_seen: Mapped[str] = mapped_column(String(8), default="", index=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class BldRun(Base):
+    """건축물대장을 **언제 어느 법정동까지** 받았나.
+
+    `KaptRun` 과 같은 이유다 — 이게 없으면 `last_seen` 이 옛 날짜인 건축물을 보고
+    멸실이라고 할 수 없다. 그 법정동을 아예 안 돌렸을 수도 있다.
+
+    `expected` 는 그때 API 가 말한 총 건수다. `fetched` 와 다르면 중간에 빈 쪽이
+    섞인 것이므로 **그 법정동은 비교에서 뺀다.**
+    """
+
+    __tablename__ = "bld_runs"
+    __table_args__ = (
+        UniqueConstraint("sigungu_cd", "bjdong_cd", "taken_on", name="uq_bld_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sigungu_cd: Mapped[str] = mapped_column(String(5), index=True)
+    bjdong_cd: Mapped[str] = mapped_column(String(5), index=True)
+    taken_on: Mapped[str] = mapped_column(String(8), index=True)
+    expected: Mapped[int] = mapped_column(Integer, default=0)
+    fetched: Mapped[int] = mapped_column(Integer, default=0)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class MemoTagPref(Base):
     """메모 키워드를 **비고에 띄울지** 여부. 사전 자체가 아니라 그 사전의 표시 설정이다.
 
