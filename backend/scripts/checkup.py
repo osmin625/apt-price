@@ -68,6 +68,17 @@ STALE = {
 }
 DEAD_CSS_WARN_PCT = 15.0
 
+# 지침서가 길어지면 손볼 때가 됐다는 신호다. 300줄은 규칙이 아니라 **읽어 볼
+# 때**를 알려 주는 선이다 — 세 번 다 '한 문서가 두 가지 일을 한다' 는 것을
+# 길어진 뒤에 알아챘다(CLAUDE.md '300줄이 넘으면 손본다' 참조).
+DOC_LINES_WARN = 300
+
+# 길어도 되는 문서. **이유를 적어야** 여기 넣는다.
+DOC_LONG_OK = {
+    "ui-log.md": "시간순 기록이라 쌓이는 것이 정상이다. 나누면 '언제 무엇을 "
+                 "시도했나' 가 끊긴다",
+}
+
 # 저장소에 남으면 안 되는 것(스크래치패드에 만들기로 한 것들).
 #
 # `nul` 을 넣었다가 **4,644개**가 잡혔다. 윈도우에서 `nul` 은 장치 이름이라 어느
@@ -245,6 +256,23 @@ def check_cruft(rep: Report) -> None:
                              + ", ".join(f"{k}-* {v}개" for k, v in top))
         print("      " + ", ".join(f"{k}-* {v}개" for k, v in top))
         print("      (템플릿 문자열로 붙이는 클래스는 거짓 양성일 수 있다)")
+
+    # 지침서 길이. 넘었다고 틀린 것은 아니라 `[!]` 다 — 사람이 읽어 보고
+    # 줄일지·나눌지·그대로 둘지 고른다.
+    docs = sorted((ROOT / "docs").glob("*.md"))
+    long_docs = []
+    for d in docs:
+        n = len(d.read_text(encoding="utf-8").splitlines())
+        if n > DOC_LINES_WARN and d.name not in DOC_LONG_OK:
+            long_docs.append((d.name, n))
+    print(f"  긴 지침서       {len(long_docs)}/{len(docs)} "
+          f"({DOC_LINES_WARN}줄 넘음)")
+    if long_docs:
+        rep.add("!", "군살",
+                "300줄 넘는 지침서 " + ", ".join(f"{n}({c}줄)" for n, c in long_docs)
+                + " — CLAUDE.md 의 '300줄이 넘으면 손본다' 참조")
+        for n, c in sorted(long_docs, key=lambda kv: -kv[1]):
+            print(f"      {n:<16} {c}줄")
 
     # 정적 번들. 문서에 적어 두면 또 어긋나므로 **여기서 잰다**(deploy.md 참조).
     # 임계값 근거: GitHub Pages 소프트 한도가 1GB 라 용량 자체는 문제가 아니다.
