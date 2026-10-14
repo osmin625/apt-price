@@ -11,6 +11,7 @@
 | 하려는 일 | 읽을 것 |
 |---|---|
 | 화면·기능 동작을 바꾼다 | [docs/design.md](docs/design.md) |
+| 호가를 읽거나 줄 세우는 것을 바꾼다 | [docs/quotes.md](docs/quotes.md) |
 | 그 화면이 왜 그렇게 됐는지 찾는다 | [docs/ui-log.md](docs/ui-log.md) |
 | 모델에 요인을 더하거나 뺀다 | [docs/factors.md](docs/factors.md) |
 | 추정 방법·수식을 건드린다 | [docs/model.md](docs/model.md) |
