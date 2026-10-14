@@ -65,6 +65,11 @@ STALE = {
     # 있었나' 라서 지나가면 복구할 수 없다. 1년에 한 번 뜨면 되므로 400일로 두되,
     # 넘기면 그해 멸실은 **영구히 빈칸**이 된다는 뜻이다.
     "snapshot_days": 400,
+    # 한국은행 ECOS 지표는 **지표마다 늦는 정도가 다르다.** 최신 공표통계 한 줄
+    # (`reb_days`)은 가장 늦은 달 하나만 보므로, CPI 가 멈춰도 기준금리가 새로
+    # 들어오면 지나간다. 그래서 지표별로 본다. 2026-10-13 에 받았을 때 cpi·기준금리는
+    # 2026-09, M2 는 2026-07 까지 왔다 — M2 는 두 달 뒤 중순에 나오므로 정상이다.
+    "ecos_days": {"cpi": 45, "base_rate": 45, "m2": 105},
 }
 DEAD_CSS_WARN_PCT = 15.0
 
@@ -181,6 +186,24 @@ def check_fresh(rep: Report, today: dt.date) -> None:
         reb_date = (dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1))
     say("최신 공표통계", days_since(reb_date, today), STALE["reb_days"],
         "python -m scripts.ingest_reb")
+
+    from app.clients import ecos
+
+    with SessionLocal() as db:
+        last_ecos = dict(db.execute(
+            select(RebStat.metric, func.max(RebStat.ym))
+            .where(RebStat.metric.in_(list(ecos.TABLES)))
+            .group_by(RebStat.metric)).all())
+    for metric in ecos.TABLES:
+        # 한도가 없는 지표를 더했으면 여기서 멈춘다 — 조용히 빠지지 않게.
+        limit = STALE["ecos_days"][metric]
+        last = last_ecos.get(metric)
+        d = None
+        if last:
+            y, m = int(last[:4]), int(last[4:6])
+            d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
+        say(f"ECOS {metric}", days_since(d, today), limit,
+            f"python -m scripts.ingest_macro --metric {metric}")
 
     amen_age = days_since(oldest_amen.date() if oldest_amen else None, today)
     say("입지 수집", amen_age, STALE["amenity_days"],
