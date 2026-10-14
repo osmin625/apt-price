@@ -44,7 +44,7 @@ CASES: list[tuple[str, str, dict]] = [
      "힐스테이트푸르지오수원 103동\n매매 9억\n3,360만원/3.3㎡평당가 도움말\n"
      "알림관심매물\n공유하기\n아파트88B㎡ (전용59B)8/15층남향",
      {"exclusive_area": 59.0, "supply_area": 88.0, "area_is_explicit": True,
-      "floor": 8, "total_floor": 15, "dong": "103", "asking_price": 90000,
+      "area_pyeong": None, "floor": 8, "total_floor": 15, "dong": "103", "asking_price": 90000,
       "stated_ppp": 3360}),
     ("공급/전용 쌍과 층 구간",
      "래미안영통마크원 105동\n매매 8억 5,000\n아파트 · 84.97/59.94㎡, 중층, 남향",
@@ -84,22 +84,18 @@ CASES: list[tuple[str, str, dict]] = [
     ("법정동은 동 번호가 아니다", "인계동 래미안\n매매 4억\n84㎡ 5/10층", {"dong": None}),
     ("본문의 '남동향' 은 동이 아니다", "X\n매매 4억\n84㎡ 5/10층남동향", {"dong": None}),
     ("한 글자 동", "X 가동\n매매 4억\n84㎡ 5/10층", {"dong": "가"}),
-    # 알려진 결함 — 아래 KNOWN 참조
+    # 공급이 ㎡ 면 단위 없는 전용도 ㎡ 다 — 평 구간으로 찾지 않는다
     ("㎡ 공급 뒤의 단위 없는 전용은 평이 아니다",
      "X 101동\n매매 2억\n아파트49㎡ (전용36)3/15층",
      {"exclusive_area": 36.0, "area_pyeong": None}),
+    ("'전용 84㎡' 는 84평이 아니다",
+     "X\n매매 9억\n전용 84㎡ / 15층", {"exclusive_area": 84.0, "area_pyeong": None}),
+    ("'전용14평' 은 정수 평", "X\n매매 3억\n전용14평 5/10층",
+     {"exclusive_area": round(14 * PY, 2), "area_pyeong": 14}),
 ]
 
 # 사례마다 이유. **고치지 않은 이유**를 적는다.
-KNOWN: dict[str, str] = {
-    "㎡ 공급 뒤의 단위 없는 전용은 평이 아니다":
-        "`area_pyeong` 을 잡는 정규식이 단위를 안 본다. `_PAIR_PYEONG` 주석은 "
-        "'88B㎡ (전용59B) 는 ㎡ 로 읽힌다' 고 하는데, 같은 숫자가 area_pyeong=59 로도 "
-        "잡혀 `_resolve_area` 가 [195, 198㎡] 구간부터 찾는다. 2026-10-15 실측: 2,472개 "
-        "단지 중 그 구간에 다른 평형이 있는 곳은 1곳(권선자이e편한세상 59.96 ↔ "
-        "195.49㎡)이고, 그곳 195㎡ 호가 10건은 메모·가격으로 보아 진짜 큰 평형이었다. "
-        "고치면 값이 바뀌므로 따로 정한다.",
-}
+KNOWN: dict[str, str] = {}
 
 
 def split_cases() -> list[tuple[str, bool, str]]:
