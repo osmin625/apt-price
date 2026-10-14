@@ -72,6 +72,8 @@
 - `scripts/verify_spline.py` — 벡터화한 스플라인 기저 vs `pricing.rcs_basis` (오차 0)
 - `scripts/verify_absorb.py` — 고정효과 흡수 vs 더미 회귀 (1e-13)
 - `scripts/verify_name_match.py` — 단지명 매칭 규칙 변경 전후 전수 대조 (깨짐 0)
+- `scripts/verify_listing_parse.py` — 파서 주석의 '실제로 겪은' 사례를 입력으로, 주석이
+  말하는 값을 기대값으로. 지금 출력을 얼리지 않는다 — 그러면 지금의 버그가 정답이 된다
 - `scripts/verify_payloads.py` — 적합 페이로드가 정말 JSON 이 되는지
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다
@@ -115,7 +117,7 @@
 
 ### 정기 검진 — `python -m scripts.checkup`
 
-검증 스크립트가 여덟 개가 됐다. **하나씩 기억해서 돌리는 구조는 반드시 뒤처진다** —
+검증 스크립트가 늘었다. **하나씩 기억해서 돌리는 구조는 반드시 뒤처진다** —
 '손으로 유지하는 목록' 에서 이미 당한 것과 같은 함정이다. 입구를 하나로 둔다.
 
 세 가지를 본다.

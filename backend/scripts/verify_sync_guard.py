@@ -69,6 +69,13 @@ def edit(rel: str, fn):
 CASES = [
     ("목록 — 테이블을 하나 지움", "docs/architecture.md",
      lambda s: s.replace("ComplexAmenity /", "/", 1), "ComplexAmenity"),
+    # 실제로 빠져 있던 모양 그대로 — 이름이 다른 파일(`ingest_kapt.py`)의 꼬리와 겹친다.
+    # 부분 문자열로 찾던 때는 이것이 통과했다.
+    ("목록 — 다른 파일 꼬리와 겹치는 이름", "docs/architecture.md",
+     lambda s: s.replace("    clients/kapt.py ", "    clients/zzz.py ", 1), "clients/kapt.py"),
+    # routers 와 services 에 같은 이름이 있다. 한쪽만 지워도 잡혀야 한다.
+    ("목록 — 같은 이름의 서비스만 지움", "docs/architecture.md",
+     lambda s: s.replace("    services/quotes.py ", "    services/zzz.py ", 1), "services/quotes.py"),
     ("이름 — 문서에 옛 탭 이름", "docs/performance.md",
      lambda s: s + "\n옛 이름 시장 분석 을 적어 본다.\n", "시장 분석"),
     ("계약 — 프론트가 없는 키를 읽음", "frontend/src/components/FactorHint.jsx",
@@ -86,7 +93,9 @@ CASES = [
     ("CSS — 선택자 자리에 산문", "frontend/src/styles.css",
      lambda s: s.replace(".chip {", "더 높아서 {", 1), "선택자 자리에"),
     # 준공선이 통째로 사라졌던 모양. 쓰는 쪽의 이름을 없는 것으로 바꿔 본다.
-    ("CSS 변수 — 없는 것을 쓴다", "frontend/src/components/Charts.jsx",
+    # 처음에는 Charts.jsx 를 고쳤는데, 죽은 코드를 치우며(512bd50) 그 줄이 사라져
+    # 시험이 "못 바꿨다" 로 죽었다. 지금 그 변수를 쓰는 곳으로 옮겼다.
+    ("CSS 변수 — 없는 것을 쓴다", "frontend/src/views/SupplyView.jsx",
      lambda s: s.replace("var(--series-1)", "var(--없는변수)", 1), "없는변수"),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),

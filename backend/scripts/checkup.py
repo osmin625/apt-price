@@ -112,6 +112,7 @@ SUITES = [
     ("scripts.verify_guard", "실패 감지가 걸리는지", False),
     ("scripts.verify_sync", "코드↔문서↔데이터↔프론트", True),
     ("scripts.verify_spline", "스플라인 기저", False),
+    ("scripts.verify_listing_parse", "매물 파서가 주석의 사례대로", False),
     ("scripts.verify_payloads", "페이로드가 JSON 이 되는지", True),
 ]
 
@@ -128,6 +129,10 @@ def run_suites(rep: Report, fast: bool) -> None:
         out = p.stdout.decode("utf-8", "replace")
         if p.returncode == 0:
             print(f"  {what:<28} 통과")
+            # 통과했어도 `[!]` 는 올린다. 알려진 결함처럼 '사람이 정할 것' 을
+            # 스크립트가 말해도, 여기서 버리면 직접 돌려 본 사람만 안다.
+            for t in (l for l in out.splitlines() if l.startswith("[!]")):
+                rep.add("!", "정합성", f"{mod}: {t[4:]}")
         else:
             tail = [l for l in out.splitlines() if l.startswith(("[X]", "[!]"))]
             print(f"  {what:<28} 실패")
