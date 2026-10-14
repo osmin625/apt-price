@@ -12,7 +12,6 @@ from .models import Base, Complex, ComplexStation, Station, Trade
 from .routers import (
     analysis,
     complexes,
-    listings,
     macro,
     map as map_router,
     model,
@@ -42,7 +41,6 @@ app.add_middleware(
 
 app.include_router(complexes.router)
 app.include_router(analysis.router)
-app.include_router(listings.router)
 app.include_router(model.router)
 app.include_router(map_router.router)
 app.include_router(quotes.router)

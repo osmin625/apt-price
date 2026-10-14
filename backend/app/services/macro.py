@@ -196,38 +196,6 @@ def series(db: Session, metric: str, *, since: str | None = None) -> dict:
     }
 
 
-def latest_table(db: Session) -> dict:
-    """모든 지표의 최신값을 시군구 한 줄로. 한눈에 보는 표."""
-    sub = (
-        select(RebStat.metric, func.max(RebStat.ym).label("ym"))
-        .group_by(RebStat.metric)
-        .subquery()
-    )
-    rows = db.execute(
-        select(RebStat.sgg_cd, RebStat.metric, RebStat.ym, RebStat.value, RebStat.unit)
-        .join(sub, (RebStat.metric == sub.c.metric) & (RebStat.ym == sub.c.ym))
-    ).all()
-
-    cells: dict[str, dict[str, float]] = {}
-    ym_of: dict[str, str] = {}
-    for sgg, metric, ym, value, unit in rows:
-        cells.setdefault(sgg, {})[metric] = round(convert(value, metric, unit), 4)
-        ym_of[metric] = ym
-
-    items = [
-        {"sgg_cd": sgg, "name": name, **cells.get(sgg, {})}
-        for sgg, name in DISTRICTS.items()
-        if sgg in cells
-    ]
-    items.sort(key=lambda x: -(x.get("avg_unit_price") or 0))
-
-    return {
-        "metrics": METRICS,
-        "latest_ym": ym_of,
-        "items": items,
-    }
-
-
 # ---------------------------------------------------------------- 인사이트
 #
 # 값만 17줄 그려 놓으면 읽는 일이 통째로 사람 몫이 된다. 그래서 **세 장의 그림**으로

@@ -49,7 +49,6 @@ from app.models import (  # noqa: E402
     Base,
     Complex,
     ComplexStation,
-    Listing,
     Station,
     Trade,
 )
@@ -138,14 +137,6 @@ def walk_effect(walk_min: float, t: dict) -> float:
     if walk_min <= knee:
         return lam * walk_min
     return lam * knee + lam * t["walk_flatten_ratio"] * (walk_min - knee)
-
-
-def true_log_ppp_at(walk_min: float, t: dict) -> float:
-    """검증·시각화용 — 도보분만 바꿨을 때의 참 log 평당가(다른 항은 상수).
-
-    모델의 곡선은 기준점 대비 '대비'로 나오므로 여기서도 절대 수준은 필요 없다.
-    """
-    return walk_effect(min(walk_min, pricing.WALK_CAP_MIN), t)
 
 
 @dataclass
@@ -288,7 +279,6 @@ def seed(months: int, reset: bool, recreate: bool, seed_value: int, use_tmap: bo
 
     with SessionLocal() as db:
         if reset and not recreate:
-            db.query(Listing).delete()
             db.query(Trade).delete()
             db.query(ComplexStation).delete()
             db.query(Complex).delete()

@@ -90,21 +90,6 @@ def _get(path: str) -> dict:
     return data
 
 
-def table_list(limit: int = 1000) -> list[dict]:
-    """통계표 목록. 코드를 **고르기 위해** 쓴다(기억으로 적지 않는다)."""
-    key, page = (api_key() or "sample"), (REAL_PAGE if available() else SAMPLE_PAGE)
-    out: list[dict] = []
-    for start in range(1, limit + 1, page):
-        d = _get(f"StatisticTableList/{key}/json/kr/{start}/{start + page - 1}/")
-        rows = d["StatisticTableList"]["row"]
-        out += rows
-        if len(rows) < page:
-            break
-        if not available():
-            time.sleep(0.12)
-    return out
-
-
 def fetch(metric: str, start_ym: str = "200001", end_ym: str = "209912") -> list[EcosPoint]:
     """한 지표의 월별 시계열.
 

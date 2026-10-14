@@ -110,8 +110,15 @@ def check_lists(r: Result) -> None:
     header("목록 — architecture.md 가 실물을 다 적었나")
     arch = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
 
+    def listed(name: str) -> bool:
+        # **부분 문자열로 찾지 않는다.** 예전에는 `n in arch` 였는데, 그러면
+        # `clients/kapt.py` 가 빠져 있어도 `ingest_kapt.py` 가 있어서 통과했다.
+        # `reb.py`(ingest_reb)·`macro.py`(ingest_macro) 도 같은 식으로 빠진 채였다.
+        # 앞이 글자·`_`·`.` 이면 다른 파일 이름의 꼬리다.
+        return re.search(r"(?<![\w.])" + re.escape(name) + r"(?!\w)", arch) is not None
+
     def sweep(label: str, names: list[str]) -> None:
-        missing = [n for n in names if n not in arch]
+        missing = [n for n in names if not listed(n)]
         print(f"  {label:<10} 실물 {len(names):>3}개 · 빠짐 {len(missing)}개")
         for n in missing:
             r.bad(f"architecture.md 에 {label} '{n}' 가 없습니다")
@@ -131,11 +138,15 @@ def check_lists(r: Result) -> None:
     )
     sweep("스크립트", scripts)
 
-    clients = sorted(
-        p.name for p in (BACKEND / "app" / "clients").glob("*.py")
-        if p.name not in ARCH_SKIP
-    )
-    sweep("클라이언트", clients)
+    app = BACKEND / "app"
+    sweep("앱", sorted(p.name for p in app.glob("*.py") if p.name not in ARCH_SKIP))
+    # 하위 패키지는 **경로째** 찾는다. `quotes.py` 가 routers 와 services 에 둘 다
+    # 있어서, 이름만 보면 한쪽이 빠져도 다른 쪽이 대신 통과시킨다.
+    for pkg, label in (("routers", "라우터"), ("services", "서비스"), ("clients", "클라이언트")):
+        sweep(label, sorted(
+            f"{pkg}/{p.name}" for p in (app / pkg).glob("*.py")
+            if p.name not in ARCH_SKIP
+        ))
 
 
 # ──────────────────────────────────────────────────────────
@@ -147,12 +158,20 @@ def check_labels(r: Result) -> None:
     live = set(re.findall(r"label:\s*'([^']+)'", app))
     print(f"  지금 탭: {' · '.join(sorted(live))}")
 
-    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md"))]
+    # **문서만 보면 모자란다.** 탭 이름을 바꾸고도 화면 안의 제목은 그대로여서
+    # '호가 입력' 탭에 '매물 관리' 라고 적혀 있었다(아홉 곳). 보는 사람에게는
+    # 문서보다 화면이 먼저다. JSX 도 같이 본다 — 주석은 뺀다. 거기 적힌 옛 이름은
+    # '왜 바꿨나' 를 남긴 경위 기록이라 지우면 안 된다.
+    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md")),
+            *sorted(FRONT.rglob("*.jsx"))]
     hits = 0
     for d in docs:
         if d.name in LABEL_EXEMPT:
             continue
         text = d.read_text(encoding="utf-8")
+        if d.suffix == ".jsx":
+            text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+            text = re.sub(r"(?m)^\s*//.*$", " ", text)
         for old, new in RETIRED_LABELS.items():
             if old in live:
                 continue  # 되살아난 이름

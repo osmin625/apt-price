@@ -78,7 +78,7 @@ export function scopeClick(e, onScope, scope) {
  */
 
 // 좋은 쪽부터. 숫자가 클수록 나쁘고, 두 글자면 **큰 쪽**이 그 집의 무리다.
-export const ASPECT_ORDER = ['남', '동', '서', '북']
+const ASPECT_ORDER = ['남', '동', '서', '북']
 
 export function aspectGroup(a) {
   if (!a) return null
@@ -92,7 +92,7 @@ export function aspectGroup(a) {
 }
 
 /** 한 줄이 가진 향 무리들. 접힌 줄은 여럿일 수 있다. */
-export function aspectGroupsOf(i) {
+function aspectGroupsOf(i) {
   const list = i.aspects?.length ? i.aspects : i.aspect ? [i.aspect] : []
   return [...new Set(list.map(aspectGroup).filter(Boolean))]
 }
@@ -112,7 +112,7 @@ export function inScope(item, scope) {
 }
 
 /** 면적 묶음 키. 서버가 주면 그것을, 없으면 반올림해서 쓴다. */
-export const areaKeyOf = (i) =>
+const areaKeyOf = (i) =>
   i.note_key?.area_key ?? (i.exclusive_area != null ? Math.round(i.exclusive_area) : null)
 
 /** 좁힌 범위를 한 줄로. 화면에 그대로 적는다. */

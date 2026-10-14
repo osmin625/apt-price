@@ -369,7 +369,7 @@ export default function MacroView() {
         <Modal title="모델과 어긋나는 곳" onClose={() => setOpen(null)} wide>
           {!ins.has_fit ? (
             <p className="empty">
-              적합이 아직 캐시에 없어 비교할 수 없습니다. <b>시장 분석</b> 탭을 한 번
+              적합이 아직 캐시에 없어 비교할 수 없습니다. <b>매물 분석</b> 탭을 한 번
               열면 계산되고, 그 뒤 이 화면으로 돌아오면 보입니다.
             </p>
           ) : (

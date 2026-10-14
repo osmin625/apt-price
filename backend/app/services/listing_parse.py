@@ -84,6 +84,32 @@ _PAIR_PYEONG = re.compile(
     r"(\d{1,3}(?:\.\d+)?)[ 	]*평(?:형)?(?![대당])(\s*[(（]?\s*전용\s*)(\d{1,3}(?:\.\d+)?)"
     r"(?![\d.]|\s*(?:㎡|m2|m²|평))"
 )
+# '전용14평' — 전용이 평이라고 **적힌** 경우. 정수만 받는다('전용 25.7평' 은 버림한
+# 값이 아니라 그대로 점이다).
+_EXCL_PYEONG = re.compile(r"전용\s*(\d{1,3})[ 	]*평(?:형)?(?![대당])")
+
+
+def parse_area_pyeong(text: str) -> int | None:
+    """전용면적이 **정수 평**으로 적혀 있었다면 그 값. 아니면 None.
+
+    평이었다고 말할 수 있는 경우는 둘뿐이다. '전용14평' 처럼 평이 적혔거나,
+    '아파트17평 (전용12)' 처럼 공급이 평이라 단위 없는 전용이 평을 물려받은 경우
+    (`_PAIR_PYEONG` — `normalize_pyeong` 이 환산하는 바로 그 경우)다.
+
+    예전에는 `전용\\s*(\\d{1,3})\\s*(?:평)?` 로 단위를 보지 않았다. 그래서
+    '아파트49㎡ (전용36)' 의 36㎡ 를 36평으로도 잡아, `_resolve_area` 가 [119, 122㎡]
+    구간부터 찾았다. '전용 84㎡' 도 84평이 됐다. 그 구간에 마침 다른 평형이 있는
+    단지에서는 59㎡ 매물이 195㎡ 로 붙는다(2026-10-15 실측: 권선자이e편한세상 1곳).
+    **㎡ 공급 뒤의 단위 없는 전용은 ㎡ 다** — `parse_area` 가 읽는 것과 같다.
+    """
+    m = _EXCL_PYEONG.search(text)
+    if m:
+        return int(m.group(1))
+    m = _PAIR_PYEONG.search(text)
+    if m and "." not in m.group(3):
+        return int(m.group(3))
+    return None
+
 
 # '3,360만원/3.3㎡' — 네이버가 표시하는 평당가. 3.3㎡ 가 곧 1평이다.
 _STATED_PPP = re.compile(r"([\d,]{3,7})\s*만원\s*/\s*(?:3\.3\s*(?:㎡|m2|m²)|평)")
@@ -211,7 +237,7 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
     """(전용면적㎡, 공급면적㎡, 전용이 명시됐는가, 경고).
 
     세 번째 값이 중요하다. 광고의 면적은 **표기가 없으면 공급**이라, 뒤에서 그 단지의
-    실제 평형과 대조해 공급으로 재해석할지 정해야 한다(`routers/model._resolve_area`).
+    실제 평형과 대조해 공급으로 재해석할지 정해야 한다(`listing_match._resolve_area`).
     '전용' 이라고 적혔거나 공급/전용 쌍의 뒤쪽이면 재해석할 이유가 없다.
 
     평 표기는 먼저 ㎡ 로 환산해(`normalize_pyeong`) 단위를 통일한 뒤, 아래 우선순위로
@@ -229,7 +255,7 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
     text, converted = normalize_pyeong(text)
     if converted:
         # 환산한 값이 전용인지 공급인지는 여기서 알 수 없다. 그 판정은 단지의 실제
-        # 평형과 대조한 뒤(`routers/model._resolve_area`)에나 나오므로, 여기서는
+        # 평형과 대조한 뒤(`listing_match._resolve_area`)에나 나오므로, 여기서는
         # **환산 사실만** 적는다. '전용 112.4㎡' 라고 써 두면 바로 다음 줄에서
         # '공급으로 보인다' 고 뒤집히게 된다.
         warns.append({"field": "area", "text":
@@ -374,7 +400,7 @@ def name_fragments(text: str) -> list[str]:
     이름만으로는 1:N 이라 고를 수 없고, 그래서 조각을 따로 내어 준다.
 
     조각 하나로는 못 고른다 — '쌍용' 은 전국에 흔하다. 어느 단지인지는 **동 번호**가
-    가른다(`routers/model._resolve_by_dong`).
+    가른다(`listing_match._resolve_by_dong`).
     """
     line = next((ln for ln in text.splitlines() if ln.strip()), "")
     line = _HEAD_DONG.sub("", line.strip())
@@ -629,9 +655,8 @@ def parse_listing(text: str, complexes: list) -> ParsedListing:
     out.exclusive_area, out.supply_area, out.area_is_explicit, warns = parse_area(body)
     # '전용14' 처럼 **정수 평**으로 적힌 전용면적인가. 네이버가 버림해서 쓰므로
     # 그런 값은 점이 아니라 구간으로 다뤄야 한다(`_resolve_area`).
-    m_py = re.search(r"전용\s*(\d{1,3})\s*(?:평)?(?![\d.])", body)
-    if m_py and out.area_is_explicit:
-        out.area_pyeong = int(m_py.group(1))
+    if out.area_is_explicit:
+        out.area_pyeong = parse_area_pyeong(body)
     out.warnings.extend(warns)
     out.floor, out.total_floor, out.floor_band = parse_floor(body)
     out.dong = parse_dong(text)
