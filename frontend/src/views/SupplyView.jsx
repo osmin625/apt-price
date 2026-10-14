@@ -320,18 +320,46 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
 
   // 부족 구간과 과잉 구간을 따로 칠한다. 한 덩어리로 칠하면 부호가 섞인 해에서
   // 색이 거짓말을 한다.
+  //
+  // **두 선이 구간 안에서 엇갈리면 교차점에서 띠를 둘로 가른다.** 예전에는 i→i+1
+  // 띠를 시작 해(i)의 부호 하나로 칠했다. 서울 2019(+5,945) → 2020(−7,427) 은
+  // 준공선이 적정선 위에서 아래로 내려가는데, 꼬인 사각형 하나가 통째로 파랗게
+  // 칠해져 2020 쪽 절반이 '더 지음' 으로 보였다. 위 문장을 지키지 못한 것이다.
+  //
+  // 교차점은 선형 보간이다. 두 선이 직선으로 그려지므로 그 사이 차이(준공 − 적정)도
+  // 구간 안에서 직선이고, 0 이 되는 자리가 그림 위 교차점과 정확히 같다. 차이는
+  // 백엔드의 `gap_smooth`(= 준공 − 3년평균 적정)를 그대로 써서 색 판정(isShort)과
+  // 같은 값에서 나오게 한다. 반올림 탓에 선 위 교차와 1호 안쪽으로 어긋날 수 있으나
+  // 그림에서는 안 보인다.
+  //
+  // 이렇게 가르면 **어느 해든 제 자리의 색이 제 부호다** — 끝 해(적정이 있는 마지막
+  // 해, 다음 해는 need_missing)도 왼쪽 구간의 오른쪽 끝이 제 부호로 칠해진다.
+  // 그래서 끝 해 오른쪽으로 띠를 따로 늘리지 않는다. 다음 해에는 적정이 없어 늘릴
+  // 근거가 없고, 늘리면 없는 비교를 그린 셈이 된다.
   const bands = []
   for (let i = 0; i < list.length - 1; i += 1) {
     const a = list[i]
     const b = list[i + 1]
     if (a.adequate_smooth == null || b.adequate_smooth == null) continue
-    const short = isShort(a)
-    bands.push({
-      key: a.year,
+    const xa = x(i)
+    const xb = x(i + 1)
+    const quad = (key, short, x0, a0, d0, x1, a1, d1) => ({
+      key,
       short,
-      d: `M${x(i)},${y(a.adequate_smooth)} L${x(i + 1)},${y(b.adequate_smooth)} `
-        + `L${x(i + 1)},${y(b.done)} L${x(i)},${y(a.done)} Z`,
+      d: `M${x0},${y(a0)} L${x1},${y(a1)} L${x1},${y(d1)} L${x0},${y(d0)} Z`,
     })
+    if (isShort(a) === isShort(b)) {
+      bands.push(quad(a.year, isShort(a), xa, a.adequate_smooth, a.done,
+        xb, b.adequate_smooth, b.done))
+      continue
+    }
+    // 부호가 다르니 gap_smooth 둘은 0 이 아니거나(음수 쪽) 서로 다르다 — 분모는 0 이 아니다.
+    const t = a.gap_smooth / (a.gap_smooth - b.gap_smooth)
+    const xc = xa + t * (xb - xa)
+    const ac = a.adequate_smooth + t * (b.adequate_smooth - a.adequate_smooth)
+    // 교차점에서는 두 선이 만나므로 왼쪽·오른쪽 조각 모두 그 한 점으로 모인다(삼각형).
+    bands.push(quad(a.year, isShort(a), xa, a.adequate_smooth, a.done, xc, ac, ac))
+    bands.push(quad(`${a.year}x`, isShort(b), xc, ac, ac, xb, b.adequate_smooth, b.done))
   }
 
   return (
