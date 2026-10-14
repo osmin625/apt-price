@@ -29,30 +29,19 @@ import BulkPaste from './BulkPaste'
  */
 export default function CompareView({ months: initialMonths, incoming }) {
   const [months, setMonths] = useState(initialMonths ?? 12)
-  const [saved, setSaved] = useState([])
   const [basis, setBasis] = useState('market')
 
   useEffect(() => setMonths(initialMonths ?? 12), [initialMonths])
-
-  const reloadSaved = () =>
-    api
-      .listings({ months })
-      .then((d) => setSaved(d.items || []))
-      .catch(() => setSaved([]))
-
-  useEffect(() => {
-    reloadSaved()
-  }, [months])
 
   return (
     <>
       <div className="card">
         <h2>
-          매물 관리
+          호가 입력
           <Hint
             notes={[
               '매물 목록을 통째로 붙여넣으면 단지·면적·층·호가를 뽑아 각각 적정가를 진단합니다.',
-              '쌓인 매물은 매물 순위 탭에서 한 표로 볼 수 있습니다. 기간을 바꾸면 그 기간의 실거래로 전부 다시 계산됩니다.',
+              '쌓인 매물은 호가 분석 탭에서 한 표로 볼 수 있습니다. 기간을 바꾸면 그 기간의 실거래로 전부 다시 계산됩니다.',
             ]}
           />
         </h2>
@@ -78,15 +67,6 @@ export default function CompareView({ months: initialMonths, incoming }) {
           막 붙여넣은 뒤에 보는 것이 자연스럽다. 메모가 하나도 없으면 그렇게 말한다. */}
       <MemoTagPanel />
 
-      {saved.length > 0 && (
-        <SavedListings
-          saved={saved}
-          months={months}
-          basis={basis}
-          setBasis={setBasis}
-          onDelete={(id) => api.deleteListing(id).then(reloadSaved)}
-        />
-      )}
     </>
   )
 }
@@ -115,100 +95,3 @@ const TONE = {
  * 자기 단지 최근 거래보다는 많이 싸지만 펀더멘털 대비로는 아니라는 뜻이다.
  * 그래서 **두 기준을 한 표에 나란히** 두고, 줄 세우는 기준만 고르게 한다.
  */
-function SavedListings({ saved, onDelete, months, basis, setBasis }) {
-  const label = basis === 'factor' ? '요인 기준' : '실거래 기준'
-  return (
-    <section className="card">
-      <h2>
-        매물 순위 <span className="muted small">{saved.length}건 · 최근 {months}개월 기준</span>
-        <Hint
-          notes={[
-            '더 저평가된 매물이 위로 갑니다. 괴리율이 작을수록(음수일수록) 순위가 높습니다.',
-            '분석 기간을 바꾸면 그 기간의 실거래로 표 전체가 다시 계산됩니다.',
-            '실거래 기준은 그 단지 시세 대비, 요인 기준은 펀더멘털 대비입니다. 두 기준의 순위가 어긋나면 그 자체가 정보입니다.',
-          ]}
-        />
-      </h2>
-
-      <div className="rank-basis">
-        <span className="muted small">순위 기준</span>
-        {[
-          ['market', '실거래 기준'],
-          ['factor', '요인 기준'],
-        ].map(([k, t]) => (
-          <button
-            key={k}
-            className={`chip${basis === k ? ' on' : ''}`}
-            onClick={() => setBasis(k)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th className="num">#</th>
-              <th>단지</th>
-              <th>동</th>
-              <th>메모</th>
-              <th className="num">전용</th>
-              <th className="num">층</th>
-              <th className="num">호가</th>
-              <th className={`num${basis === 'market' ? ' is-sort' : ''}`}>실거래 대비</th>
-              <th className={`num${basis === 'factor' ? ' is-sort' : ''}`}>요인 대비</th>
-              <th>판정</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {saved.map((s) => {
-              const gf = s.gap_factor
-              return (
-                <tr key={s.id} className={s.rank === 1 ? 'is-top' : ''}>
-                  <td className="num rank-no">{s.rank ?? '—'}</td>
-                  <td style={{ fontWeight: 600 }}>{s.fair.complex.name}</td>
-                  <td>{s.fair.dong ? `${s.fair.dong}동` : <span className="muted">—</span>}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{s.input.label || '—'}</td>
-                  <td className="num">{s.input.exclusive_area}㎡</td>
-                  <td className="num">{s.input.floor ?? '—'}</td>
-                  <td className="num">{eok(s.input.asking_price)}</td>
-                  <td
-                    className={`num${basis === 'market' ? ' is-sort' : ''}`}
-                    data-tone={s.gap ? (s.gap.pct < -3 ? 'good' : s.gap.pct > 3 ? 'bad' : 'mid') : null}
-                  >
-                    {s.gap ? `${s.gap.pct > 0 ? '+' : ''}${s.gap.pct}%` : '—'}
-                  </td>
-                  <td
-                    className={`num${basis === 'factor' ? ' is-sort' : ''}`}
-                    data-tone={gf ? (gf.pct < -3 ? 'good' : gf.pct > 3 ? 'bad' : 'mid') : null}
-                  >
-                    {gf ? `${gf.pct > 0 ? '+' : ''}${gf.pct}%` : '—'}
-                  </td>
-                  <td>
-                    {s.gap && (
-                      <span className="verdict" data-tone={TONE[s.gap.verdict]} style={{ fontSize: 13 }}>
-                        {s.gap.verdict}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <button className="ghost" onClick={() => onDelete(s.id)}>
-                      삭제
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted small" style={{ marginTop: 8 }}>
-        <b>{label}</b>으로 줄 세웠습니다. 두 기준의 순위가 어긋나는 매물은 단지 고유
-        프리미엄이 크게 붙어 있다는 뜻입니다.
-      </p>
-    </section>
-  )
-}

@@ -1,4 +1,4 @@
-"""한국은행 ECOS — 통화량(M2)과 기준금리.
+"""한국은행 ECOS — 통화량(M2)·기준금리·소비자물가.
 
 ## 왜 이것만 ECOS 인가
 
@@ -14,6 +14,7 @@
 
     161Y006 / BBHA00   M2(평잔, 원계열)       월 200310~
     722Y001 / 0101000  한국은행 기준금리        월 199905~
+    901Y009 / 0        소비자물가지수 총지수   월 196501~
 
 ## 키가 없어도 막히지는 않는다
 
@@ -62,6 +63,11 @@ class EcosPoint:
 TABLES: dict[str, tuple[str, str, str]] = {
     "m2": ("161Y006", "BBHA00", "M"),        # M2 평잔 원계열(십억원)
     "base_rate": ("722Y001", "0101000", "M"),  # 한국은행 기준금리(연%)
+    # 소비자물가 총지수(전국, 2020=100). 거시 요인을 실질로 바꾸면 결론이 달라지나
+    # 재려고 받는다(docs/macro.md). 물가 절(4.)의 **4.1 은 생산자물가**이고 소비자
+    # 물가는 4.2 다 — 이름이 비슷한 표가 나란히 있어 목록에서 골랐다. 통계청이 5년
+    # 마다 기준연도를 바꾸지만 매번 처음부터 다시 받으므로 기준이 섞이지 않는다.
+    "cpi": ("901Y009", "0", "M"),
 }
 
 
@@ -88,21 +94,6 @@ def _get(path: str) -> dict:
         res = data["RESULT"]
         raise EcosError(f"ECOS {res.get('CODE')}: {res.get('MESSAGE', '')[:120]}")
     return data
-
-
-def table_list(limit: int = 1000) -> list[dict]:
-    """통계표 목록. 코드를 **고르기 위해** 쓴다(기억으로 적지 않는다)."""
-    key, page = (api_key() or "sample"), (REAL_PAGE if available() else SAMPLE_PAGE)
-    out: list[dict] = []
-    for start in range(1, limit + 1, page):
-        d = _get(f"StatisticTableList/{key}/json/kr/{start}/{start + page - 1}/")
-        rows = d["StatisticTableList"]["row"]
-        out += rows
-        if len(rows) < page:
-            break
-        if not available():
-            time.sleep(0.12)
-    return out
 
 
 def fetch(metric: str, start_ym: str = "200001", end_ym: str = "209912") -> list[EcosPoint]:

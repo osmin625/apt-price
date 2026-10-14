@@ -65,8 +65,24 @@ STALE = {
     # 있었나' 라서 지나가면 복구할 수 없다. 1년에 한 번 뜨면 되므로 400일로 두되,
     # 넘기면 그해 멸실은 **영구히 빈칸**이 된다는 뜻이다.
     "snapshot_days": 400,
+    # 한국은행 ECOS 지표는 **지표마다 늦는 정도가 다르다.** 최신 공표통계 한 줄
+    # (`reb_days`)은 가장 늦은 달 하나만 보므로, CPI 가 멈춰도 기준금리가 새로
+    # 들어오면 지나간다. 그래서 지표별로 본다. 2026-10-13 에 받았을 때 cpi·기준금리는
+    # 2026-09, M2 는 2026-07 까지 왔다 — M2 는 두 달 뒤 중순에 나오므로 정상이다.
+    "ecos_days": {"cpi": 45, "base_rate": 45, "m2": 105},
 }
 DEAD_CSS_WARN_PCT = 15.0
+
+# 지침서가 길어지면 손볼 때가 됐다는 신호다. 300줄은 규칙이 아니라 **읽어 볼
+# 때**를 알려 주는 선이다 — 세 번 다 '한 문서가 두 가지 일을 한다' 는 것을
+# 길어진 뒤에 알아챘다(CLAUDE.md '300줄이 넘으면 손본다' 참조).
+DOC_LINES_WARN = 300
+
+# 길어도 되는 문서. **이유를 적어야** 여기 넣는다.
+DOC_LONG_OK = {
+    "ui-log.md": "시간순 기록이라 쌓이는 것이 정상이다. 나누면 '언제 무엇을 "
+                 "시도했나' 가 끊긴다",
+}
 
 # 저장소에 남으면 안 되는 것(스크래치패드에 만들기로 한 것들).
 #
@@ -101,6 +117,7 @@ SUITES = [
     ("scripts.verify_guard", "실패 감지가 걸리는지", False),
     ("scripts.verify_sync", "코드↔문서↔데이터↔프론트", True),
     ("scripts.verify_spline", "스플라인 기저", False),
+    ("scripts.verify_listing_parse", "매물 파서가 주석의 사례대로", False),
     ("scripts.verify_payloads", "페이로드가 JSON 이 되는지", True),
 ]
 
@@ -117,6 +134,10 @@ def run_suites(rep: Report, fast: bool) -> None:
         out = p.stdout.decode("utf-8", "replace")
         if p.returncode == 0:
             print(f"  {what:<28} 통과")
+            # 통과했어도 `[!]` 는 올린다. 알려진 결함처럼 '사람이 정할 것' 을
+            # 스크립트가 말해도, 여기서 버리면 직접 돌려 본 사람만 안다.
+            for t in (l for l in out.splitlines() if l.startswith("[!]")):
+                rep.add("!", "정합성", f"{mod}: {t[4:]}")
         else:
             tail = [l for l in out.splitlines() if l.startswith(("[X]", "[!]"))]
             print(f"  {what:<28} 실패")
@@ -165,6 +186,24 @@ def check_fresh(rep: Report, today: dt.date) -> None:
         reb_date = (dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1))
     say("최신 공표통계", days_since(reb_date, today), STALE["reb_days"],
         "python -m scripts.ingest_reb")
+
+    from app.clients import ecos
+
+    with SessionLocal() as db:
+        last_ecos = dict(db.execute(
+            select(RebStat.metric, func.max(RebStat.ym))
+            .where(RebStat.metric.in_(list(ecos.TABLES)))
+            .group_by(RebStat.metric)).all())
+    for metric in ecos.TABLES:
+        # 한도가 없는 지표를 더했으면 여기서 멈춘다 — 조용히 빠지지 않게.
+        limit = STALE["ecos_days"][metric]
+        last = last_ecos.get(metric)
+        d = None
+        if last:
+            y, m = int(last[:4]), int(last[4:6])
+            d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
+        say(f"ECOS {metric}", days_since(d, today), limit,
+            f"python -m scripts.ingest_macro --metric {metric}")
 
     amen_age = days_since(oldest_amen.date() if oldest_amen else None, today)
     say("입지 수집", amen_age, STALE["amenity_days"],
@@ -245,6 +284,23 @@ def check_cruft(rep: Report) -> None:
                              + ", ".join(f"{k}-* {v}개" for k, v in top))
         print("      " + ", ".join(f"{k}-* {v}개" for k, v in top))
         print("      (템플릿 문자열로 붙이는 클래스는 거짓 양성일 수 있다)")
+
+    # 지침서 길이. 넘었다고 틀린 것은 아니라 `[!]` 다 — 사람이 읽어 보고
+    # 줄일지·나눌지·그대로 둘지 고른다.
+    docs = sorted((ROOT / "docs").glob("*.md"))
+    long_docs = []
+    for d in docs:
+        n = len(d.read_text(encoding="utf-8").splitlines())
+        if n > DOC_LINES_WARN and d.name not in DOC_LONG_OK:
+            long_docs.append((d.name, n))
+    print(f"  긴 지침서       {len(long_docs)}/{len(docs)} "
+          f"({DOC_LINES_WARN}줄 넘음)")
+    if long_docs:
+        rep.add("!", "군살",
+                "300줄 넘는 지침서 " + ", ".join(f"{n}({c}줄)" for n, c in long_docs)
+                + " — CLAUDE.md 의 '300줄이 넘으면 손본다' 참조")
+        for n, c in sorted(long_docs, key=lambda kv: -kv[1]):
+            print(f"      {n:<16} {c}줄")
 
     # 정적 번들. 문서에 적어 두면 또 어긋나므로 **여기서 잰다**(deploy.md 참조).
     # 임계값 근거: GitHub Pages 소프트 한도가 1GB 라 용량 자체는 문제가 아니다.

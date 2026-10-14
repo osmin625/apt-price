@@ -137,7 +137,6 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/map/stations", {}),
         # 매크로 — 한국부동산원 공표 통계. 기간·지표 조합이 작아 전부 내보낸다.
         Req("/api/macro/metrics", {}),
-        Req("/api/macro/latest", {}),
         # 공급 — 파라미터가 없다. 시도 2곳 × 연 15행이라 한 응답에 다 들어간다.
         Req("/api/supply/overview", {}),
         # 거시 — 요인 상관을 서버에서 재서 담아 보낸다. 파라미터가 없다.

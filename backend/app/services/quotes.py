@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import pricing
-from ..models import Quote
+from ..models import MemoTagPref, Quote
 
 # 이보다 오래된 호가는 '현재 호가' 집계에서 뺀다. 매물은 팔리거나 내려가는데
 # 우리는 내려간 걸 알 방법이 없어서, 시간으로 끊는 수밖에 없다.
@@ -392,3 +392,35 @@ def latest_per_unit(rows: list[Quote]) -> list[Quote]:
     분포가 위로 끌린다 — 하필 이 데이터를 쌓는 이유(내려간 값 포착)와 반대 방향이다.
     """
     return [c.latest for c in unit_chains(rows)[0]]
+
+
+def disabled_tags(db: Session) -> set[str]:
+    """비고에 안 띄우기로 한 태그. **행이 없으면 켜진 것**으로 본다.
+
+    규칙을 새로 더했을 때 행이 없다고 꺼져 있으면, 더해 놓고 왜 안 보이는지 한참
+    찾게 된다. 끈 것만 행으로 남긴다.
+    """
+    return {
+        r.name
+        for r in db.execute(select(MemoTagPref).where(MemoTagPref.enabled.is_(False)))
+        .scalars()
+        .all()
+    }
+
+
+def all_memos(db: Session) -> list[str]:
+    """쌓인 매물의 중개사 메모 전부(중복 제거).
+
+    `Quote.memo` 는 같은 유닛에 여러 중개사 메모가 줄바꿈으로 쌓인 것이라 쪼갠다.
+    같은 글이 여러 매물에 붙어 있으면 한 번만 센다 — 같은 중개사가 같은 문구를
+    여러 매물에 돌려 쓰면 그 말이 사전을 통째로 왜곡한다.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for (memo,) in db.execute(select(Quote.memo).where(Quote.memo != "")).all():
+        for line in (memo or "").split("\n"):
+            t = line.strip()
+            if t and t not in seen:
+                seen.add(t)
+                out.append(t)
+    return out

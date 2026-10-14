@@ -91,12 +91,19 @@ export default function RegimeView() {
           값이 아니라 <b>자기 역사에서 어디쯤인지</b>로 봅니다. 미분양 14,509호가 많은
           것인지는 경기도 미분양의 지난 25년을 봐야 알 수 있기 때문입니다.
         </p>
+        <div className="heat-legend" aria-hidden="true">
+          <span>저점</span>
+          <span className="heat-legend-bar" />
+          <span>고점</span>
+          <span className="muted">— 카드 색은 자기 역사에서의 위치입니다. 좋고 나쁨이 아닙니다</span>
+        </div>
         <div className="macro-grid">
           {data.factors.map((f) => (
             <PanelCard
               key={f.key}
               title={f.label}
               sub={factorSub(f)}
+              heat={heatVars(f.percentile)}
               onOpen={() => setOpen({ kind: 'factor', f })}
             >
               <Spark f={f} />
@@ -198,7 +205,29 @@ const DIRWORD = { up: '상승 압력', down: '하락 압력', none: '방향 없�
 function factorSub(f) {
   const v = `${f.latest.value}${f.unit}`
   const pct = Math.round(f.percentile * 100)
-  return `${ymText(f.latest.ym)} ${v} · 자기 역사 ${pct}% 지점 · ${f.region}`
+  return (
+    <>
+      {ymText(f.latest.ym)} {v} · 자기 역사 <span className="heat-pct">{pct}%</span> 지점 · {f.region}
+    </>
+  )
+}
+
+/**
+ * 백분위 → 카드 색. 50% 에서 멀수록 진하다.
+ *
+ * 진하기를 **연속으로** 둔다. `regime.py` 는 30%·70% 로 '낮다·보통·높다' 를 가르지만,
+ * 카드 색까지 세 칸으로 끊으면 69% 와 71% 가 전혀 다른 카드로 보인다. 그 문턱은 화살표
+ * 판정에 쓰는 것이지 위치를 보여 주는 데 쓸 것이 아니다.
+ * 배경은 최대 22% 만 섞는다 — 더 진하면 다크 모드에서 글자가 묻힌다.
+ */
+function heatVars(p) {
+  if (p == null || Number.isNaN(p)) return undefined
+  const k = Math.min(Math.abs(p - 0.5) * 2, 1)
+  return {
+    '--heat-c': p >= 0.5 ? 'var(--heat-hi)' : 'var(--heat-lo)',
+    '--heat-mix': `${Math.round(k * 22)}%`,
+    '--heat-edge': `${Math.round(25 + k * 75)}%`,
+  }
 }
 
 /** 그룹 한 줄. **배지 혼자 두지 않는다** — 세기와 근거가 늘 붙어 있어야 한다. */

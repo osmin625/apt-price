@@ -245,7 +245,7 @@ function DongPanel({ complexId, data, onChange }) {
         동<span className="muted small"> {data.items.length}개</span>
       </h2>
       <p className="sub">
-        누르면 <b>민간임대</b>로 표시됩니다. 표시한 동의 매물은 매물 순위의 비고에
+        누르면 <b>민간임대</b>로 표시됩니다. 표시한 동의 매물은 호가 분석의 비고에
         자동으로 따라붙습니다.
       </p>
       {err && <p className="paste-warn">{err}</p>}

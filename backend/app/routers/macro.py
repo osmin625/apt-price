@@ -44,14 +44,6 @@ def series(
         raise HTTPException(status_code=422, detail=str(exc))
 
 
-@router.get("/latest")
-def latest(db: Session = Depends(get_db)):
-    """모든 지표의 최신값을 한 표로."""
-    if not mc.available(db):
-        raise HTTPException(status_code=503, detail=NOT_INGESTED)
-    return mc.latest_table(db)
-
-
 @router.get("/insights")
 def insights(
     db: Session = Depends(get_db),

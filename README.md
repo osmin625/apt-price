@@ -13,6 +13,7 @@
 | 문서 | 무엇이 있나 | 언제 보나 |
 |---|---|---|
 | [docs/design.md](docs/design.md) | 화면·기능이 지금 어떻게 되어 있고 왜 그런가 | 동작을 바꾸기 전에 |
+| [docs/quotes.md](docs/quotes.md) | 호가 하나가 읽히고 값이 매겨지고 줄 서기까지 | 호가 입력·호가 분석을 건드릴 때 |
 | [docs/ui-log.md](docs/ui-log.md) | 화면을 바꾸며 무엇을 시도하고 버렸나 | 같은 자리를 또 건드리기 전에 |
 | [docs/model.md](docs/model.md) | 2단계 헤도닉 회귀와 비교표본 방식의 수식 | 숫자가 어떻게 나오는지 알아야 할 때 |
 | [docs/factors.md](docs/factors.md) | 모델에 어떤 요인이 왜 들어 있나 | 요인을 더하거나 뺄 때 |
