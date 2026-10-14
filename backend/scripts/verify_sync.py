@@ -50,6 +50,7 @@ sys.path.insert(0, str(BACKEND))
 ARCH_SKIP = {
     "__init__.py",
     "probe_reb.py",      # R-ONE 응답을 들여다보는 일회성 도구
+    "probe_ecos.py",     # ECOS 통계표 코드를 목록과 대조하는 일회성 도구
     "memo_report.py",    # 메모 사전을 늘릴 때 쓰는 측정 루프
     "verify_sync.py",    # 이 파일. 아래 검사가 자기 자신을 요구하지 않게 한다
 }
