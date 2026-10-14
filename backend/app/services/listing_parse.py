@@ -211,7 +211,7 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
     """(전용면적㎡, 공급면적㎡, 전용이 명시됐는가, 경고).
 
     세 번째 값이 중요하다. 광고의 면적은 **표기가 없으면 공급**이라, 뒤에서 그 단지의
-    실제 평형과 대조해 공급으로 재해석할지 정해야 한다(`routers/model._resolve_area`).
+    실제 평형과 대조해 공급으로 재해석할지 정해야 한다(`listing_match._resolve_area`).
     '전용' 이라고 적혔거나 공급/전용 쌍의 뒤쪽이면 재해석할 이유가 없다.
 
     평 표기는 먼저 ㎡ 로 환산해(`normalize_pyeong`) 단위를 통일한 뒤, 아래 우선순위로
@@ -229,7 +229,7 @@ def parse_area(text: str) -> tuple[float | None, float | None, bool, list[str]]:
     text, converted = normalize_pyeong(text)
     if converted:
         # 환산한 값이 전용인지 공급인지는 여기서 알 수 없다. 그 판정은 단지의 실제
-        # 평형과 대조한 뒤(`routers/model._resolve_area`)에나 나오므로, 여기서는
+        # 평형과 대조한 뒤(`listing_match._resolve_area`)에나 나오므로, 여기서는
         # **환산 사실만** 적는다. '전용 112.4㎡' 라고 써 두면 바로 다음 줄에서
         # '공급으로 보인다' 고 뒤집히게 된다.
         warns.append({"field": "area", "text":
@@ -374,7 +374,7 @@ def name_fragments(text: str) -> list[str]:
     이름만으로는 1:N 이라 고를 수 없고, 그래서 조각을 따로 내어 준다.
 
     조각 하나로는 못 고른다 — '쌍용' 은 전국에 흔하다. 어느 단지인지는 **동 번호**가
-    가른다(`routers/model._resolve_by_dong`).
+    가른다(`listing_match._resolve_by_dong`).
     """
     line = next((ln for ln in text.splitlines() if ln.strip()), "")
     line = _HEAD_DONG.sub("", line.strip())

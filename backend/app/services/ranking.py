@@ -18,8 +18,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+
 from .. import pricing
-from . import analysis
+from ..models import Complex, DongTag, Quote, QuoteNote
+from . import analysis, memo_tags, quotes
 from . import model_view as mv
 
 
@@ -165,3 +171,91 @@ def merge_duplicates(items: list[dict]) -> tuple[list[dict], int]:
             merged[k] = i
     out = list(merged.values())
     return out, sum(i.get("listing_count", 1) - 1 for i in out)
+
+
+def rank_saved(db: Session, months: int, basis: str = "market",
+               days: int | None = None, complex_id: int | None = None) -> dict:
+    """쌓인 매물 전체를 평가해 **더 저평가된 순서**로 돌려준다(`/api/quotes/ranking`).
+
+    `Quote` 테이블은 붙여넣기마다 중복 없이 쌓인다. 그러니 지금까지 본 모든 매물의
+    순위는 따로 저장할 것 없이 여기서 언제든 다시 계산할 수 있다. 비고·메모 태그·
+    민간임대 표시도 읽을 때마다 붙인다.
+    """
+
+    stmt = select(Quote)
+    if days:
+        # 확인일자 기준이다. `last_seen_at` 은 우리가 붙여넣은 시각이라 전부 오늘이
+        # 되어 버려 거르는 의미가 없었다. 날짜를 못 읽은 매물은 남긴다 — 읽기
+        # 실패를 '오래된 매물' 로 바꿔 조용히 숨기면 안 된다.
+        cut = (datetime.now() - timedelta(days=days)).date()
+        stmt = stmt.where(or_(Quote.confirmed_on.is_(None), Quote.confirmed_on >= cut))
+    if complex_id:
+        stmt = stmt.where(Quote.complex_id == complex_id)
+    rows = db.execute(stmt).scalars().all()
+
+    # 한 (단지·동·평형·층)당 한 줄. 값이 바뀐 이력도, 동시에 올라와 있는 매물도
+    # 대표 한 줄로 접고 나머지는 호버로 내린다 — `quotes.display_units` 참조.
+    units = quotes.display_units(rows)
+
+    names = {
+        c.id: c.name
+        for c in db.execute(select(Complex)).scalars().all()
+    }
+    rep_of = {q.id: q for q in rows}
+    payload = []
+    for u in units:
+        q = rep_of[u["quote_id"]]
+        payload.append({
+            **u,
+            "complex_id": q.complex_id,
+            "complex_name": names.get(q.complex_id, ""),
+            "dong": q.dong or None,
+            "exclusive_area": q.exclusive_area,
+            "floor": q.floor or None,
+        })
+
+    out = evaluate_many(db, payload, months=months, basis=basis)
+
+    # 비고를 붙인다. 유닛 키로 맞추므로 호가가 바뀌어도 메모는 그 줄에 남는다.
+    notes = {
+        (n.complex_id, n.dong, n.area_key, n.floor): n.text
+        for n in db.execute(select(QuoteNote)).scalars().all()
+    }
+    by_quote = {p["quote_id"]: p.get("note_key") for p in payload}
+    # 중개사 메모에서 뽑은 키워드. 사람이 쓴 비고와 **같은 칸에 다른 모양으로** 둔다 —
+    # 우리가 확인한 사실이 아니라 올린 사람이 그렇게 적었다는 뜻이기 때문이다.
+    # 뽑는 것은 읽을 때마다 한다. 저장할 때 뽑아 두면 사전을 고쳐도 옛 줄은 안 바뀐다.
+    memos_of = {p["quote_id"]: p.get("memos") or [] for p in payload}
+    # 끈 태그는 비고에서 뺀다. **원문(memos)은 그대로 보낸다** — 호버에서 왜 그
+    # 키워드가 붙었는지 보려면 원문이 있어야 하고, 끈 것은 '안 보여 주기' 지
+    # '안 읽기' 가 아니다. 사전을 다시 켜면 그 자리에서 되살아난다.
+    off = quotes.disabled_tags(db)
+    # 민간임대 표시는 **동에 붙어 있고 여기서 파생한다.** 비고에 글자를 써 넣으면
+    # 표시를 끈 뒤에도 남고, 사용자가 직접 쓴 메모와 구분되지 않는다.
+    rental = {
+        (t.complex_id, t.dong)
+        for t in db.execute(select(DongTag).where(DongTag.rental.is_(True)))
+        .scalars()
+        .all()
+    }
+
+    for item in out.get("items", []):
+        k = by_quote.get(item.get("quote_id"))
+        if not k:
+            continue
+        item["note_key"] = k
+        item["note"] = notes.get(
+            (k["complex_id"], k["dong"], k["area_key"], k["floor"]), ""
+        )
+        item["note_auto"] = (
+            ["민간임대"] if (k["complex_id"], k["dong"]) in rental else []
+        )
+        memos = memos_of.get(item.get("quote_id")) or []
+        item["note_tags"] = [t for t in memo_tags.merge(memos) if t not in off]
+        item["memos"] = memos
+    out["months"] = months
+    out["total_quotes"] = len(rows)
+    out["revised_units"] = sum(1 for p in payload if p["revisions"] > 1)
+    out["grouped_away"] = sum(len(p["quote_ids"]) for p in payload) - len(payload)
+    out["days"] = days
+    return out
