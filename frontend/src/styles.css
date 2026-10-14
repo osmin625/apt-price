@@ -623,6 +623,26 @@ tr.is-deleting td { opacity: 0.4; }
 .macro-card-body { margin-top: 8px; min-height: 152px; display: flex; align-items: center; }
 .macro-card-body > * { width: 100%; }
 .macro-card-body .empty { padding: 18px 0; }
+/* 자기 역사 백분위를 카드 색으로. 0% 쪽(저점)은 파랑, 100% 쪽(고점)은 빨강,
+   가운데(50%)는 칠하지 않는다. 진하기는 가운데에서 얼마나 멀리 갔는가다.
+   **좋다·나쁘다가 아니다** — 미분양이 고점이어도, 금리가 저점이어도 같은 규칙이다.
+   방향(상승·하락 압력)은 위 그룹 화살표가 따로 말한다.
+   색은 JSX 가 `--heat-c`·`--heat-mix`·`--heat-edge` 로 넘긴다. 여기 기본값을 두는
+   것은 넘기지 않은 카드가 무효 속성으로 조용히 떨어지지 않게 하려는 것이다. */
+:root { --heat-lo: var(--series-1); --heat-hi: var(--neg); }
+.macro-card.is-heat {
+  --heat-c: var(--heat-hi); --heat-mix: 0%; --heat-edge: 0%;
+  background: color-mix(in srgb, var(--heat-c) var(--heat-mix), var(--surface-1));
+  border-left: 4px solid color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--border));
+}
+.heat-pct { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
+/* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */
+.heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.heat-legend-bar {
+  width: 160px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--heat-lo), var(--surface-1) 50%, var(--heat-hi));
+  border: 1px solid var(--border);
+}
 .macro-card .quad-chart, .macro-card .macro-chart { margin-top: 0; }
 /* 설명문 툴팁 — 차트 값과 달리 줄바꿈이 필요하다 */
 .chart-tooltip.is-wide { white-space: normal; max-width: 320px; }
