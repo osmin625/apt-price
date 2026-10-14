@@ -7,10 +7,13 @@
  *
  * 축소판에는 **그림만** 둔다. 숫자·표·경고는 창에 있다. 카드가 답하는 질문은
  * '볼 만한가' 하나이고, '얼마인가' 는 눌러서 묻는 것이다.
+ *
+ * `heat` 는 카드 색을 정하는 CSS 변수 묶음이다(거시 탭의 자기 역사 백분위). 안 넘기면
+ * 지금까지와 같은 카드다 — 가격 분석 탭 카드는 칠하지 않는다.
  */
-export default function PanelCard({ title, sub, onOpen, ready = true, children }) {
+export default function PanelCard({ title, sub, onOpen, ready = true, heat, children }) {
   return (
-    <div className="factor macro-card">
+    <div className={`factor macro-card${heat ? ' is-heat' : ''}`} style={heat}>
       <div className="factor-head">
         <button
           className="linklike factor-open"
