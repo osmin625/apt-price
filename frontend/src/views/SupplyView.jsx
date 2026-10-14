@@ -220,14 +220,29 @@ export default function SupplyView() {
   )
 }
 
+/**
+ * 덜 지은 해인가 — **3년평균 적정 대비**. 카드 부제·그림의 띠·창의 표가 모두
+ * 이것 하나로 판정한다. 기준을 3년평균으로 두는 까닭은 GapLines 주석에 있다.
+ */
+const isShort = (x) => x.gap_smooth < 0
+
 function gapSub(r) {
-  const last = [...r.rows].reverse().find((x) => x.gap != null)
+  // 부제도 그림과 **같은 기준(3년평균)** 으로 쓴다. 예전에는 단년 `gap` 으로 써서
+  // 한 카드가 두 말을 했다 — 서울 끝 해는 단년 적정(31,122)이 준공(39,119)보다
+  // 작아 부제는 '7,997호 더 지음' 인데, 그림은 3년평균(50,889)이 준공 위라 그
+  // 해를 덜 지은 쪽으로 그렸다. 단년이 튀는 해(서울 2016)를 피하려고 그림을
+  // 3년평균으로 바꿨으니, 그 그림 위에 단년 숫자를 얹으면 튀는 값이 부제로
+  // 되돌아온다. '덜 지은 해 몇 번' 도 단년이면 6, 3년평균이면 5 로 갈렸다.
+  const rows = r.rows.filter((x) => x.gap_smooth != null)
+  const last = rows[rows.length - 1]
   if (!last) return '—'
-  const short = r.rows.filter((x) => x.gap != null && x.gap < 0).length
+  const short = rows.filter(isShort).length
   // '과부족 +7,997호' 는 읽는 사람이 부호의 뜻을 외워야 한다. 말로 적는다 —
   // "과부족이 부족한 물량 아니냐" 는 물음을 실제로 받았다.
-  const word = last.gap >= 0 ? '더 지음' : '덜 지음'
-  return `${last.year}년 ${fmt(Math.abs(last.gap))}호 ${word} · 덜 지은 해 ${short}번`
+  // 분모를 같이 적는다. '5번' 만으로는 몇 해 가운데인지 모른다.
+  const word = isShort(last) ? '덜 지음' : '더 지음'
+  return `${last.year}년 ${fmt(Math.abs(last.gap_smooth))}호 ${word} · `
+    + `덜 지은 해 ${short}/${rows.length} (3년평균 기준)`
 }
 
 /**
@@ -287,8 +302,8 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
   // 0 을 반드시 축에 포함한다 — 음수로 돌아섰는지가 이 선의 요점이다.
   //
   // **'누계' 라고 적었다가 물음을 받았다** — "누계라는데 내려간다". 맞는 지적이다.
-  // 더한 값이 아니라 **더한 것에서 뺀 것**이라 덜 지은 해에는 내려간다(서울·경기
-  // 각각 14년 중 6년). 계산은 맞았고 이름이 틀렸다.
+  // 더한 값이 아니라 **더한 것에서 뺀 것**이라 덜 지은 해에는 내려간다(그 무렵
+  // 단년 기준으로 서울·경기 각각 14년 중 6년). 계산은 맞았고 이름이 틀렸다.
   const cums = list.map((r) => r.gap_cum_smooth).filter((v) => v != null)
   const c2 = cums.length
     ? { lo: Math.min(0, ...cums) * 1.1, hi: Math.max(0, ...cums) * 1.1 }
@@ -310,7 +325,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
     const a = list[i]
     const b = list[i + 1]
     if (a.adequate_smooth == null || b.adequate_smooth == null) continue
-    const short = a.done < a.adequate_smooth
+    const short = isShort(a)
     bands.push({
       key: a.year,
       short,
@@ -752,7 +767,8 @@ function BalanceTable({ r }) {
               <th className="num">적정 공급</th>
               <th className="num">적정(3년평균)</th>
               <th className="num">준공</th>
-              <th className="num">더(+)·덜(−) 지음</th>
+              <th className="num">더(+)·덜(−) 단년</th>
+              <th className="num">더(+)·덜(−) 3년평균</th>
               <th />
             </tr>
           </thead>
@@ -766,8 +782,14 @@ function BalanceTable({ r }) {
                 <td className="num">{fmt(x.adequate)}</td>
                 <td className="num">{x.adequate_smooth == null ? '—' : fmt(x.adequate_smooth)}</td>
                 <td className="num">{x.done == null ? '—' : fmt(x.done)}</td>
-                <td className={`num ${x.gap == null ? '' : x.gap < 0 ? 'tone-neg' : 'tone-pos'}`}>
+                {/* 색은 3년평균 쪽에만 칠한다. 카드 부제·그림이 그 기준이라, 단년에도
+                    칠하면 서울 끝 해처럼 부호가 갈리는 해에 붉고 파란 칸이 나란히 선다. */}
+                <td className="num muted">
                   {x.gap == null ? '—' : `${x.gap > 0 ? '+' : ''}${fmt(x.gap)}`}
+                </td>
+                <td className={`num ${x.gap_smooth == null ? '' : isShort(x) ? 'tone-neg' : 'tone-pos'}`}>
+                  {x.gap_smooth == null ? '—'
+                    : `${x.gap_smooth > 0 ? '+' : ''}${fmt(x.gap_smooth)}`}
                 </td>
                 <td className="muted">
                   {x.need_missing ? '가구수·멸실 미공표'

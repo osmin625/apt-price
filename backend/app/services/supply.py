@@ -174,7 +174,10 @@ def balance(db: Session, sgg_cd: str) -> dict:
         })
     for r in rows:
         r.setdefault("need_missing", False)
-    first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
+    # 화면이 그리는 누계는 **3년평균 기준**(`gap_cum_smooth`)이라 시작 해도 그것을
+    # 따른다. 단년 누계(`gap_cum`)로 잡았더니 범례는 '2011년~' 인데 점선은 평균이
+    # 처음 서는 2013년에서 시작했다 — 앞 두 해는 평균을 낼 재료가 모자란다.
+    first = next((r["year"] for r in rows if r["gap_cum_smooth"] is not None), None)
     return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
             "cum_from": first,
             # 끝 연도를 **데이터에서** 준다. 화면 문구가 연도를 박지 않게.
