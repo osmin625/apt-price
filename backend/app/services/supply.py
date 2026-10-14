@@ -146,9 +146,41 @@ def balance(db: Session, sgg_cd: str) -> dict:
             if need_s is not None:
                 cum_s += got - need_s
                 rows[-1]["gap_cum_smooth"] = round(cum_s)
+
+    # **준공은 있는데 적정을 못 내는 해**도 행으로 낸다. 가구수·멸실은 연 단위로
+    # 늦게 공표되고, 준공은 월별로 빨리 나온다. 행을 '둘 다 있는 해' 로만 만들면
+    # 12개월이 다 찬 해의 준공이 통째로 버려지는데, 화면은 '올해라 빠진다' 고만
+    # 말해 다른 까닭을 댄다(재 보니 준공은 다음 해 8월까지 있는데 가구수·멸실은
+    # 그 전 해에서 끝났다). 적정·과부족·누계는 **None** — 0 으로 채우면 '적정
+    # 공급이 0 이라 크게 더 지었다' 는 거짓이 된다. 누계도 여기서 멈춘다.
+    #
+    # 뒤쪽만 붙인다. 가구수가 시작되기 전의 준공은 적정 공급 계열의 '앞' 이 아니라
+    # 이 비교의 범위 밖이다 — 붙이면 누계 시작점(`cum_from`)과 그림 폭이 바뀐다.
+    adequate_to = max(grow) if grow else None
+    for y in sorted(done):
+        if adequate_to is None or y <= adequate_to:
+            continue
+        rows.append({
+            "year": y,
+            "households": None, "household_growth": None,
+            "household_growth_smooth": None,
+            "demolish": None, "demolish_apt": None,
+            "adequate": None, "adequate_smooth": None,
+            "done": round(done[y]),
+            "gap": None, "gap_cum": None, "gap_cum_smooth": None,
+            "growth_odd": False, "gap_smooth": None,
+            # 적정이 빈 까닭. 화면이 '—' 를 찍고 끝 연도를 말한다.
+            "need_missing": True,
+        })
+    for r in rows:
+        r.setdefault("need_missing", False)
     first = next((r["year"] for r in rows if r["gap_cum"] is not None), None)
     return {"sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "rows": rows,
-            "cum_from": first}
+            "cum_from": first,
+            # 끝 연도를 **데이터에서** 준다. 화면 문구가 연도를 박지 않게.
+            "adequate_to": adequate_to,
+            "households_to": max(hh) if hh else None,
+            "demolish_to": max(dem) if dem else None}
 
 
 def south_supply(db: Session, since: int = 2005) -> dict:
