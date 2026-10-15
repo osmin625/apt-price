@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { api } from '../api'
-import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
+import { fmt } from '../components/Charts'
 import Loading from '../components/Loading'
 import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
@@ -9,6 +9,9 @@ import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import { heatColor } from '../components/heat'
 import QuadrantScatter from '../components/QuadrantScatter'
+import { MultiLine } from '../topics/RegionMetric'
+import TopicModal from '../topics/TopicModal'
+import { topicFor } from '../topics/registry'
 
 /**
  * 매크로 — 한국부동산원 공표 통계를 경기 남부 17개 시군구로 묶어 본다.
@@ -401,170 +404,18 @@ export default function MacroView() {
         </Modal>
       )}
 
-      {/* 지표 창 — 추이·범례·최신값을 한자리에. 예전에는 '지표 추이' 와 '최신값' 이
-          따로 있었는데, 둘 다 같은 지표를 보는 것이라 나눌 이유가 없었다. */}
+      {/* 지표 창 — 주제 창(`TopicModal`)으로 띄운다. 전세가율·거래량처럼 거시
+          분석에도 카드가 있는 지표는 거기서 열어도 같은 창이다(topics/registry.js). */}
       {series[open] && (
-        <Modal title={series[open].label} onClose={() => setOpen(null)} wide>
-          <p className="muted small">{series[open].note}</p>
-          <MultiLine data={series[open]} hidden={hidden} />
-          <Legend data={series[open]} hidden={hidden} onToggle={toggle} />
-          {series[open].items.some((i) => i.partial) && (
-            <p className="paste-warn" style={{ marginTop: 8 }}>
-              화성시 분구(만세·효행·병점·동탄)는 <b>분구 시점부터</b> 공표가 시작돼
-              시계열이 짧습니다. 없는 기간을 채우지 않았으므로 선이 중간에서 시작합니다.
-            </p>
-          )}
-
-          <h3 className="mt16">
-            최신값 <span className="muted small">{series[open].items[0]?.latest_ym} 공표</span>
-          </h3>
-          <p className="muted small">변화율은 고른 기간의 처음 대비입니다.</p>
-          <FullTable data={series[open]} />
-        </Modal>
+        <TopicModal
+          topic={topicFor('metric', open, { since, title: series[open].label })}
+          hidden={hidden}
+          onToggle={toggle}
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
   )
-}
-
-/* 17개 선을 한 축에. 색은 순위로 돌린다 — 이름마다 고정색을 주면 17개를 구분할
-   만큼 색이 없고, 어차피 범례에서 짚어 보게 된다. */
-function MultiLine({ data, hidden, compact = false }) {
-  const [ref, { width }] = useMeasure()
-  const tip = useTooltip()
-  const H = compact ? 150 : 300
-  const PAD = compact ? { t: 8, r: 8, b: 14, l: 28 } : { t: 12, r: 12, b: 26, l: 52 }
-
-  const shown = data.items.filter((i) => !hidden.has(i.sgg_cd))
-  const months = data.months
-
-  const { xOf, yOf, ticks, paths } = useMemo(() => {
-    const w = Math.max(width || 640, compact ? 200 : 320)
-    const iw = w - PAD.l - PAD.r
-    const ih = H - PAD.t - PAD.b
-    const idx = new Map(months.map((m, i) => [m, i]))
-    const xOf = (ym) => PAD.l + (idx.get(ym) / Math.max(months.length - 1, 1)) * iw
-
-    let lo = Infinity
-    let hi = -Infinity
-    shown.forEach((s) =>
-      s.points.forEach((p) => {
-        if (p.value < lo) lo = p.value
-        if (p.value > hi) hi = p.value
-      }),
-    )
-    if (!Number.isFinite(lo)) {
-      lo = 0
-      hi = 1
-    }
-    const pad = (hi - lo) * 0.08 || 1
-    lo -= pad
-    hi += pad
-    const yOf = (v) => PAD.t + ih - ((v - lo) / (hi - lo || 1)) * ih
-
-    const paths = shown.map((s) => ({
-      ...s,
-      d: s.points
-        .map((p, k) => `${k ? 'L' : 'M'}${xOf(p.ym).toFixed(1)},${yOf(p.value).toFixed(1)}`)
-        .join(' '),
-    }))
-    return { xOf, yOf, ticks: niceTicks(lo, hi, 4), paths }
-  }, [width, shown, months, compact])
-
-  // x축 라벨은 연 단위로만. 월까지 찍으면 겹쳐서 못 읽는다.
-  const yearMarks = months
-    .map((m, i) => ({ m, i }))
-    .filter(({ m }) => m.endsWith('01'))
-
-  return (
-    <div className="macro-chart" ref={ref}>
-      <svg viewBox={`0 0 ${Math.max(width || 640, compact ? 200 : 320)} ${H}`} role="img"
-           aria-label={`${data.label} 시군구별 추이`}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={PAD.l} x2={(width || 640) - PAD.r} y1={yOf(t)} y2={yOf(t)}
-                  stroke="var(--border)" strokeDasharray="2 3" />
-            {!compact && (
-              <text x={PAD.l - 6} y={yOf(t) + 3} textAnchor="end"
-                    fontSize="10" fill="var(--text-muted)">
-                {fmt(t, data.decimals)}
-              </text>
-            )}
-          </g>
-        ))}
-        {!compact && yearMarks.map(({ m }) => (
-          <text key={m} x={xOf(m)} y={H - 8} textAnchor="middle"
-                fontSize="10" fill="var(--text-muted)">
-            {m.slice(0, 4)}
-          </text>
-        ))}
-        {paths.map((p, i) => (
-          <path
-            key={p.sgg_cd}
-            d={p.d}
-            fill="none"
-            stroke={colorAt(i, paths.length)}
-            strokeWidth={compact ? 1.2 : 1.8}
-            strokeLinejoin="round"
-            onMouseEnter={(e) =>
-              tip.show(e, (
-                <>
-                  <div className="t-title">{p.name}</div>
-                  <div className="t-row">
-                    최신 {fmt(p.latest, data.decimals)} {data.unit}
-                  </div>
-                  <div className="t-row">
-                    {p.first_ym}~{p.latest_ym}
-                    {p.change_pct == null
-                      ? ''
-                      : ` · ${p.change_pct > 0 ? '+' : ''}${fmt(p.change_pct, 1)}%`}
-                  </div>
-                </>
-              ))
-            }
-            onMouseLeave={tip.hide}
-          />
-        ))}
-      </svg>
-      {tip.node}
-    </div>
-  )
-}
-
-function Legend({ data, hidden, onToggle }) {
-  const shown = data.items.filter((i) => !hidden.has(i.sgg_cd))
-  const indexOfShown = new Map(shown.map((s, i) => [s.sgg_cd, i]))
-  return (
-    <div className="macro-legend">
-      {data.items.map((i) => {
-        const off = hidden.has(i.sgg_cd)
-        return (
-          <button
-            key={i.sgg_cd}
-            className={`macro-key${off ? ' is-off' : ''}`}
-            onClick={() => onToggle(i.sgg_cd)}
-            aria-pressed={!off}
-            title={off ? '다시 표시' : '숨기기'}
-          >
-            <i
-              style={{
-                background: off
-                  ? 'var(--text-muted)'
-                  : colorAt(indexOfShown.get(i.sgg_cd), shown.length),
-              }}
-            />
-            {i.name}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** 순위를 색상환에 고르게 편다. 17개를 구분하려면 고정 팔레트로는 모자란다. */
-function colorAt(i, n) {
-  if (i == null) return 'var(--text-muted)'
-  const hue = Math.round((i / Math.max(n, 1)) * 320)
-  return `hsl(${hue} 62% 48%)`
 }
 
 /* ── 카드 ──────────────────────────────────────────────────────────────
@@ -797,47 +648,6 @@ function GapTable({ gap }) {
         놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
       </p>
     </>
-  )
-}
-
-function FullTable({ data }) {
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>시군구</th>
-            <th className="num">{data.label}</th>
-            <th className="num">기간 변화</th>
-            <th>시작</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.items.map((i) => (
-            <tr key={i.sgg_cd}>
-              <td>{i.name}</td>
-              <td className="num">
-                <b>{fmt(i.latest, data.decimals)}</b>
-                <span className="muted small"> {data.unit}</span>
-              </td>
-              <td
-                className={`num ${
-                  i.change_pct > 0 ? 'tone-pos' : i.change_pct < 0 ? 'tone-neg' : ''
-                }`}
-              >
-                {i.change_pct == null
-                  ? '—'
-                  : `${i.change_pct > 0 ? '+' : ''}${fmt(i.change_pct, 1)}%`}
-              </td>
-              <td className="muted small">
-                {i.first_ym}
-                {i.partial ? ' (분구 후)' : ''}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   )
 }
 

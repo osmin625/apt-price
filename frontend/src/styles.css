@@ -947,3 +947,14 @@ tr.is-deleting td { opacity: 0.4; }
   .rg-group { grid-template-columns: 22px 1fr; row-gap: 4px; }
   .rg-label, .rg-why { grid-column: 2; white-space: normal; }
 }
+/* ── 주제 창 (topics/TopicModal) ─────────────────────────────────────
+   어느 탭에서 열든 같은 창이다. 절마다 어느 탭의 관점인지 제목 옆에 적어, 다른
+   탭에서 열었을 때도 '이건 공급 분석에서 보던 그것' 임을 알 수 있게 한다. */
+.topic-section + .topic-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.topic-head { font-size: 14px; margin: 0 0 8px; }
+.topic-since { margin: 4px 0 8px; }
+.topic-seg { margin: 2px 0 12px; }
+.topic-tiles { margin-bottom: 6px; }
+/* 미분양처럼 자릿수가 다른 지역은 한 축에 겹치지 않고 나란히 둔다 */
+.topic-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 16px; margin-bottom: 8px; }
+.topic-multiple-title { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
