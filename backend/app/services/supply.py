@@ -35,6 +35,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..clients.molit import DISTRICTS
 from ..clients.reb import SIDO
 from ..models import KaptUnit, RebStat
 
@@ -47,8 +48,11 @@ SOUTH_GG = "41S"
 
 # 착공이 준공으로 나타나기까지. **재서 정했다**(상관 최대 지점).
 # 서울은 선행성이 성립하지 않아 넣지 않는다.
+#
+# 시차는 정한 값이지만 그 시차에서의 **상관은 매번 잰다**(`_lead_corr`). 예전에는
+# 정할 때 잰 0.895 를 상수로 두고 카드 부제에 그대로 띄웠다 — 데이터가 쌓여도
+# 화면 숫자는 그날에 멈춰 있었다.
 LEAD_MONTHS: dict[str, int] = {"41": 27}
-LEAD_CORR: dict[str, float] = {"41": 0.895}
 
 # 단년 증가분이 집계 변경에 흔들려서 함께 낸다.
 SMOOTH_YEARS = 3
@@ -264,13 +268,13 @@ def south_supply(db: Session, since: int = 2005) -> dict:
     partial_from = years[-2]["year"] if len(years) >= 2 else None
 
     return {
-        "region": "경기 남부 17개 구",
+        "region": f"경기 남부 {len(DISTRICTS)}개 구",
         "years": years,
         "coverage": {"units": total, "with_households": with_hh,
                      "with_year": with_yr},
         "partial_from": partial_from,
         "cross_check": cross,
-        "note": ("K-apt 의무관리대상 공동주택을 17개 구 전수로 받아 사용승인 연도별로 "
+        "note": ("K-apt 의무관리대상 공동주택을 경기 남부 구 전수로 받아 사용승인 연도별로 "
                  "모은 값입니다. 공급 통계의 '준공' 과 다릅니다 — 소규모 단지와 "
                  "비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게 잡힙니다. "
                  "적정 공급에서 이 값을 빼지 않고 추세만 견줍니다. "
@@ -349,7 +353,7 @@ def lead(db: Session, sgg_cd: str, months: int = 12) -> dict:
             "sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd),
             "available": False,
             "note": "착공이 준공을 선행하지 않아 앞을 가늠하지 않습니다. "
-                    "12개월 누적 상관이 시차 0에서 +0.693 으로 가장 높고 시차가 "
+                    "12개월 누적끼리 견주면 시차를 두지 않을 때 가장 잘 맞고 시차가 "
                     "늘수록 떨어집니다 — 재건축·재개발 위주라 착공과 준공 사이가 "
                     "들쭉날쭉하기 때문으로 보입니다.",
         }
@@ -367,14 +371,42 @@ def lead(db: Session, sgg_cd: str, months: int = 12) -> dict:
             "expect_ym": f"{t // 12:04d}{t % 12 + 1:02d}",
             "value": round(sum(s[k] for k in win)),
         })
+    corr = _lead_corr(db, sgg_cd, lag, months)
     return {
         "sgg_cd": sgg_cd, "region": SIDO.get(sgg_cd, sgg_cd), "available": True,
-        "lag_months": lag, "corr": LEAD_CORR.get(sgg_cd), "months": months,
-        "series": acc,
+        "lag_months": lag, "corr": round(corr, 3) if corr is not None else None,
+        "months": months, "series": acc,
         "note": f"착공 12개월 누적이 {lag}개월 뒤 준공과 가장 잘 맞습니다"
-                f"(상관 {LEAD_CORR.get(sgg_cd):+.3f}). 착공한 집이 그만큼 뒤에 "
-                f"입주한다는 뜻이라, 최근 착공이 앞으로의 입주를 가늠하게 해 줍니다.",
+                + (f"(상관 {corr:+.3f})" if corr is not None else "")
+                + ". 착공한 집이 그만큼 뒤에 입주한다는 뜻이라, 최근 착공이 앞으로의 "
+                  "입주를 가늠하게 해 줍니다.",
     }
+
+
+def _lead_corr(db: Session, sgg_cd: str, lag: int, months: int = 12) -> float | None:
+    """착공 12개월 누적과 `lag` 개월 뒤 준공 12개월 누적의 상관."""
+    def roll(metric: str) -> dict[str, float]:
+        s = _series(db, sgg_cd, metric)
+        ks = sorted(k for k in s if not k.endswith("00"))
+        return {ks[i]: sum(s[k] for k in ks[i - months + 1:i + 1])
+                for i in range(months - 1, len(ks))}
+
+    start, done = roll("start"), roll("done")
+    pairs = []
+    for ym, v in start.items():
+        y, m = int(ym[:4]), int(ym[4:])
+        t = (y * 12 + m - 1) + lag
+        later = f"{t // 12:04d}{t % 12 + 1:02d}"
+        if later in done:
+            pairs.append((v, done[later]))
+    n = len(pairs)
+    if n < 3:
+        return None
+    ma = sum(a for a, _ in pairs) / n
+    mb = sum(b for _, b in pairs) / n
+    sa = sum((a - ma) ** 2 for a, _ in pairs) ** 0.5
+    sb = sum((b - mb) ** 2 for _, b in pairs) ** 0.5
+    return sum((a - ma) * (b - mb) for a, b in pairs) / (sa * sb) if sa and sb else None
 
 
 def age_pressure(db: Session) -> dict:

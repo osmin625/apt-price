@@ -797,7 +797,7 @@ def factor_payload(fit: dict) -> dict:
          FACTOR_REF["adult"], _ADULT_POINTS,
          "식품위생법상 '일반유흥주점·무도유흥주점' 이다. 요리주점·생맥주 같은 "
          "일반 술집은 여기 안 들어간다 — 둘을 섞어서 재면 효과가 사라진다. "
-         "단지 57%가 0곳이라 분위 매듭이 겹쳐 직선으로만 들어간다.", lambda x: x),
+         "0곳인 단지가 많아 분위 매듭이 겹치므로 직선으로만 들어간다.", lambda x: x),
     ]
     for key, var, label, unit, xlab, ref, points, note, fx in plan:
         cs = coefs_of(var)

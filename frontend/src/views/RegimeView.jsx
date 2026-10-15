@@ -76,8 +76,9 @@ export default function RegimeView() {
             {p.yoy}%
           </b>{' '}
           입니다. 아래 방향은 <b>각 요인이 과거에 가격과 어떻게 움직였는지를 재서</b>{' '}
-          정한 것입니다 — 가장 센 상관도 0.45 라, 어느 하나도 혼자서는 가격을 설명하지
-          못합니다.
+          정한 것입니다
+          {data.max_abs_r != null && <> — 가장 센 상관도 {data.max_abs_r.toFixed(2)} 라</>}, 어느
+          하나도 혼자서는 가격을 설명하지 못합니다.
         </p>
 
         <div className="rg-groups">
@@ -90,8 +91,8 @@ export default function RegimeView() {
       <section className="card">
         <h2>요인별로 하나씩</h2>
         <p className="sub">
-          값이 아니라 <b>자기 역사에서 어디쯤인지</b>로 봅니다. 미분양 14,509호가 많은
-          것인지는 경기도 미분양의 지난 25년을 봐야 알 수 있기 때문입니다.
+          값이 아니라 <b>자기 역사에서 어디쯤인지</b>로 봅니다. 미분양 몇 호가 많은
+          것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.
         </p>
         <HeatLegend>카드 색은 자기 역사에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
         <div className="macro-grid">
@@ -370,8 +371,8 @@ function FactorDetail({ f }) {
         </tbody>
       </table>
       <p className="muted small">
-        월별 상관의 n 은 {m.n} 이지만 12개월 창이 겹쳐 있어 <b>독립 표본은 스무 개
-        남짓</b>입니다. 그래서 매년 12월만 쓴 값을 같이 냅니다.
+        월별 상관의 n 은 {m.n} 이지만 12개월 창이 겹쳐 있어 <b>독립 표본은 해마다 하나,{' '}
+        {m.nonoverlap_n}개 남짓</b>입니다. 그래서 매년 12월만 쓴 값을 같이 냅니다.
         {m.agree ? ' 두 값의 부호가 같습니다.' : ' 두 값의 부호가 달라 약하게 봅니다.'}
       </p>
     </>
