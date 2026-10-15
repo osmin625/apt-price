@@ -49,8 +49,9 @@
     --page: #1b1b1e;
     --text-primary: #e6e6e6;
     --text-secondary: #c8c8c8;
-    /* 참고 사이트의 3차 색(#646464)은 이 배경에서 대비 3.0 이라 작은 글씨가
-       흐려진다. 축 눈금·각주에 쓰는 자리라 한 단계 밝혔다. */
+    /* 참고 사이트의 3차 색(#646464)은 이 배경에서 대비 2.9 라 작은 글씨가
+       흐려진다. 축 눈금·각주에 쓰는 자리라 #8c8c8c(5.1)로 밝혔다. 강조 바탕 위
+       글자는 라이트 흰색/파랑 5.3, 다크 바탕색/빨강 5.3 이다(재서 확인). */
     --text-muted: #8c8c8c;
     --grid: #2d333b;
     --axis: #3d444e;
@@ -183,7 +184,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 .coef-more { margin-left: 8px; font-size: 11.5px; color: var(--text-muted); }
 .usage { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .usage li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
-.usage-mark { flex: none; font-size: 10px; color: var(--series-1); }
+.usage-mark { flex: none; font-size: 10px; color: var(--accent); }
 .usage li.is-off .usage-mark { color: var(--text-muted); }
 .usage-where { font-weight: 500; }
 .usage li.is-off .usage-where { color: var(--text-secondary); font-weight: 400; }
