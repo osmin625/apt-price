@@ -6,6 +6,8 @@ import Loading from '../components/Loading'
 import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
 import PanelCard from '../components/PanelCard'
+import HeatLegend from '../components/HeatLegend'
+import { heatColor } from '../components/heat'
 import QuadrantScatter from '../components/QuadrantScatter'
 
 /**
@@ -111,7 +113,7 @@ export default function MacroView() {
       <div className="macro-grid">
         <PanelCard
           title="지금 어느 국면인가"
-          sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월` : '불러오는 중'}
+          sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월 · 점 색은 역대 위치` : '불러오는 중'}
           onOpen={() => setOpen('cycle')}
           ready={!!ins}
         >
@@ -225,6 +227,9 @@ export default function MacroView() {
             ]}
             caveat="월간 매매가격지수 기준이다. 어디가 어느 국면인지까지만 말하고, 거기서 투자 판단으로 넘어가는 것은 이 데이터 밖이다."
           />
+          <HeatLegend lo="역대 최저" hi="역대 최고">
+            점 색은 지금 지수가 그 구의 역대 최저와 최고 사이 어디인지입니다. 좋고 나쁨이 아닙니다
+          </HeatLegend>
           <CycleChart ins={ins} />
           {ins.cycle.excluded.length > 0 && (
             <p className="paste-warn" style={{ marginTop: 8 }}>
@@ -572,6 +577,7 @@ function CycleChart({ ins, compact }) {
   return (
     <QuadrantScatter
       items={ins.cycle.items}
+      color={(d) => heatColor(d.range_pos)}
       x={(d) => d.from_peak}
       y={(d) => d.m3}
       xLabel={ins.cycle.x_label}
@@ -595,6 +601,11 @@ function CycleChart({ ins, compact }) {
             {fmt(d.m3, 2)}% · 12개월 {d.m12 > 0 ? '+' : ''}
             {fmt(d.m12, 2)}%
           </div>
+          {d.range_pos != null && (
+            <div className="t-row">
+              역대 최저({d.low_ym})~최고의 {Math.round(d.range_pos * 100)}% 지점
+            </div>
+          )}
           {d.accel != null && (
             <div className="t-row">
               직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p

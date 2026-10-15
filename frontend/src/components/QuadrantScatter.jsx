@@ -42,6 +42,9 @@ export default function QuadrantScatter({
   // 카드 안에 들어가는 축소판. 300px 폭에 이름표 17개를 적으면 읽을 수가 없어서
   // **구름의 모양만** 보여 준다. 자세한 것은 눌러서 띄우는 창에 있다.
   compact = false,
+  // 점 색. 안 넘기면 모두 같은 색이다. 넘기면 `heat.js` 의 `heatColor` 처럼 CSS 색
+  // 문자열을 돌려준다(`color-mix` 라 `style` 로 칠한다).
+  color,
 }) {
   const [ref, { width }] = useMeasure()
   const tip = useTooltip()
@@ -174,7 +177,8 @@ export default function QuadrantScatter({
           <g key={d.sgg_cd}
              onMouseEnter={(e) => tip.show(e, renderTip ? renderTip(d) : <div className="t-title">{label(d)}</div>)}
              onMouseLeave={tip.hide}>
-            <circle cx={px} cy={py} r={compact ? 3 : 4.5} fill="var(--series-1)" opacity="0.85" />
+            <circle cx={px} cy={py} r={compact ? 3 : 4.5} opacity="0.85"
+                    style={{ fill: color ? color(d) : 'var(--series-1)' }} />
             {!compact && (
               <text x={px + 7} y={ly} fontSize="10" fill="var(--text-secondary)">{label(d)}</text>
             )}
