@@ -13,8 +13,19 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  * 세로선 하나로 그 달을 짚는 쪽이 맞다 — "2023년 착공이 줄 때 준공은 어땠나" 가 이
  * 그림이 답할 질문이다.
  *
- * `series`: [{ key, label, color, points: [{ ym, value }], dash? }]. 계열마다 시작
- * 달이 달라도 된다(인허가가 착공보다 길다). x 축은 모든 계열의 달을 합친 것이다.
+ * `series`: [{ key, label, color, points: [{ ym, value }], dash?, axis? }]. 계열마다
+ * 시작 달이 달라도 된다(인허가가 착공보다 길다). x 축은 모든 계열의 달을 합친 것이다.
+ *
+ * ## 오른쪽 축
+ *
+ * `axis: 'right'` 인 계열은 오른쪽 축에 그린다. 단위가 다른 두 계열(요인 %p 와 가격
+ * 변화 %)을 **한 그림에 겹쳐** 같이 오르내리는지 보려는 것이다. 한 축에 넣으면 단위가
+ * 다른 숫자를 같은 눈금으로 읽게 되어 크기 비교가 거짓이 된다. 축 글자는 그 축 계열의
+ * 색으로 칠하고, 범례에 어느 축인지 적는다.
+ *
+ * 두 축이 다 0 을 넣으면(`zero` 와 `rightZero`) **0 선을 같은 높이에** 맞춘다. 증감률끼리
+ * 견줄 때 읽는 것은 '둘 다 0 위인가 아래인가' 인데, 0 이 축마다 다른 높이에 있으면
+ * 같이 움직이지 않는 두 선도 겹쳐 보인다.
  */
 export default function TimeLines({
   series,
@@ -23,20 +34,21 @@ export default function TimeLines({
   height = 280,
   // 0 을 축에 넣을지. 증감률(%)·차이(%p)는 0 선이 기준이라 넣고, 수준값은 넣지 않는다.
   zero = false,
-  // 이 값에 가로 점선을 긋는다(예: 심리지수 100).
+  // 이 값에 가로 점선을 긋는다(예: 심리지수 100). 왼쪽 축 기준.
   refLine = null,
   ariaLabel = '추이',
-  // x 축으로 쓸 달 목록. 안 주면 계열들의 달을 합친다. 그림 두 장을 위아래로 놓고
-  // **같은 달을 같은 자리에** 두려면 밖에서 같은 목록을 넘긴다('그 뒤 가격과의 관계').
+  // x 축으로 쓸 달 목록. 안 주면 계열들의 달을 합친다. 계열 하나가 더 길 때(가격은
+  // 2003~, 요인은 2012~) 다른 계열의 기간으로 자르려면 밖에서 넘긴다.
   months: monthsProp = null,
-  // 같이 놓인 그림끼리 짚은 달을 나눈다. 넘기면 세로선·점은 이 값을 따르고, 툴팁은
-  // 마우스가 올라간 그림에만 뜬다 — 두 장에 다 띄우면 서로 가린다.
-  hoverYm = undefined,
-  onHoverYm = null,
+  // 오른쪽 축 — `axis: 'right'` 계열이 있을 때만 쓴다.
+  rightUnit = '',
+  rightDecimals = 0,
+  rightZero = false,
 }) {
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState(null)
-  const PAD = { t: 12, r: 14, b: 26, l: 56 }
+  const hasRight = series.some((s) => s.axis === 'right')
+  const PAD = { t: 12, r: hasRight ? 52 : 14, b: 26, l: 56 }
   const W = Math.max(width || 640, 280)
 
   const g = useMemo(() => {
@@ -50,30 +62,52 @@ export default function TimeLines({
     const ih = height - PAD.t - PAD.b
     const xOf = (ym) => PAD.l + (idx.get(ym) / Math.max(months.length - 1, 1)) * iw
 
-    const vals = series.flatMap((s) => s.points.filter(inAxis).map((p) => p.value))
-      .filter((v) => v != null)
-    if (!vals.length) return null
-    let lo = Math.min(...vals)
-    let hi = Math.max(...vals)
-    if (zero) {
-      lo = Math.min(lo, 0)
-      hi = Math.max(hi, 0)
+    const sideOf = (s) => (s.axis === 'right' ? 'right' : 'left')
+    const rangeOf = (side, withZero, ref) => {
+      const vals = series.filter((s) => sideOf(s) === side)
+        .flatMap((s) => s.points.filter(inAxis).map((p) => p.value))
+        .filter((v) => v != null)
+      if (!vals.length) return null
+      let lo = Math.min(...vals)
+      let hi = Math.max(...vals)
+      if (withZero) {
+        lo = Math.min(lo, 0)
+        hi = Math.max(hi, 0)
+      }
+      if (ref != null) {
+        lo = Math.min(lo, ref)
+        hi = Math.max(hi, ref)
+      }
+      const pad = (hi - lo) * 0.06 || 1
+      return [lo - pad, hi + pad]
     }
-    if (refLine != null) {
-      lo = Math.min(lo, refLine)
-      hi = Math.max(hi, refLine)
+    let L = rangeOf('left', zero, refLine)
+    let R = hasRight ? rangeOf('right', rightZero, null) : null
+    if (!L && !R) return null
+    // 0 선 맞추기. 각 축의 폭으로 나눈 '0 위 몫' 과 '0 아래 몫' 의 큰 쪽을 두 축이 같이
+    // 쓴다 — 그러면 두 축 모두 제 값을 다 담으면서 0 이 같은 높이에 온다.
+    if (L && R && zero && rightZero) {
+      const up = Math.max(L[1] / (L[1] - L[0]), R[1] / (R[1] - R[0]))
+      const down = Math.max(-L[0] / (L[1] - L[0]), -R[0] / (R[1] - R[0]))
+      const fit = ([lo, hi]) => {
+        const span = hi - lo
+        return [-down * span, up * span]
+      }
+      L = fit(L)
+      R = fit(R)
     }
-    const pad = (hi - lo) * 0.06 || 1
-    lo -= pad
-    hi += pad
-    const yOf = (v) => PAD.t + ih - ((v - lo) / (hi - lo || 1)) * ih
+    const scale = ([lo, hi]) => (v) => PAD.t + ih - ((v - lo) / (hi - lo || 1)) * ih
+    const yL = L ? scale(L) : null
+    const yR = R ? scale(R) : null
+    const yFor = (s) => (sideOf(s) === 'right' ? yR : yL)
 
     const lookup = series.map((s) => new Map(s.points.map((p) => [p.ym, p.value])))
     const paths = series.map((s) => ({
       ...s,
+      y: yFor(s),
       d: s.points
         .filter((p) => p.value != null && inAxis(p))
-        .map((p, k) => `${k ? 'L' : 'M'}${xOf(p.ym).toFixed(1)},${yOf(p.value).toFixed(1)}`)
+        .map((p, k) => `${k ? 'L' : 'M'}${xOf(p.ym).toFixed(1)},${yFor(s)(p.value).toFixed(1)}`)
         .join(' '),
     }))
 
@@ -82,8 +116,12 @@ export default function TimeLines({
     const every = Math.ceil(years.length / Math.max(Math.floor(iw / 56), 1))
     const yearMarks = years.filter((_, i) => i % every === 0)
 
-    return { months, xOf, yOf, iw, ih, lookup, paths, yearMarks, ticks: niceTicks(lo, hi, 5) }
-  }, [series, W, height, zero, refLine, monthsProp])
+    return {
+      months, xOf, yL, yR, iw, ih, lookup, paths, yearMarks,
+      ticksL: L ? niceTicks(L[0], L[1], 5).filter((t) => t >= L[0] && t <= L[1]) : [],
+      ticksR: R ? niceTicks(R[0], R[1], 5).filter((t) => t >= R[0] && t <= R[1]) : [],
+    }
+  }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero])
 
   if (!g) return <p className="empty">값이 없습니다</p>
 
@@ -94,31 +132,41 @@ export default function TimeLines({
     const t = (x - PAD.l) / g.iw
     const i = Math.round(Math.min(Math.max(t, 0), 1) * (g.months.length - 1))
     setHover({ i, cx: e.clientX, cy: e.clientY })
-    onHoverYm?.(g.months[i])
-  }
-  const onLeave = () => {
-    setHover(null)
-    onHoverYm?.(null)
   }
 
-  const hm = hoverYm !== undefined ? hoverYm : hover ? g.months[hover.i] : null
+  const hm = hover ? g.months[hover.i] : null
+  // 축 글자 색 — 한 축에 계열이 하나면 그 색으로 칠해 어느 선의 눈금인지 보이게 한다.
+  const sideColor = (side) => {
+    const ss = series.filter((s) => (s.axis === 'right' ? 'right' : 'left') === side)
+    return hasRight && ss.length === 1 ? ss[0].color : 'var(--text-muted)'
+  }
+  const unitOf = (s) => (s.axis === 'right' ? rightUnit : unit)
+  const decOf = (s) => (s.axis === 'right' ? rightDecimals : decimals)
 
   return (
     <div className="macro-chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${height}`} role="img" aria-label={ariaLabel}
-           onMouseMove={onMove} onMouseLeave={onLeave}>
-        {g.ticks.map((t) => (
-          <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={g.yOf(t)} y2={g.yOf(t)}
+           onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        {g.ticksL.map((t) => (
+          <g key={`l${t}`}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={g.yL(t)} y2={g.yL(t)}
                   stroke="var(--grid)" strokeDasharray={t === 0 && zero ? undefined : '2 3'} />
-            <text x={PAD.l - 6} y={g.yOf(t) + 3} textAnchor="end" fontSize="10.5"
-                  fill="var(--text-muted)">
+            <text x={PAD.l - 6} y={g.yL(t) + 3} textAnchor="end" fontSize="10.5"
+                  fill={sideColor('left')}>
               {fmt(t, decimals)}
             </text>
           </g>
         ))}
-        {refLine != null && (
-          <line x1={PAD.l} x2={W - PAD.r} y1={g.yOf(refLine)} y2={g.yOf(refLine)}
+        {/* 오른쪽 축은 눈금 글자만 둔다. 격자선까지 그으면 두 축의 선이 엇갈려 어느
+            선이 어느 축인지 더 헷갈린다. */}
+        {g.ticksR.map((t) => (
+          <text key={`r${t}`} x={W - PAD.r + 6} y={g.yR(t) + 3} textAnchor="start"
+                fontSize="10.5" fill={sideColor('right')}>
+            {fmt(t, rightDecimals)}
+          </text>
+        ))}
+        {refLine != null && g.yL && (
+          <line x1={PAD.l} x2={W - PAD.r} y1={g.yL(refLine)} y2={g.yL(refLine)}
                 stroke="var(--axis)" strokeDasharray="5 4" />
         )}
         {g.yearMarks.map((m) => (
@@ -138,7 +186,7 @@ export default function TimeLines({
             {g.paths.map((p, si) => {
               const v = g.lookup[si].get(hm)
               return v == null ? null : (
-                <circle key={p.key} cx={g.xOf(hm)} cy={g.yOf(v)} r="3.2" fill={p.color} />
+                <circle key={p.key} cx={g.xOf(hm)} cy={p.y(v)} r="3.2" fill={p.color} />
               )
             })}
           </g>
@@ -153,20 +201,22 @@ export default function TimeLines({
               <span className={`swatch${s.dash ? ' dash' : ''}`}
                     style={s.dash ? { color: s.color, background: 'none' } : { background: s.color }} />
               {s.label}
+              {hasRight && <span className="muted"> ({s.axis === 'right' ? '오른쪽' : '왼쪽'} 축)</span>}
             </span>
           ))}
         </div>
       )}
-      {hm && hover && (
+      {hm && (
         <div className="chart-tooltip"
              style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
           <div className="t-title">{hm.slice(0, 4)}.{hm.slice(4)}</div>
           {series.map((s, si) => {
             const v = g.lookup[si].get(hm)
+            const u = unitOf(s)
             return (
               <div className="t-row" key={s.key}>
                 {series.length > 1 && <>{s.label} </>}
-                {v == null ? '—' : `${fmt(v, decimals)}${unit ? ` ${unit}` : ''}`}
+                {v == null ? '—' : `${fmt(v, decOf(s))}${u ? ` ${u}` : ''}`}
               </div>
             )
           })}
