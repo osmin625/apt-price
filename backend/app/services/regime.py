@@ -167,11 +167,22 @@ def _corr(a: list[float], b: list[float]) -> float:
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (sa * sb) if sa and sb else 0.0
 
 
+def hist_percentile(values: list[float], v: float) -> float:
+    """`v` 가 자기 역사(`values`)에서 몇 % 지점인가 — **탭 공통의 자**(0~1).
+
+    지금보다 낮았던 달의 몫이다. 거시 분석의 요인 카드, 가격 분석의 국면 점 색, 공급
+    분석의 미분양 카드가 모두 이 값으로 칠한다. 예전에는 거시만 이것이고 나머지 둘은
+    '역대 최저~최고 사이 어디인가' 였다. 같은 경기 미분양이 한 탭에서는 '자기 역사 67%',
+    다른 탭에서는 '최저~최고의 50%' 로 나와 두 숫자가 같은 것을 다르게 말했다.
+    백분위로 맞춘 것은 방향 판정(`_pressure`)이 이미 이 값을 쓰기 때문이다. 화면의
+    `heat.js` 의 `histPct` 가 같은 공식이다.
+    """
+    below = sum(1 for x in values if x < v)
+    return below / max(len(values) - 1, 1)
+
+
 def _percentile(s: dict[str, float], ym: str) -> float:
-    vals = sorted(s.values())
-    v = s[ym]
-    below = sum(1 for x in vals if x < v)
-    return below / max(len(vals) - 1, 1)
+    return hist_percentile(list(s.values()), s[ym])
 
 
 def _fwd12(price: dict[str, float], yms: list[str], i: int) -> float | None:

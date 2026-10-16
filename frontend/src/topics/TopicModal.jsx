@@ -4,9 +4,10 @@ import { api } from '../api'
 import { fmt } from '../components/Charts'
 import Modal from '../components/Modal'
 import TimeLines from '../components/TimeLines'
-import { heatVars, rangePos } from '../components/heat'
+import { heatVars, histPct } from '../components/heat'
 import { FactorDetail } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
+import { PRICE_METRIC } from './registry'
 import { PipeTable, UnsoldTable } from './SupplyTables'
 
 /**
@@ -28,10 +29,14 @@ export default function TopicModal({ topic, onClose, hidden, onToggle }) {
   return (
     <Modal title={title || '불러오는 중'} onClose={onClose} wide>
       {topic.supply && <SupplySection topic={topic} />}
-      {topic.metric && (
-        <MetricSection topic={topic} hidden={hidden} onToggle={onToggle}
-                       onLabel={(l) => !topic.title && setTitle(l)} />
-      )}
+      {/* 가격 분석 절은 **모든 주제 창**에 둔다. 주제에 지표가 없으면 매매가격지수다
+          (`PRICE_METRIC`) — 공급·요인을 보다가 '그래서 구마다 값은 어떻게 갔나' 를
+          보려고 가격 분석 탭으로 건너가지 않게 한다. */}
+      <MetricSection topic={topic.metric ? topic : { ...topic, metric: PRICE_METRIC }}
+                     fallback={!topic.metric}
+                     hidden={topic.metric ? hidden : undefined}
+                     onToggle={topic.metric ? onToggle : undefined}
+                     onLabel={(l) => topic.metric && !topic.title && setTitle(l)} />
       {topic.factor && (
         <FactorSection topic={topic} onLabel={(l) => !topic.title && !topic.metric && setTitle(l)} />
       )}
@@ -77,7 +82,7 @@ const SINCE = [
   ['201201', '전체(2012~)'],
 ]
 
-function MetricSection({ topic, hidden: hiddenProp, onToggle, onLabel }) {
+function MetricSection({ topic, fallback = false, hidden: hiddenProp, onToggle, onLabel }) {
   const [since, setSince] = useState(topic.since || '202001')
   const [own, setOwn] = useState(() => new Set())
   const hidden = hiddenProp || own
@@ -98,7 +103,7 @@ function MetricSection({ topic, hidden: hiddenProp, onToggle, onLabel }) {
 
   return (
     <section className="topic-section">
-      <SectionHead title="시군구별 추이" from="가격 분석" />
+      <SectionHead title={fallback ? '시군구별 매매가격지수' : '시군구별 추이'} from="가격 분석" />
       <div className="field topic-since">
         <label htmlFor={`ts-${topic.id}`}>기간</label>
         <select id={`ts-${topic.id}`} value={since} onChange={(e) => setSince(e.target.value)}>
@@ -252,8 +257,8 @@ const REGION_LABEL = { 서울: '서울', 경기: '경기 전체' }
  * 파이프라인을 크게. 카드 축소판은 세 선의 모양만 보여 주고 숫자가 없었다.
  *
  * 숫자 타일은 계열마다 **지금 12개월 누적 · 1년 전 대비 · 역대 범위 안 위치** 셋이다.
- * 위치는 공급 분석 미분양 카드와 같은 자(역대 최저 ~ 최고, `heat.js`)다 — 준공이
- * 역대 범위의 어디쯤인지가 '지금 공급이 많은가' 에 대한 가장 짧은 답이다.
+ * 위치는 탭 공통의 자(자기 역사 백분위, `heat.js` 의 `histPct`)다 — 준공이 자기
+ * 역사의 어디쯤인지가 '지금 공급이 많은가' 에 대한 가장 짧은 답이다.
  */
 function PipelineDetail({ regions, initial }) {
   const pick = regions.find((r) => r.sgg_cd === initial) || regions.find((r) => r.sgg_cd === '41') || regions[0]
@@ -281,7 +286,7 @@ function PipelineDetail({ regions, initial }) {
           const yoy = prev?.value ? (last.value / prev.value - 1) * 100 : null
           const vals = pts.map((p) => p.value)
           const peak = pts.reduce((a, b) => (b.value > a.value ? b : a))
-          const pos = rangePos(vals, last.value)
+          const pos = histPct(vals, last.value)
           return (
             <div className="tile" key={k} style={heatVars(pos)}>
               <div className="label">{label} · 12개월 누적</div>
@@ -296,7 +301,7 @@ function PipelineDetail({ regions, initial }) {
               <div className="note">
                 역대 최고 {fmt(peak.value)}호({fmtYm(peak.ym)})
                 {pos != null && (
-                  <> · 최저~최고의 <span className="heat-pct">{Math.round(pos * 100)}%</span></>
+                  <> · 자기 역사 <span className="heat-pct">{Math.round(pos * 100)}%</span> 지점</>
                 )}
               </div>
             </div>

@@ -36,9 +36,17 @@ export function heatColor(p) {
   return `color-mix(in srgb, ${c} ${Math.round(20 + k * 80)}%, var(--text-muted))`
 }
 
-/** 값 목록 안에서 `v` 가 최저~최고 사이 어디인가(0~1). 폭이 0 이면 판단하지 않는다. */
-export function rangePos(values, v) {
-  const lo = Math.min(...values)
-  const hi = Math.max(...values)
-  return hi > lo ? (v - lo) / (hi - lo) : null
+/**
+ * `v` 가 자기 역사(`values`)에서 몇 % 지점인가(0~1) — 지금보다 낮았던 달의 몫.
+ *
+ * **탭 공통의 자.** 백엔드 `regime.hist_percentile` 과 같은 공식이다. 예전에는 공급
+ * 분석·가격 분석이 '역대 최저~최고 사이 어디인가' 를, 거시 분석이 이 백분위를 써서
+ * 같은 경기 미분양이 '최저~최고의 50%' 와 '자기 역사 67%' 로 따로 나왔다. 한 데이터가
+ * 두 숫자로 말하면 같은 것인지부터 의심하게 된다. 백분위로 맞춘 것은 거시 분석의 방향
+ * 판정이 이미 이 값을 쓰기 때문이다.
+ */
+export function histPct(values, v) {
+  if (!values.length || v == null) return null
+  const below = values.filter((x) => x < v).length
+  return below / Math.max(values.length - 1, 1)
 }

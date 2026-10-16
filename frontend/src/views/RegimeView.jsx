@@ -7,7 +7,7 @@ import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import { heatVars } from '../components/heat'
 import TopicModal from '../topics/TopicModal'
-import { topicFor } from '../topics/registry'
+import { homeOf, topicFor } from '../topics/registry'
 
 /**
  * 거시 분석 — 공급·수요·통화량·금리·정책·세금이 지금 어느 쪽으로 미는가.
@@ -97,8 +97,12 @@ export default function RegimeView() {
           것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.
         </p>
         <HeatLegend>카드 색은 자기 역사에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
+        {/* **데이터 하나에 카드 하나.** 준공·미분양·거래량·전세가율은 공급·가격 분석에
+            카드가 있어, 여기서 같은 선을 또 그리면 같은 데이터가 두 탭에 카드로 선다.
+            그런 요인은 그림 없이 위치만 한 줄로 두고, 누르면 같은 주제 창을 연다.
+            어느 요인이 그런지는 `registry.js` 의 `homeOf` 가 정한다. */}
         <div className="macro-grid">
-          {data.factors.map((f) => (
+          {data.factors.filter((f) => !homeOf(topicFor('factor', f.key))).map((f) => (
             <PanelCard
               key={f.key}
               title={f.label}
@@ -110,6 +114,27 @@ export default function RegimeView() {
             </PanelCard>
           ))}
         </div>
+        {data.factors.some((f) => homeOf(topicFor('factor', f.key))) && (
+          <>
+            <h3 className="mt16">카드가 다른 탭에 있는 요인</h3>
+            <div className="rg-shared">
+              {data.factors.filter((f) => homeOf(topicFor('factor', f.key))).map((f) => (
+                <button key={f.key} className="rg-shared-row" style={heatVars(f.percentile)}
+                        onClick={() => setOpen({ kind: 'factor', f })} aria-haspopup="dialog">
+                  <strong>{f.label}</strong>
+                  {/* 무엇의 백분위인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
+                      여기는 그 전년비의 위치라, 같은 자라도 숫자가 다를 수 있다. */}
+                  <span className="muted small">
+                    {f.transform_label} · 자기 역사{' '}
+                    <span className="heat-pct">{Math.round(f.percentile * 100)}%</span> 지점 · {f.region}
+                  </span>
+                  <span className="muted small">카드는 {homeOf(topicFor('factor', f.key))}</span>
+                  <span className="factor-caret" aria-hidden="true">&#10530;</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <p className="muted small">{data.note}</p>
       </section>
 

@@ -33,11 +33,11 @@ import { topicFor } from '../topics/registry'
 export default function MacroView() {
   const [meta, setMeta] = useState(null)
   const [since, setSince] = useState('202001')
-  /* 지표를 **칩으로 고르게 하지 않는다.** 일곱 개뿐이고 카드 축소판은 한 장이
+  /* 지표를 **칩으로 고르게 하지 않는다.** 몇 개 안 되고 카드 축소판은 한 장이
      작으므로, 고르는 수고를 시키느니 전부 깔고 눈으로 훑게 하는 쪽이 빠르다.
      선택식일 때는 '전세가율이 어떻더라' 를 보려면 칩을 누르고 기다려야 했다.
 
-     `series` 는 지표 키 -> 응답. 기간을 바꾸면 일곱 개를 한꺼번에 다시 받는다. */
+     `series` 는 지표 키 -> 응답. 기간을 바꾸면 전부 한꺼번에 다시 받는다. */
   const [series, setSeries] = useState({})
   const [error, setError] = useState(null)
   const [hidden, setHidden] = useState(() => new Set())
@@ -51,15 +51,17 @@ export default function MacroView() {
     api.macroInsights().then(setIns).catch(() => setIns(null))
   }, [])
 
-  const metrics = meta?.metrics || []
+  // 카드를 두는 지표만. `card: False` 인 것(평균·중위 매매가격)은 '구 안의 가격 편차'
+  // 카드가 둘을 직접 견주므로 따로 그리지 않는다 — 데이터 하나에 카드 하나.
+  const metrics = (meta?.metrics || []).filter((m) => m.card !== false)
 
   useEffect(() => {
     if (!metrics.length) return
     let alive = true
     setError(null)
     setSeries({})
-    /* 지표마다 따로 받고 **오는 대로 그린다.** 일곱 개를 Promise.all 로 묶으면 제일
-       느린 하나가 전부를 잡는데, 정적 사이트에서는 파일 일곱 개라 그럴 이유가 없다.
+    /* 지표마다 따로 받고 **오는 대로 그린다.** 전부 Promise.all 로 묶으면 제일
+       느린 하나가 전부를 잡는데, 정적 사이트에서는 지표마다 파일 하나라 그럴 이유가 없다.
        하나가 실패해도 나머지는 그려야 한다 — 그래서 실패를 모아 오류로 올리지 않고
        그 카드만 비운다. */
     for (const m of metrics) {
@@ -231,7 +233,7 @@ export default function MacroView() {
             caveat="월간 매매가격지수 기준이다. 어디가 어느 국면인지까지만 말하고, 거기서 투자 판단으로 넘어가는 것은 이 데이터 밖이다."
           />
           <HeatLegend lo="역대 최저" hi="역대 최고">
-            점 색은 지금 지수가 그 구의 역대 최저와 최고 사이 어디인지입니다. 좋고 나쁨이 아닙니다
+            점 색은 지금 지수가 그 구의 자기 역사에서 몇 % 지점인지입니다. 좋고 나쁨이 아닙니다
           </HeatLegend>
           <CycleChart ins={ins} />
           {ins.cycle.excluded.length > 0 && (
@@ -463,7 +465,7 @@ function CycleChart({ ins, compact }) {
   return (
     <QuadrantScatter
       items={ins.cycle.items}
-      color={(d) => heatColor(d.range_pos)}
+      color={(d) => heatColor(d.hist_pct)}
       x={(d) => d.from_peak}
       y={(d) => d.m3}
       xLabel={ins.cycle.x_label}
@@ -487,10 +489,8 @@ function CycleChart({ ins, compact }) {
             {fmt(d.m3, 2)}% · 12개월 {d.m12 > 0 ? '+' : ''}
             {fmt(d.m12, 2)}%
           </div>
-          {d.range_pos != null && (
-            <div className="t-row">
-              역대 최저({d.low_ym})~최고의 {Math.round(d.range_pos * 100)}% 지점
-            </div>
+          {d.hist_pct != null && (
+            <div className="t-row">자기 역사 {Math.round(d.hist_pct * 100)}% 지점</div>
           )}
           {d.accel != null && (
             <div className="t-row">
