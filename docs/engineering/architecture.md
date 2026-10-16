@@ -91,6 +91,7 @@ frontend/
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
+  src/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가

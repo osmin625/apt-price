@@ -79,6 +79,13 @@ RANK_BASIS = ("market", "factor")
 # 있어서 조용하다 — 인사이트 경로를 하나 빠뜨렸다가 4분면이 통째로 빈 채 배포된 적이
 # 있다. 반대로 카드를 뺀 지표(`card: False`)는 아무도 부르지 않으므로 내보내지 않는다.
 # 앱 모듈은 이 파일의 다른 곳처럼 **쓸 때** import 한다(FIT_IN_PROCESS 를 먼저 정해야 한다).
+def group_bys() -> tuple[str, ...]:
+    """분해 모델 탭 '노선·생활권으로 묶어 보기' 의 기준들. 화면의 버튼이 이 목록에서 나온다."""
+    from app.services.model_view import GROUP_BY
+
+    return tuple(GROUP_BY)
+
+
 def macro_metrics() -> tuple[str, ...]:
     from app.services.macro import METRICS
 
@@ -167,6 +174,9 @@ def build_plan(with_quotes: bool) -> list[Req]:
         # 시장 분석의 도보거리 상세 창과 지도 탭이 같이 쓴다.
         plan.append(Req("/api/model/fit", {"months": m}))
         plan.append(Req("/api/map/complexes", {"months": m}))
+        # 분해 모델 탭 — 묶는 기준마다 하나.
+        for by in group_bys():
+            plan.append(Req("/api/model/groups", {"months": m, "by": by}))
 
     if with_quotes:
         for m in MONTHS:

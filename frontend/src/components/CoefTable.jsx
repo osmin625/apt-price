@@ -35,7 +35,9 @@ const UNIT_MULT = { elem_dist: 100, mid_dist: 100 }
  *   - **선형성 판정** — 이 요인이 직선인지 아닌지는 형태를 가정하지 않고 검정한 결과다
  *   - 기저 몇 개를 썼는지 — 접힌 것이 몇 줄인지 밝힌다
  */
-export default function CoefTable({ fit }) {
+/* `only` 를 넘기면 그 이름의 행만 그린다(분해 모델 수식에서 항 하나를 고를 때).
+   스플라인 요인은 변수 이름, 범주형은 계수 이름으로 판정한다. */
+export default function CoefTable({ fit, only = null }) {
   const [openVar, setOpenVar] = useState(null)
 
   const terms = fit.terms.filter((t) => t.name !== 'const')
@@ -53,7 +55,8 @@ export default function CoefTable({ fit }) {
       lin: lin[varName],
     }))
     .filter((g) => g.head)
-  const others = terms.filter((t) => !inSpline.has(t.name))
+    .filter((g) => !only || only(g.varName))
+  const others = terms.filter((t) => !inSpline.has(t.name)).filter((t) => !only || only(t.name))
 
   const verdictTone = (v) => (v === '비선형' ? 'bad' : v ? 'mid' : null)
 

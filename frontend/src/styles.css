@@ -1004,3 +1004,33 @@ tr.is-deleting td { opacity: 0.4; }
 /* 미분양처럼 자릿수가 다른 지역은 한 축에 겹치지 않고 나란히 둔다 */
 .topic-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 16px; margin-bottom: 8px; }
 .topic-multiple-title { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+
+/* ── 분해 모델 수식 (components/ModelFormula) ─────────────────────────────
+   식의 각 항이 버튼이다. 기호 아래 작은 이름을 둬 기호를 몰라도 읽히게 한다.
+   한 줄에 안 들면 항 단위로 줄을 바꾼다 — 휴대폰에서 가로로 넘치지 않게. */
+.mf-line { margin-top: 14px; }
+.mf-stage { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.mf-eq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; }
+.mf-cell { display: inline-flex; align-items: center; gap: 4px; }
+.mf-op { color: var(--text-muted); font-size: 15px; padding: 0 2px; }
+.mf-term {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 9px; cursor: pointer; font: inherit; color: inherit;
+  background: var(--surface-1); border: 1px solid var(--border);
+}
+.mf-term:hover { border-color: var(--accent); }
+.mf-term.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); }
+.mf-term.is-linked { border-style: dashed; border-color: var(--accent); }
+.mf-term.is-lhs .mf-sym { font-weight: 700; }
+.mf-sym { font-family: 'Times New Roman', Georgia, serif; font-size: 17px; font-style: italic; line-height: 1.2; }
+.mf-sym sub { font-family: Pretendard, system-ui, sans-serif; font-style: normal; font-size: 10px; }
+.mf-name { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.mf-foot { margin-top: 12px; }
+.mf-all .mf-name { font-size: 12px; color: var(--text-secondary); }
+.mf-detail { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); }
+.mf-detail h3 { margin: 0 0 6px; font-size: 14px; }
+.mf-detail p { max-width: 90ch; }
+.mf-hint { margin-top: 12px; }
+/* 상세 안의 표는 줄바꿈하지 않고 가로로 넘긴다. 휴대폰 폭에서 칸이 좁아지면
+   '역까지 도보' 가 한 글자씩 세로로 쪼개졌다. */
+.mf-detail .coef td, .mf-detail .coef th { white-space: nowrap; }

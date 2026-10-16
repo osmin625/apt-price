@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
-import CoefTable from '../components/CoefTable'
 import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
+import ModelFormula from '../components/ModelFormula'
 
 /**
- * 분해 모델 — 계수 자체를 읽는 탭.
+ * 분해 모델 — 계수 자체를 읽는 탭. 맨 위는 수식(`ModelFormula`)이고, 항을 누르면 그
+ * 항의 계수가 나온다. 예전의 '계수' 카드(78행 표)는 수식의 항마다 나눠 들어갔다.
  *
  * 산점도·모델 잔차·층 프리미엄은 여기서 뺐다(각각 시장 분석의 도보거리 창, 지도 탭,
  * 시장 분석의 층 카드). 그 섹션들이 쓰던 `/map/complexes` 는 응답이 1.2MB 인데,
@@ -48,6 +49,9 @@ export default function ModelView({ months }) {
           실거래가를 적재하면 점선은 사라집니다.
         </div>
       )}
+
+      {/* 입구는 수식이다. 계수표는 수식의 항마다 나눠 들어갔다(전체는 '전체 계수표' 칩). */}
+      <ModelFormula fit={fit} />
 
       <CoefUsage />
 
@@ -102,16 +106,6 @@ export default function ModelView({ months }) {
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="card">
-        <h2>계수</h2>
-        <p className="muted small">{fit.dep_var} · 기준 {fit.stage1.reference}</p>
-        <CoefTable fit={fit} />
-        <p className="muted small">
-          월 상승률 {fmt(fit.stage1.month_trend_pct, 3)}%/월 · Stage1 within-R²{' '}
-          {fmt(fit.stage1.within_r2, 3)}
-        </p>
       </div>
 
       <GroupCompare months={months} />
