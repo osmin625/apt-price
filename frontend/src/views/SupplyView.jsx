@@ -6,6 +6,8 @@ import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import { heatVars, rangePos } from '../components/heat'
+import TopicModal from '../topics/TopicModal'
+import { topicFor } from '../topics/registry'
 
 /**
  * 공급 분석 — 적정 공급량과 실제 공급을 견준다.
@@ -197,10 +199,10 @@ export default function SupplyView() {
         <p className="muted small">{data.unsold.note}</p>
       </section>
 
+      {/* 미분양·파이프라인은 거시 분석에도 카드가 있다(미분양 · 준공 물량). 어디서
+          열든 같은 주제 창이다 — topics/registry.js. */}
       {open?.kind === 'unsold' && (
-        <Modal title="미분양" onClose={() => setOpen(null)} wide>
-          <UnsoldTable d={data.unsold} />
-        </Modal>
+        <TopicModal topic={topicFor('supply', 'unsold')} onClose={() => setOpen(null)} />
       )}
       {open?.kind === 'balance' && (
         <Modal title={`${regionName(open.r.region)} — 적정 대비 공급`} onClose={() => setOpen(null)} wide>
@@ -208,9 +210,8 @@ export default function SupplyView() {
         </Modal>
       )}
       {open?.kind === 'pipeline' && (
-        <Modal title={`${regionName(open.r.region)} — 공급 파이프라인`} onClose={() => setOpen(null)} wide>
-          <PipeTable r={open.r} />
-        </Modal>
+        <TopicModal topic={topicFor('supply', 'pipeline', { region: open.r.sgg_cd })}
+                    onClose={() => setOpen(null)} />
       )}
       {open?.kind === 'lead' && (
         <Modal title="2~3년 뒤 입주" onClose={() => setOpen(null)} wide>
@@ -757,48 +758,6 @@ function UnsoldLine({ u }) {
   )
 }
 
-function UnsoldTable({ d }) {
-  return (
-    <>
-      <p className="sub">{d.note}</p>
-      <div className="table-wrap">
-        <table className="coef">
-          <thead>
-            <tr>
-              <th>지역</th>
-              <th className="num">최근</th>
-              <th className="num">전년비</th>
-              <th className="num">최고</th>
-              <th className="num">최고 대비</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.regions.map((u) => (
-              <tr key={u.sgg_cd}>
-                <td>{u.region}</td>
-                <td className="num">
-                  {fmt(u.latest.value)}호<span className="muted"> ({fmtYm(u.latest.ym)})</span>
-                </td>
-                <td className={`num ${u.yoy == null ? '' : u.yoy > 0 ? 'tone-neg' : 'tone-pos'}`}>
-                  {u.yoy == null ? '—' : `${u.yoy > 0 ? '+' : ''}${u.yoy}%`}
-                </td>
-                <td className="num muted">
-                  {fmt(u.peak.value)}호 ({fmtYm(u.peak.ym)})
-                </td>
-                <td className="num">{Math.round((u.latest.value / u.peak.value) * 100)}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted small">
-        경기 남부는 수원·용인·화성·안양·오산·의왕·군포·과천 8개 시의 합입니다.
-        시 단위는 전체보다 한두 달 늦게 공표됩니다.
-      </p>
-    </>
-  )
-}
-
 function BalanceTable({ r }) {
   return (
     <>
@@ -884,42 +843,6 @@ function NeedEnd({ r }) {
       {src} 적정 공급도 <b>{r.adequate_to}년까지</b>입니다. {span}은 준공만 있어 점만
       찍고 적정·차이 칸은 비워 둡니다. 누적 차이도 {r.adequate_to}년에서 멈춥니다.
     </p>
-  )
-}
-
-function PipeTable({ r }) {
-  const rows = r.pipeline.series.done || []
-  const find = (k, ym) => (r.pipeline.series[k] || []).find((d) => d.ym === ym)?.value
-  return (
-    <>
-      <p className="muted small">
-        12개월 누적입니다. 월별은 큰 단지 하나가 들어오는 달에 튀어서 들쭉날쭉하므로
-        누적으로 봐야 추세가 읽힙니다. <b>인허가는 연 누계로 공표</b>되어
-        적재할 때 월별로 되돌렸습니다.
-      </p>
-      <div className="table-wrap">
-        <table className="coef">
-          <thead>
-            <tr>
-              <th>시점</th>
-              <th className="num">인허가</th>
-              <th className="num">착공</th>
-              <th className="num">준공</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(-24).reverse().map((d) => (
-              <tr key={d.ym}>
-                <td>{fmtYm(d.ym)}</td>
-                <td className="num">{fmt(find('permit', d.ym))}</td>
-                <td className="num">{fmt(find('start', d.ym))}</td>
-                <td className="num">{fmt(d.value)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
   )
 }
 
