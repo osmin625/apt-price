@@ -27,6 +27,14 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  * 견줄 때 읽는 것은 '둘 다 0 위인가 아래인가' 인데, 0 이 축마다 다른 높이에 있으면
  * 같이 움직이지 않는 두 선도 겹쳐 보인다.
  */
+/* 축 범위 안의 눈금. 0 선을 맞추려고 범위를 늘리면 눈금 계산에서 -0 이 나와 축에
+   '-0' 이 찍혔다(미분양 창 오른쪽 축) — 0 으로 바로잡는다. */
+function axisTicks([lo, hi]) {
+  return niceTicks(lo, hi, 5)
+    .filter((t) => t >= lo && t <= hi)
+    .map((t) => (Math.abs(t) < 1e-9 ? 0 : t))
+}
+
 export default function TimeLines({
   series,
   unit = '',
@@ -118,8 +126,8 @@ export default function TimeLines({
 
     return {
       months, xOf, yL, yR, iw, ih, lookup, paths, yearMarks,
-      ticksL: L ? niceTicks(L[0], L[1], 5).filter((t) => t >= L[0] && t <= L[1]) : [],
-      ticksR: R ? niceTicks(R[0], R[1], 5).filter((t) => t >= R[0] && t <= R[1]) : [],
+      ticksL: L ? axisTicks(L) : [],
+      ticksR: R ? axisTicks(R) : [],
     }
   }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero])
 
