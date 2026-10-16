@@ -26,6 +26,13 @@ export default function TimeLines({
   // 이 값에 가로 점선을 긋는다(예: 심리지수 100).
   refLine = null,
   ariaLabel = '추이',
+  // x 축으로 쓸 달 목록. 안 주면 계열들의 달을 합친다. 그림 두 장을 위아래로 놓고
+  // **같은 달을 같은 자리에** 두려면 밖에서 같은 목록을 넘긴다('그 뒤 가격과의 관계').
+  months: monthsProp = null,
+  // 같이 놓인 그림끼리 짚은 달을 나눈다. 넘기면 세로선·점은 이 값을 따르고, 툴팁은
+  // 마우스가 올라간 그림에만 뜬다 — 두 장에 다 띄우면 서로 가린다.
+  hoverYm = undefined,
+  onHoverYm = null,
 }) {
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState(null)
@@ -33,14 +40,19 @@ export default function TimeLines({
   const W = Math.max(width || 640, 280)
 
   const g = useMemo(() => {
-    const months = [...new Set(series.flatMap((s) => s.points.map((p) => p.ym)))].sort()
+    const months = monthsProp
+      || [...new Set(series.flatMap((s) => s.points.map((p) => p.ym)))].sort()
     if (!months.length) return null
     const idx = new Map(months.map((m, i) => [m, i]))
+    // 축 밖의 달은 그리지 않는다. 목록을 밖에서 받으면 계열이 더 길 수 있다.
+    const inAxis = (p) => idx.has(p.ym)
     const iw = W - PAD.l - PAD.r
     const ih = height - PAD.t - PAD.b
     const xOf = (ym) => PAD.l + (idx.get(ym) / Math.max(months.length - 1, 1)) * iw
 
-    const vals = series.flatMap((s) => s.points.map((p) => p.value)).filter((v) => v != null)
+    const vals = series.flatMap((s) => s.points.filter(inAxis).map((p) => p.value))
+      .filter((v) => v != null)
+    if (!vals.length) return null
     let lo = Math.min(...vals)
     let hi = Math.max(...vals)
     if (zero) {
@@ -60,7 +72,7 @@ export default function TimeLines({
     const paths = series.map((s) => ({
       ...s,
       d: s.points
-        .filter((p) => p.value != null)
+        .filter((p) => p.value != null && inAxis(p))
         .map((p, k) => `${k ? 'L' : 'M'}${xOf(p.ym).toFixed(1)},${yOf(p.value).toFixed(1)}`)
         .join(' '),
     }))
@@ -71,7 +83,7 @@ export default function TimeLines({
     const yearMarks = years.filter((_, i) => i % every === 0)
 
     return { months, xOf, yOf, iw, ih, lookup, paths, yearMarks, ticks: niceTicks(lo, hi, 5) }
-  }, [series, W, height, zero, refLine])
+  }, [series, W, height, zero, refLine, monthsProp])
 
   if (!g) return <p className="empty">값이 없습니다</p>
 
@@ -82,14 +94,19 @@ export default function TimeLines({
     const t = (x - PAD.l) / g.iw
     const i = Math.round(Math.min(Math.max(t, 0), 1) * (g.months.length - 1))
     setHover({ i, cx: e.clientX, cy: e.clientY })
+    onHoverYm?.(g.months[i])
+  }
+  const onLeave = () => {
+    setHover(null)
+    onHoverYm?.(null)
   }
 
-  const hm = hover ? g.months[hover.i] : null
+  const hm = hoverYm !== undefined ? hoverYm : hover ? g.months[hover.i] : null
 
   return (
     <div className="macro-chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${height}`} role="img" aria-label={ariaLabel}
-           onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+           onMouseMove={onMove} onMouseLeave={onLeave}>
         {g.ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.l} x2={W - PAD.r} y1={g.yOf(t)} y2={g.yOf(t)}
@@ -140,7 +157,7 @@ export default function TimeLines({
           ))}
         </div>
       )}
-      {hm && (
+      {hm && hover && (
         <div className="chart-tooltip"
              style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
           <div className="t-title">{hm.slice(0, 4)}.{hm.slice(4)}</div>
