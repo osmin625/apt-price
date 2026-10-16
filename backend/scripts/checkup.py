@@ -287,12 +287,14 @@ def check_cruft(rep: Report) -> None:
 
     # 지침서 길이. 넘었다고 틀린 것은 아니라 `[!]` 다 — 사람이 읽어 보고
     # 줄일지·나눌지·그대로 둘지 고른다.
-    docs = sorted((ROOT / "docs").glob("*.md"))
+    # docs/ 는 묶음 폴더 아래에 둔다(verify_docs 가 지킨다). 그래서 rglob 이고,
+    # 찍을 때는 묶음까지 보이게 docs/ 아래 경로를 쓴다.
+    docs = sorted((ROOT / "docs").rglob("*.md"))
     long_docs = []
     for d in docs:
         n = len(d.read_text(encoding="utf-8").splitlines())
         if n > DOC_LINES_WARN and d.name not in DOC_LONG_OK:
-            long_docs.append((d.name, n))
+            long_docs.append((d.relative_to(ROOT / "docs").as_posix(), n))
     print(f"  긴 지침서       {len(long_docs)}/{len(docs)} "
           f"({DOC_LINES_WARN}줄 넘음)")
     if long_docs:
@@ -300,7 +302,7 @@ def check_cruft(rep: Report) -> None:
                 "300줄 넘는 지침서 " + ", ".join(f"{n}({c}줄)" for n, c in long_docs)
                 + " — CLAUDE.md 의 '300줄이 넘으면 손본다' 참조")
         for n, c in sorted(long_docs, key=lambda kv: -kv[1]):
-            print(f"      {n:<16} {c}줄")
+            print(f"      {n:<26} {c}줄")
 
     # 정적 번들. 문서에 적어 두면 또 어긋나므로 **여기서 잰다**(deploy.md 참조).
     # 임계값 근거: GitHub Pages 소프트 한도가 1GB 라 용량 자체는 문제가 아니다.

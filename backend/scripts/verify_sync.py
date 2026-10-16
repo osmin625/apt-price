@@ -112,7 +112,7 @@ def header(title: str) -> None:
 # ──────────────────────────────────────────────────────────
 def check_lists(r: Result) -> None:
     header("목록 — architecture.md 가 실물을 다 적었나")
-    arch = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
+    arch = (ROOT / "docs" / "engineering" / "architecture.md").read_text(encoding="utf-8")
 
     def listed(name: str) -> bool:
         # **부분 문자열로 찾지 않는다.** 예전에는 `n in arch` 였는데, 그러면
@@ -166,7 +166,7 @@ def check_labels(r: Result) -> None:
     # '호가 입력' 탭에 '매물 관리' 라고 적혀 있었다(아홉 곳). 보는 사람에게는
     # 문서보다 화면이 먼저다. JSX 도 같이 본다 — 주석은 뺀다. 거기 적힌 옛 이름은
     # '왜 바꿨나' 를 남긴 경위 기록이라 지우면 안 된다.
-    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md")),
+    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md")),
             *sorted(FRONT.rglob("*.jsx"))]
     hits = 0
     for d in docs:
