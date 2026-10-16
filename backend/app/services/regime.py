@@ -350,8 +350,24 @@ def factor_rows(db: Session) -> list[dict]:
 # ──────────────────────────────────────────────────────────
 # 과거 추적 — 그때 각 요인은 어땠고, 집값은 어떻게 됐나
 # ──────────────────────────────────────────────────────────
+# 과거 국면 표의 다섯 단계. 가운데 경계(30%·70%)는 방향 판정의 `LO`·`HI` 와 같게 둔다 —
+# 표에서 '높음' 인 칸이 판정에서는 '보통' 이면 같은 말을 두 자로 하는 셈이다. 끝의 두
+# 단계(10%·90%)는 그 바깥을 한 번 더 가른다. 세 단계일 때는 자기 역사 71% 와 99% 가 같은
+# '높음' 이라, 2008년 미분양처럼 역대급인 칸과 그냥 높은 칸이 구분되지 않았다.
+# 칸 색은 이 단계가 아니라 백분위 그대로(연속)다 — 글자는 읽기 쉽게, 색은 끊지 않게.
+VLO, VHI = 0.10, 0.90
+
+
 def _state(pct: float) -> str:
-    return "높음" if pct >= HI else ("낮음" if pct <= LO else "보통")
+    if pct <= VLO:
+        return "매우 낮음"
+    if pct <= LO:
+        return "낮음"
+    if pct >= VHI:
+        return "매우 높음"
+    if pct >= HI:
+        return "높음"
+    return "보통"
 
 
 def history(db: Session, step: int = 6) -> dict:
@@ -372,7 +388,8 @@ def history(db: Session, step: int = 6) -> dict:
         states = {}
         for f, s in cols:
             if ym in s:
-                states[f.key] = {"state": _state(_percentile(s, ym)),
+                pct = _percentile(s, ym)
+                states[f.key] = {"state": _state(pct), "pct": round(pct, 3),
                                  "v": round(s[ym], 2)}
         if not states:
             continue
@@ -383,6 +400,11 @@ def history(db: Session, step: int = 6) -> dict:
                       if _fwd12(price, yms, i) is not None else None),
         })
     return {"step_months": step, "rows": rows,
+            # 다섯 단계의 경계. 화면 범례가 이것을 읽는다 — 화면에 경계를 따로 적으면
+            # 여기와 어긋난다.
+            "levels": [{"label": "매우 낮음", "max": VLO}, {"label": "낮음", "max": LO},
+                       {"label": "보통"}, {"label": "높음", "min": HI},
+                       {"label": "매우 높음", "min": VHI}],
             # 표본 길이를 문구에 얼리지 않는다('스무 해') — 해마다 하나씩 는다.
             "note": ("그때의 요인 상태와 그 뒤 12개월 가격 변화를 나란히 둔 것입니다. "
                      "요인이 가격을 움직였다는 뜻이 아닙니다 — 요인들은 서로 얽혀 "
