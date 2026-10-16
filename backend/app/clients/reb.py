@@ -210,7 +210,7 @@ SIDO: dict[str, str] = {"11": "서울", "41": "경기"}
 
 # (통계표, 항목ID, 주기, 지표이름). 항목ID 는 `region_codes` 의 ITM_TAG=='항목'.
 #
-# 표를 고른 경위는 docs/supply.md 에 있다. 738개를 훑어 '입주/준공/착공/인허가/
+# 표를 고른 경위는 docs/analysis/supply.md 에 있다. 738개를 훑어 '입주/준공/착공/인허가/
 # 분양/멸실/보급률' 로 걸렀고, **미래 입주 예정 물량은 R-ONE 에 없다**(민간 집계다).
 SUPPLY_TABLES: dict[str, tuple[str, int, str]] = {
     # 공급 파이프라인. 인허가 → 착공 → 준공 순으로 2~3년씩 흐른다.

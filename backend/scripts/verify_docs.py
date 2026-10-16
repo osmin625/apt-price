@@ -19,6 +19,17 @@
 - `#앵커` 가 그 파일의 **제목에서 실제로 만들어지는가**
 - CLAUDE.md 라우팅 표가 **있는 문서를 가리키는가**, 그리고 `docs/` 의 문서가
   표에서 **빠져 있지 않은가** (나눠 놓고 표에 안 넣으면 아무도 못 찾는다)
+- 문서가 **묶음 폴더 한 단계 아래**에 있는가 — `docs/<묶음>/<문서>.md`
+
+## 계층을 검사로 지킨다
+
+문서가 열둘이 되자 `docs/` 한 폴더에 평평하게 늘어서서, 비슷한 문서(공급·거시·
+공표 통계)가 이름순으로 흩어졌다. 그래서 '무엇에 답하나' 로 묶었다 — 화면(screens),
+추정(model), 데이터 출처(data), 공급·거시 탭(analysis), 코드 다루기(engineering).
+
+묶어 놓아도 다음 문서를 `docs/` 바로 아래에 두면 다시 평평해진다. 사람이 기억하는
+규칙은 반드시 뒤처지므로 여기서 막는다. 두 단계 이상도 막는다 — 깊게 파면 이번에는
+어느 폴더에 있는지 찾느라 길을 잃는다. 묶음이 모자라면 폴더를 **옆으로** 더한다.
 """
 
 from __future__ import annotations
@@ -64,8 +75,29 @@ def anchors_of(path: Path) -> set[str]:
     return out
 
 
+def layout_problems(rels: list[str]) -> list[str]:
+    """`docs/` 아래 상대 경로들 중 계층 규칙을 어긴 것. 순수 함수라 자체 시험이 쉽다."""
+    bad = []
+    for r in rels:
+        depth = r.count("/")
+        if depth == 0:
+            bad.append(f"docs/{r}  묶음 폴더 없이 docs/ 바로 아래에 있습니다 — "
+                       f"비슷한 문서의 폴더에 넣으세요")
+        elif depth > 1:
+            bad.append(f"docs/{r}  폴더가 두 단계 이상입니다 — 묶음은 한 단계만 둡니다")
+    return bad
+
+
+def self_test() -> bool:
+    """계층 검사가 **걸리는지**, 그리고 멀쩡한 것은 **안 걸리는지**."""
+    caught = (len(layout_problems(["new.md"])) == 1
+              and len(layout_problems(["model/deep/x.md"])) == 1)
+    clean = layout_problems(["model/method.md", "screens/ui-log.md"]) == []
+    return caught and clean
+
+
 def main() -> int:
-    docs = sorted(ROOT.glob("docs/*.md"))
+    docs = sorted((ROOT / "docs").rglob("*.md"))
     targets = [ROOT / "CLAUDE.md", ROOT / "README.md", *docs]
     anchors = {p.resolve(): anchors_of(p) for p in targets}
 
@@ -108,7 +140,18 @@ def main() -> int:
         for m in missing:
             print(f"      {m}")
 
-    ok = not bad and not missing
+    # 계층 — 묶음 폴더 한 단계 아래
+    layout = layout_problems([d.relative_to(ROOT / "docs").as_posix() for d in docs])
+    groups = sorted({d.parent.name for d in docs if d.parent != ROOT / "docs"})
+    print(f"\n묶음 {len(groups)}개 ({' · '.join(groups)}) · 규칙 어긴 문서 {len(layout)}개")
+    for b in layout:
+        print(f"  [X] {b}")
+    tested = self_test()
+    print(f"자체 시험 — 계층 검사가 {'걸려야 할 때 걸리고, 아닐 때 안 걸림' if tested else '제대로 걸리지 않음'}")
+    if not tested:
+        print("  [X] 계층 검사가 일부러 어긴 경우를 못 잡거나 멀쩡한 것을 잡습니다")
+
+    ok = not bad and not missing and not layout and tested
     print("\n" + ("전부 통과" if ok else "고칠 것이 있습니다"))
     return 0 if ok else 1
 

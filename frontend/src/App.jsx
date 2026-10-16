@@ -21,7 +21,7 @@ import SupplyView from './views/SupplyView'
  *
  * 지도는 데이터가 아니라 **키 때문에** 조건부다. 응답은 늘 내보내지만, 카카오 JS
  * 키가 공개 번들에 들어가야 하므로 켜는 것을 의도적인 행위로 만들었다
- * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/deploy.md.
+ * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/engineering/deploy.md.
  *
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
  */

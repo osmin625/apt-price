@@ -49,7 +49,7 @@ export const STATIC_MODE = import.meta.env.VITE_DATA_MODE === 'static'
  *
  * 그러니 **기본은 끈 상태**로 두고, 켜는 것을 의도적인 행위로 만든다. 켜는 방법은
  * `frontend/.env.static.local`(gitignore 됨)을 만들어 키와 이 변수를 같이 넣는 것이다.
- * 자세한 것은 docs/deploy.md.
+ * 자세한 것은 docs/engineering/deploy.md.
  *
  * 백엔드가 지오코딩에 쓰는 `KAKAO_REST_KEY` 는 **다른 키**이고 backend/.env 에만
  * 있다. 이쪽으로는 절대 나가지 않는다.

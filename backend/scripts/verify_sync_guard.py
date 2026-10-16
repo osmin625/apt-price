@@ -70,16 +70,16 @@ def edit(rel: str, fn):
 
 
 CASES = [
-    ("목록 — 테이블을 하나 지움", "docs/architecture.md",
+    ("목록 — 테이블을 하나 지움", "docs/engineering/architecture.md",
      lambda s: s.replace("ComplexAmenity /", "/", 1), "ComplexAmenity"),
     # 실제로 빠져 있던 모양 그대로 — 이름이 다른 파일(`ingest_kapt.py`)의 꼬리와 겹친다.
     # 부분 문자열로 찾던 때는 이것이 통과했다.
-    ("목록 — 다른 파일 꼬리와 겹치는 이름", "docs/architecture.md",
+    ("목록 — 다른 파일 꼬리와 겹치는 이름", "docs/engineering/architecture.md",
      lambda s: s.replace("    clients/kapt.py ", "    clients/zzz.py ", 1), "clients/kapt.py"),
     # routers 와 services 에 같은 이름이 있다. 한쪽만 지워도 잡혀야 한다.
-    ("목록 — 같은 이름의 서비스만 지움", "docs/architecture.md",
+    ("목록 — 같은 이름의 서비스만 지움", "docs/engineering/architecture.md",
      lambda s: s.replace("    services/quotes.py ", "    services/zzz.py ", 1), "services/quotes.py"),
-    ("이름 — 문서에 옛 탭 이름", "docs/performance.md",
+    ("이름 — 문서에 옛 탭 이름", "docs/engineering/performance.md",
      lambda s: s + "\n옛 이름 시장 분석 을 적어 본다.\n", "시장 분석"),
     ("계약 — 프론트가 없는 키를 읽음", "frontend/src/components/FactorHint.jsx",
      # 순위 payload 를 단지/유닛 두 조각으로 나누면서 `premium_pct` 가 사라졌다.
@@ -114,12 +114,12 @@ CASES = [
      None),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
-    ("조사 — 받침에 안 맞는 조사", "docs/performance.md",
+    ("조사 — 받침에 안 맞는 조사", "docs/engineering/performance.md",
      lambda s: s.replace("**호가 분석**은 쌓인", "**호가 분석**는 쌓인", 1),
      "호가 분석**는"),
     # **걸리지 말아야 할 때** — ㄹ 받침은 '로' 가 맞다('분해 모델로'). 이것까지
     # 잡으면 조사 검사는 전부 잡아 놓고 통과했다고 하는 셈이 된다.
-    ("조사 — ㄹ 받침 '로' 는 그냥 둔다(통과해야 함)", "docs/performance.md",
+    ("조사 — ㄹ 받침 '로' 는 그냥 둔다(통과해야 함)", "docs/engineering/performance.md",
      lambda s: s.replace("모델링 경로,", "분해 모델로 가는 모델링 경로,", 1), None),
 ]
 
