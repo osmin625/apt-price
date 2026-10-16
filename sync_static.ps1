@@ -74,6 +74,25 @@ function Run ($exe, [string[]]$argList) {
 
 Say '=== 동기화 시작 ==='
 
+<#
+    한 번에 하나만 돈다.
+
+    매일 06:30 작업과 푸시 연동 배포(deploy_on_push.ps1, 10분마다)가 같은 dist 와
+    스냅샷 폴더를 쓴다. 둘이 겹치면 한쪽이 지우는 동안 다른 쪽이 빌드해 **반쪽 dist**
+    가 올라갈 수 있다. 이름 있는 뮤텍스로 막는다. 이미 돌고 있으면 기다리지 않고
+    '겹침' 으로 끝낸다 — 실패가 아니므로 종료 코드는 0 이다.
+    뮤텍스는 프로세스가 끝나면 풀린다. 앞 실행이 죽어서 버려진 뮤텍스(Abandoned)는
+    잡은 것으로 본다.
+#>
+$Mutex = New-Object System.Threading.Mutex($false, 'Global\apt-price-sync-static')
+$got = $false
+try { $got = $Mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $got = $true }
+if (-not $got) {
+    Say '다른 동기화가 돌고 있습니다 — 겹침이라 이번 차례는 건너뜁니다.'
+    Say '=== 완료(겹침 생략) ==='
+    exit 0
+}
+
 if (-not (Test-Path $VPy)) { Die "가상환경이 없습니다: $Backend\.venv — setup.bat 을 먼저 실행하세요." }
 if (-not (Test-Path (Join-Path $Frontend 'node_modules'))) { Die '프론트엔드 의존성이 없습니다 — setup.bat 을 먼저 실행하세요.' }
 
