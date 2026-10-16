@@ -178,6 +178,24 @@ def _fwd12(price: dict[str, float], yms: list[str], i: int) -> float | None:
     return None if i + 12 >= len(yms) else (price[yms[i + 12]] / price[yms[i]] - 1) * 100
 
 
+def fwd12_series(price: dict[str, float]) -> list[dict]:
+    """달마다 '그 달부터 12개월 동안 가격이 몇 % 변했나'. 상관을 잴 때 쓰는 그 값이다.
+
+    화면의 '그 뒤 가격과의 관계' 절이 이것을 요인 아래에 같은 시간축으로 그린다.
+    예전에는 요인 한 줄만 그리고 관계는 표에만 있어서, 제목이 말하는 '가격' 이 그림
+    어디에도 없었다. 프론트가 지수에서 다시 계산하지 않고 **같은 `_fwd12` 를 지난
+    값**을 받는다 — 그래야 그림과 표가 다른 계산을 하지 않는다. 마지막 12개월은
+    그 뒤 1년이 아직 오지 않아 없다.
+    """
+    yms = sorted(price)
+    out = []
+    for i, ym in enumerate(yms):
+        f = _fwd12(price, yms, i)
+        if f is not None:
+            out.append({"ym": ym, "v": round(f, 2)})
+    return out
+
+
 def lag_profile(x: dict[str, float], price: dict[str, float],
                 lags: tuple[int, ...] = (0, 6, 12, 18, 24)) -> list[dict]:
     """시차별 상관. **argmax 하나만 고르지 않는다** — 25개 중 가장 센 것을 고르면
@@ -247,6 +265,18 @@ def _pressure(r: float | None, pct: float, agree: bool) -> dict:
     }
 
 
+# 요인 값이 무엇을 바꾼 것인지 사람이 읽는 이름. 같은 준공이라도 공급 탭은 '호'
+# 단위 12개월 누적이고 여기는 그 누적의 전년비라, 말해 주지 않으면 두 그림의
+# 숫자가 서로 다른 데이터처럼 보인다.
+# 명사로 끝낸다 — 화면이 '위는 ○○ — {이것}입니다' 로 잇는다.
+TRANSFORM_LABEL = {
+    "level": "그 달의 값",
+    "yoy": "1년 전 대비 증감률",
+    "diff12": "1년 전과의 차이",
+    "roll12_yoy": "12개월 합의 1년 전 대비 증감률",
+}
+
+
 def factor_rows(db: Session) -> list[dict]:
     price = price_series(db)
     out = []
@@ -263,6 +293,7 @@ def factor_rows(db: Session) -> list[dict]:
         out.append({
             "key": f.key, "group": f.group, "label": f.label, "region": f.region,
             "unit": f.unit, "transform": f.transform, "up_means": f.up_means,
+            "transform_label": TRANSFORM_LABEL[f.transform],
             "latest": {"ym": last, "value": round(s[last], 2)},
             "percentile": round(pct, 3),
             "measured": {"r": r0, "n": prof[0]["n"], "nonoverlap_r": nr,
@@ -471,6 +502,7 @@ def overview(db: Session) -> dict:
             "index": round(price[last], 2),
             "yoy": round(yoy, 2) if yoy is not None else None,
             "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(price.items())],
+            "fwd12": fwd12_series(price),
         },
         "groups": list(GROUP_ORDER),
         "factors": factors,

@@ -140,6 +140,13 @@ function FactorSection({ topic, onLabel }) {
     if (f) onLabel(f.label)
   }, [f])
 
+  // 위아래 그림이 같은 달을 짚는다. 위에서 어떤 달을 가리키면 아래는 그 달부터의 1년이다.
+  const [ym, setYm] = useState(null)
+  // 두 그림의 x 축은 **요인의 기간**으로 맞춘다. 가격은 더 길게(2003~) 있지만, 위에
+  // 없는 해를 아래에만 그리면 같은 자리가 같은 달이 아니게 된다.
+  const months = f ? f.series.map((p) => p.ym) : null
+  const price = data?.price
+
   return (
     <section className="topic-section">
       <SectionHead title="그 뒤 가격과의 관계" from="거시 분석" />
@@ -148,6 +155,15 @@ function FactorSection({ topic, onLabel }) {
       {data && !f && <p className="empty">이 요인의 값이 없습니다</p>}
       {f && (
         <>
+          {/* 이 절이 무엇을 무엇과 견주는지. 위 절과 단위·지역이 달라 말해 두지 않으면
+              같은 데이터를 다르게 그린 것처럼 보인다. 숫자는 넣지 않는다 — 모든 요인이
+              같은 문장을 쓴다. */}
+          <p className="sub">
+            위는 <b>{f.label}</b>({f.region}) — {f.transform_label}입니다. 아래는 그 달부터
+            12개월 동안 <b>{price.region}</b> 매매가격지수가 몇 % 변했는지입니다. 두 그림은
+            같은 달을 같은 자리에 둡니다 — 위에서 한 달을 짚으면 아래는 그 뒤 1년의 결과입니다.
+            아래 그림의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
+          </p>
           <TimeLines
             series={[{ key: f.key, label: f.label, color: 'var(--series-1)',
                        points: f.series.map((p) => ({ ym: p.ym, value: p.v })) }]}
@@ -159,8 +175,26 @@ function FactorSection({ topic, onLabel }) {
             zero={f.transform !== 'level'}
             // 심리지수는 100 이 '사겠다 = 팔겠다' 인 중립선이다(up_means 참조).
             refLine={f.key === 'sentiment' ? 100 : null}
-            height={220}
+            height={190}
+            months={months}
+            hoverYm={ym}
+            onHoverYm={setYm}
             ariaLabel={`${f.label} 추이 (${f.region})`}
+          />
+          {/* 단위가 요인마다 달라(%·%p·지수) 한 축에 겹치면 크기 비교가 거짓이 된다.
+              그래서 축을 따로 두고 시간만 맞춘다. 값은 백엔드가 상관을 잴 때 쓴 그
+              `_fwd12` 를 받는다 — 그림과 표가 다른 계산을 하지 않는다. */}
+          <TimeLines
+            series={[{ key: 'fwd12', label: '그 뒤 12개월 가격 변화', color: 'var(--series-2)',
+                       points: (price.fwd12 || []).map((p) => ({ ym: p.ym, value: p.v })) }]}
+            unit="%"
+            decimals={1}
+            zero
+            height={160}
+            months={months}
+            hoverYm={ym}
+            onHoverYm={setYm}
+            ariaLabel={`그 뒤 12개월 ${price.region} 매매가격 변화`}
           />
           <FactorDetail f={f} />
         </>
