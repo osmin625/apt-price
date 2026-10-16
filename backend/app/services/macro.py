@@ -94,10 +94,13 @@ METRICS: list[dict] = [
         "label": "매매 거래량",
         "unit": "호",
         "what": "그 달에 신고된 아파트 매매 거래 건수.",
-        "read": "가격과 **다른 축**입니다. 12개월 거래 배수와 12개월 가격 변화의 "
-                "순위상관이 0.352 밖에 안 됩니다 — 가격만 봐서는 거래가 받쳐 준 "
-                "상승인지 호가만 오른 것인지 구분되지 않습니다. 월별 값은 계절성이 "
-                "커서 톱니처럼 보이니, 추세는 1년 단위로 견주는 것이 맞습니다.",
+        # 화면 문구에 그때 잰 상관(예전에는 '순위상관 0.352')을 적지 않는다 —
+        # 데이터가 바뀌면 반드시 어긋난다. 지금 값은 '거래가 받쳐 준 상승인가'
+        # 카드가 `volume_support()['spearman']` 으로 그 자리에서 잰다.
+        "read": "가격과 다른 축입니다. 거래가 많은 순서와 많이 오른 순서가 자주 "
+                "엇갈려서, 가격만 봐서는 거래가 받쳐 준 상승인지 호가만 오른 것인지 "
+                "구분되지 않습니다. 월별 값은 계절성이 커서 톱니처럼 보이니, 추세는 "
+                "1년 단위로 견주는 것이 맞습니다.",
         "decimals": 0,
     },
     {
@@ -414,6 +417,32 @@ def _volume_ratio(s: list[tuple[str, float]]) -> tuple[float, float, float] | No
     return cur, base, cur / base
 
 
+def _spearman(a: list[float], b: list[float]) -> float | None:
+    """순위상관. 같은 값은 평균 순위를 준다."""
+    n = len(a)
+    if n < 3:
+        return None
+
+    def ranks(v: list[float]) -> list[float]:
+        order = sorted(range(n), key=lambda i: v[i])
+        r = [0.0] * n
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and v[order[j + 1]] == v[order[i]]:
+                j += 1
+            for k in range(i, j + 1):
+                r[order[k]] = (i + j) / 2 + 1
+            i = j + 1
+        return r
+
+    ra, rb = ranks(a), ranks(b)
+    ma, mb = sum(ra) / n, sum(rb) / n
+    sa = sum((x - ma) ** 2 for x in ra) ** 0.5
+    sb = sum((y - mb) ** 2 for y in rb) ** 0.5
+    return sum((x - ma) * (y - mb) for x, y in zip(ra, rb)) / (sa * sb) if sa and sb else None
+
+
 def volume_support(db: Session) -> dict:
     """거래가 받쳐 준 상승인가 — 가로 12개월 가격 변화(%), 세로 거래 배수(%).
 
@@ -449,14 +478,18 @@ def volume_support(db: Session) -> dict:
             "vol_pm": round(cur / 12),
             "latest_ym": vs[-1][0],
         })
+    # 거래 배수와 가격 변화가 얼마나 같은 순서인가. 화면이 '거래량은 다른 말을
+    # 한다' 를 숫자로 보여 줄 때 쓴다 — 문구에 얼려 두면 데이터와 어긋난다.
+    rho = _spearman([i["sale_12m"] for i in items], [i["vol_pct"] for i in items])
     return {
         "items": items,
+        "spearman": round(rho, 3) if rho is not None else None,
         "x_label": "12개월 매매가 변화 (%)",
         "y_label": "거래량 — 5년 평균 대비 (%)",
         "note": "세로 0 은 그 구의 직전 5년 연평균만큼 거래됐다는 뜻입니다. 위는 "
-                "평상시보다 활발하고 아래는 말랐습니다. 거래량은 절대값으로 지역끼리 "
-                "비교할 수 없어(과천 월 33건 ↔ 동탄 월 1,137건) 각자의 평상시와 "
-                "견줍니다. 비교할 과거 5년이 없는 화성시 분구는 뺐습니다.",
+                "평상시보다 활발하고 아래는 말랐습니다. 거래량은 구마다 규모가 달라 "
+                "절대값으로 견줄 수 없어 각자의 평상시와 견줍니다. 비교할 과거 5년이 "
+                "없는 구는 뺐습니다.",
         "excluded": [
             DISTRICTS[s] for s in DISTRICTS
             if not _volume_ratio(vol.get(s) or [])
@@ -505,8 +538,8 @@ def sample_depth(db: Session) -> dict:
         "thin_below": thin,
         "note": "최근 12개월 월평균 매매 거래 건수입니다. 지수는 거래에서 나오므로 "
                 "건수가 적은 구의 지수는 그만큼 흔들립니다. 값이 틀렸다는 뜻은 "
-                "아니지만, 같은 '전고점 대비 -5%' 가 월 33건과 월 1,137건에서 나온 "
-                "것이라면 무게가 다릅니다.",
+                "아니지만, 같은 '전고점 대비 -5%' 라도 거래가 적은 구와 많은 구에서 "
+                "나온 것이라면 무게가 다릅니다.",
     }
 
 

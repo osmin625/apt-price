@@ -22,8 +22,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(r"E:\workspace\apt-price")
-PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
+# 파일 위치에서 구한다. 예전에는 메인 체크아웃 경로를 박아 두어서, git worktree 에서
+# 돌리면 **메인 체크아웃의 파일을 고쳤다** — 다른 세션이 쓰는 곳이다.
+ROOT = Path(__file__).resolve().parent.parent.parent
+_VENV = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
+PY = str(_VENV if _VENV.exists() else Path(sys.executable))
 
 
 def run(with_model: bool = False, cmd: list[str] | None = None) -> tuple[int, str]:
@@ -97,6 +100,18 @@ CASES = [
     # 시험이 "못 바꿨다" 로 죽었다. 지금 그 변수를 쓰는 곳으로 옮겼다.
     ("CSS 변수 — 없는 것을 쓴다", "frontend/src/views/SupplyView.jsx",
      lambda s: s.replace("var(--series-1)", "var(--없는변수)", 1), "없는변수"),
+    # 화면 문구에 그때 잰 값을 얼린 모양 — 실제로 있던 것 그대로('순위상관이 0.352').
+    ("문구 — 화면 문구에 얼린 상관", "frontend/src/views/MacroView.jsx",
+     lambda s: s.replace("'올랐는데 거래는 평상시보다 적다.'",
+                         "'순위상관이 0.352 밖에 안 된다.'", 1),
+     "얼린 값"),
+    ("문구 — note 에 얼린 건수", "backend/app/routers/supply.py",
+     lambda s: s.replace("적정 공급량은 가구", "미분양 14,509호. 적정 공급량은 가구", 1), "얼린 값"),
+    # **걸리지 말아야 할 때** — 템플릿에서 계산해 넣는 값은 얼린 것이 아니다.
+    ("문구 — 계산해 넣는 값은 둔다(통과해야 함)", "frontend/src/views/MacroView.jsx",
+     lambda s: s.replace("'올랐는데 거래는 평상시보다 적다.'",
+                         "`순위상관 ${fmt(0.352, 3)} 이다.`", 1),
+     None),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
     ("조사 — 받침에 안 맞는 조사", "docs/performance.md",
