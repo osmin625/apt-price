@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..clients.molit import DISTRICTS
 from ..models import RebStat
 from .policy import COVERS_FROM, POLICY
 
@@ -308,9 +309,10 @@ def history(db: Session, step: int = 6) -> dict:
                       if _fwd12(price, yms, i) is not None else None),
         })
     return {"step_months": step, "rows": rows,
+            # 표본 길이를 문구에 얼리지 않는다('스무 해') — 해마다 하나씩 는다.
             "note": ("그때의 요인 상태와 그 뒤 12개월 가격 변화를 나란히 둔 것입니다. "
                      "요인이 가격을 움직였다는 뜻이 아닙니다 — 요인들은 서로 얽혀 "
-                     "있고 표본은 스무 해뿐입니다.")}
+                     f"있고 표본은 {len(yms) // 12}년치뿐입니다.")}
 
 
 def similar_months(db: Session, top: int = 12) -> dict:
@@ -444,7 +446,7 @@ def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
             "group": g, "kind": "policy", "dir": "none", "label": "방향을 내지 않음",
             "latest": latest,
             "aftermath": [a for a in policy_summary(policy) if a["kind"] in want],
-            "why": ("사건이 열몇 개뿐이고 내생적입니다 — 오르니까 규제가 나옵니다. "
+            "why": ("사건이 적고 내생적입니다 — 오르니까 규제가 나옵니다. "
                     "방향 대신 최근 조치와 그 뒤 실제 변화를 적습니다."),
         })
     return out
@@ -457,9 +459,14 @@ def overview(db: Session) -> dict:
     yms = sorted(price)
     last = yms[-1]
     yoy = ((price[last] / price[yms[-13]] - 1) * 100) if len(yms) > 13 else None
+    # 가장 센 상관을 **그 자리에서** 잰다. 문구에 '0.42' 를 적어 두었더니 화면의
+    # 다른 곳은 0.45 라고 하고 있었다 — 데이터가 바뀌면 문구가 먼저 틀린다.
+    rs = [abs(f["measured"]["r"]) for f in factors if f["measured"]["r"] is not None]
+    max_r = round(max(rs), 2) if rs else None
     return {
+        "max_abs_r": max_r,
         "price": {
-            "region": "경기 남부 17개 시군구",
+            "region": f"경기 남부 {len(DISTRICTS)}개 시군구",
             "ym": last,
             "index": round(price[last], 2),
             "yoy": round(yoy, 2) if yoy is not None else None,
@@ -473,8 +480,9 @@ def overview(db: Session) -> dict:
         "policy_aftermath": policy_summary(policy),
         "history": history(db),
         "similar": similar_months(db),
-        "note": ("요인마다 가격과의 상관을 재서 방향을 정합니다. 가장 센 것도 "
-                 "0.42 라 어느 요인도 혼자서는 가격을 설명하지 못합니다. "
-                 "가격은 경기 남부 17개 구지만 미분양·심리는 경기 전체, "
+        "note": ("요인마다 가격과의 상관을 재서 방향을 정합니다. "
+                 + (f"가장 센 것도 {max_r:.2f} 라 " if max_r is not None else "")
+                 + "어느 요인도 혼자서는 가격을 설명하지 못합니다. "
+                 "가격은 경기 남부 구들의 평균이지만 미분양·심리는 경기 전체, "
                  "통화량·금리는 전국 값입니다."),
     }

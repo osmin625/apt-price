@@ -23,6 +23,9 @@
 다섯 중 **'문서에 얼린 수치' 만 기계로 못 잡는다.** 그건 `scripts/model_status.py` 와
 규칙으로 간다 — 지금 값은 문서에 쓰지 않는다.
 
+**화면 문구에 얼린 수치는 잡는다**(`check_frozen_numbers`). 문서와 달리 화면 문구는
+모양이 좁다 — 그때 잰 상관(0.352)이나 그때 센 건수(14,509호)다.
+
 ## 무엇을 하지 않나
 
 - **죽은 코드를 지우지 않는다.** 보고만 한다. `services/aspect.py` 는 쓰이지 않지만
@@ -422,6 +425,82 @@ def check_markdown(r: Result) -> None:
     print(f"  파일 {files}개 검사 · 마크다운 섞인 문구 {hits}개")
 
 
+# 화면 문구에 **그때 잰 값**이 얼어 있나. 이 모양이면 데이터가 바뀌는 순간 문구만
+# 그날에 멈춘다. 숫자가 꼭 필요하면 응답에서 그 자리에서 계산해 넣는다.
+#
+#   0.352 · +0.693     상관·비율처럼 소수 둘째 자리 이상
+#   14,509호 · 1,137건  천 단위 쉼표가 붙은 건수
+#   실측 1.1616         '실측' 바로 뒤의 숫자
+#
+# 잡지 못하는 것: 숫자 없이 '과천이 여기다' 처럼 지금 상태를 말하는 문장. 그건
+# 사람이 쓸 때 지킨다(CLAUDE.md '추정을 사실처럼 보여 주지 않는다' 옆의 규칙).
+FROZEN_RE = re.compile(
+    r"(?<![\d.\w])[+\-−]?0\.\d{2,}"
+    r"|\d{1,3}(?:,\d{3})+\s*(?:호|건|곳)"
+    r"|실측\s*[\d.]+"
+)
+# 사용자 문구가 담기는 백엔드 키
+USER_TEXT_KEYS = ("note", "joint_note", "reason", "read", "what", "why", "caveat", "hint")
+# 일부러 둔 것. **이유를 적어야 통과한다**(DEAD_OK 와 같은 생각). 키는 '파일:값'.
+FROZEN_OK: dict[str, str] = {}
+
+
+def _jsx_text(src: str) -> list[tuple[int, str]]:
+    """주석과 `{...}` 식을 걷어 낸 줄. 템플릿 리터럴의 `${...}` 도 걷는다 —
+    그 자리는 데이터에서 계산되는 값이라 얼린 것이 아니다."""
+    src = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), src, flags=re.S)
+    src = re.sub(r"(^|[^:'\"`])//[^\n]*", r"\1", src)
+    out = []
+    for i, line in enumerate(src.split("\n"), 1):
+        line = re.sub(r"\$\{[^}]*\}", "", line)
+        line = re.sub(r"\{[^{}]*\}", "", line)
+        if re.search(r"[가-힣]", line):
+            out.append((i, line))
+    return out
+
+
+def check_frozen_numbers(r: Result) -> None:
+    """화면 문구(백엔드 note·read 등, 프론트 JSX)에 그때 잰 값이 얼어 있나.
+
+    한 번 손으로 훑었더니 열 곳이 넘었다. 화면 머리말은 '가장 센 상관 0.45' 라고
+    하는데 같은 탭의 백엔드 note 는 0.42 라고 하고 있었다 — 둘 다 그날 잰 값을
+    적어 둔 것이고, 하나만 고쳐졌다.
+    """
+    header("문구 — 화면 문구에 그때 잰 값이 얼어 있나")
+    import ast
+
+    hits = 0
+
+    def hit(where: str, text: str) -> None:
+        nonlocal hits
+        for m in FROZEN_RE.finditer(text):
+            if f"{where.split(':')[0]}:{m.group(0)}" in FROZEN_OK:
+                continue
+            hits += 1
+            r.bad(f"{where} — 화면 문구에 얼린 값 '{m.group(0)}'. 데이터가 바뀌면 "
+                  f"문구만 그날에 멈춥니다 — 빼거나 응답에서 계산해 넣으세요")
+
+    for p in sorted((BACKEND / "app").rglob("*.py")):
+        if "__pycache__" in str(p):
+            continue
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for k, v in zip(node.keys, node.values):
+                    if isinstance(k, ast.Constant) and k.value in USER_TEXT_KEYS:
+                        text = _str_of(v)
+                        if text:
+                            hit(f"{p.relative_to(ROOT).as_posix()}:{getattr(v, 'lineno', '?')}", text)
+
+    for p in sorted(FRONT.rglob("*.jsx")):
+        for i, line in _jsx_text(p.read_text(encoding="utf-8")):
+            hit(f"{p.relative_to(ROOT).as_posix()}:{i}", line)
+    print(f"  얼린 값 {hits}개")
+
+
 def _str_of(node) -> str:
     """상수 문자열과 이어 붙인 리터럴만 본다. f-string·변수는 건너뛴다."""
     import ast
@@ -607,6 +686,7 @@ def main() -> int:
     check_endpoints(r)
     check_dead_components(r)
     check_markdown(r)
+    check_frozen_numbers(r)
     check_css(r)
     check_data(r)
     if args.no_model:
