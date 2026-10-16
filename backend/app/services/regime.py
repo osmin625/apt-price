@@ -8,6 +8,10 @@
     주택 소비심리   0m +0.42 ·  6m -0.03 · 12m -0.34 · 18m -0.51
     거래량 전년비   0m +0.25 ·  6m +0.32 · 12m +0.26 · 18m -0.02
     미분양 전년비   0m -0.31 ·  6m -0.12 · 12m -0.00 · 18m -0.06
+
+(처음 잰 표다. 2026-10-16 건수 계열을 로그 변화율로 바꾼 뒤에는 미분양 0m −0.49,
+준공 −0.36, 거래량 +0.50 — 부호와 판정은 같고 세기만 바뀌었다. docs/analysis/macro.md.
+지금 값은 화면과 `scripts/model_status.py` 가 그 자리에서 잰다.)
     대출금리 전년차  0m -0.27 ·  6m -0.31 · 12m -0.30 · 18m -0.16
     가계대출 전년비  0m +0.29 ·  6m +0.04 · 12m -0.13 · 18m -0.20
     M2 전년비      0m -0.07 ·  6m -0.17 · 12m -0.34 · 18m -0.44
@@ -68,18 +72,21 @@ class Factor:
     metric: str
     sgg_cd: str
     region: str
-    transform: str  # level | yoy | diff12 | roll12_yoy
+    transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log
     unit: str
     up_means: str   # 이 값이 커지면 어떤 뜻인가(화면 설명)
 
 
 # 지역·변환을 한 곳에 모은다. 화면과 측정이 **같은 정의**를 봐야 한다.
 FACTORS: tuple[Factor, ...] = (
-    Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll12_yoy", "%",
+    # 건수 계열(준공·미분양·거래량)은 로그 변화율이다(`_log12`). 전년비(%)는 1년 전
+    # 값이 작으면 수천 %로 터져 그림과 상관을 그 몇 달이 덮었다. 단위는 비운다 —
+    # 로그 변화율은 %가 아니다. 읽는 법은 `TRANSFORM_LABEL` 이 화면에 붙인다.
+    Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll12_log", "",
            "새 아파트가 더 많이 입주했다"),
-    Factor("unsold", "공급", "미분양", "unsold", "41", "경기", "yoy", "%",
+    Factor("unsold", "공급", "미분양", "unsold", "41", "경기", "log12", "",
            "안 팔린 집이 늘었다"),
-    Factor("trade", "수요", "거래량", "trade_volume", "", "경기 남부", "roll12_yoy", "%",
+    Factor("trade", "수요", "거래량", "trade_volume", "", "경기 남부", "roll12_log", "",
            "사려는 사람이 늘었다"),
     Factor("sentiment", "수요", "주택시장 소비심리", "sentiment", "41", "경기", "level", "지수",
            "사겠다는 쪽이 늘었다(100 이 중립)"),
@@ -131,6 +138,23 @@ def _yoy(s: dict[str, float]) -> dict[str, float]:
             for i in range(12, len(ks)) if s[ks[i - 12]]}
 
 
+def _log12(s: dict[str, float]) -> dict[str, float]:
+    """1년 전 대비 **로그 변화율**(×100). 두 배면 +69, 절반이면 −69.
+
+    건수 계열(미분양·준공·거래량)에 쓴다. 전년비(%)는 1년 전 값이 작으면 터진다 —
+    경기 미분양이 819호에서 20,691호가 되자 +2,426% 가 나왔다. 그 몇 달이 그림을
+    덮어 나머지가 0 근처에 납작해지고, 상관도 그 몇 점에 끌려 **실제보다 약하게**
+    나왔다(미분양 0개월 −0.31, 같은 비율을 로그로 재면 −0.50).
+
+    로그는 전년비와 **순서가 같다**(같은 비율 x/y 를 다른 눈금으로 잴 뿐). 그래서 자기
+    역사 백분위·과거 국면·비슷했던 달은 바뀌지 않고 상관의 크기와 그림만 바뀐다.
+    0 이하가 낀 달은 로그를 낼 수 없어 뺀다(전년비도 1년 전 0 은 뺐다).
+    """
+    ks = sorted(s)
+    return {ks[i]: math.log(s[ks[i]] / s[ks[i - 12]]) * 100
+            for i in range(12, len(ks)) if s[ks[i - 12]] > 0 and s[ks[i]] > 0}
+
+
 def _diff12(s: dict[str, float]) -> dict[str, float]:
     ks = sorted(s)
     return {ks[i]: s[ks[i]] - s[ks[i - 12]] for i in range(12, len(ks))}
@@ -146,6 +170,10 @@ def series_of(db: Session, f: Factor) -> dict[str, float]:
         return _diff12(raw)
     if f.transform == "roll12_yoy":
         return _yoy(_roll12(raw))
+    if f.transform == "log12":
+        return _log12(raw)
+    if f.transform == "roll12_log":
+        return _log12(_roll12(raw))
     raise ValueError(f"모르는 변환: {f.transform}")
 
 
@@ -285,6 +313,10 @@ TRANSFORM_LABEL = {
     "yoy": "1년 전 대비 증감률",
     "diff12": "1년 전과의 차이",
     "roll12_yoy": "12개월 합의 1년 전 대비 증감률",
+    # 로그 변화율은 낯선 눈금이라 읽는 법을 이름에 붙인다. 69 는 ln 2 × 100 — 잰 값이
+    # 아니라 정의라서 데이터가 바뀌어도 틀리지 않는다.
+    "log12": "1년 전 대비 로그 변화율(두 배면 +69)",
+    "roll12_log": "12개월 합의 1년 전 대비 로그 변화율(두 배면 +69)",
 }
 
 
