@@ -192,15 +192,16 @@ export default function RegimeView() {
         ) : (
           <p className="empty">{data.similar.note}</p>
         )}
-        <div className="macro-grid">
-          <PanelCard
-            title="과거 국면 표"
-            sub={`${data.history.step_months}개월마다 · ${data.history.rows.length}행`}
-            onOpen={() => setOpen({ kind: 'history' })}
-          >
-            <HistoryMini rows={data.history.rows} />
-          </PanelCard>
-        </div>
+        {/* 표를 **바로 펼쳐 둔다.** 예전에는 '그 뒤 12개월' 막대만 있는 카드였고 눌러야
+            표가 떴다 — 이 섹션이 답하는 것은 '그때 요인들이 어땠나' 인데 그것이 창 안에만
+            있었다. */}
+        <h3 className="mt16">
+          과거 국면 표{' '}
+          <span className="muted small">
+            {data.history.step_months}개월마다 · {data.history.rows.length}행
+          </span>
+        </h3>
+        <HistoryTable h={data.history} factors={data.factors} />
       </section>
 
       {/* 요인 창 — 주제 창으로 띄운다. 전세가율·거래량·미분양·준공은 가격 분석·공급
@@ -212,11 +213,6 @@ export default function RegimeView() {
       {open?.kind === 'group' && (
         <Modal title={`${open.g.group} — 어떻게 정했나`} onClose={() => setOpen(null)} wide>
           <GroupDetail g={open.g} />
-        </Modal>
-      )}
-      {open?.kind === 'history' && (
-        <Modal title="과거 국면 표" onClose={() => setOpen(null)} wide>
-          <HistoryTable h={data.history} factors={data.factors} />
         </Modal>
       )}
     </>
@@ -391,32 +387,6 @@ function PolicyList({ rows }) {
 const kindTone = (k) => (k.endsWith('강화') ? 'tight' : k === '공급확대' ? 'supply' : 'loose')
 
 /** 축소판: 가격이 오른 구간과 내린 구간만 색으로. */
-function HistoryMini({ rows }) {
-  const list = rows.filter((r) => r.fwd12 != null)
-  if (!list.length) return <p className="empty">값이 없습니다</p>
-  const span = Math.max(...list.map((r) => Math.abs(r.fwd12))) * 1.1 || 1
-  return (
-    <div className="pbar">
-      {list.map((r) => {
-        const pos = r.fwd12 >= 0
-        const w = (Math.abs(r.fwd12) / span) * 50
-        return (
-          <div className="pbar-row" key={r.ym}>
-            <div className="pbar-label">{r.ym.slice(2, 4)}.{r.ym.slice(4)}</div>
-            <div className="pbar-track">
-              <div className="pbar-zero" />
-              <div
-                className={`pbar-fill ${pos ? 'pos' : 'neg'}`}
-                style={{ left: `${pos ? 50 : 50 - w}%`, width: `${w}%` }}
-              />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function HistoryTable({ h, factors }) {
   const tip = useTooltip()
   const keys = factors.map((f) => f.key)
@@ -424,6 +394,12 @@ function HistoryTable({ h, factors }) {
   return (
     <>
       <p className="sub">{h.note}</p>
+      <HeatLegend lo="역대 최저" hi="역대 최고">
+        칸 색은 자기 역사에서의 위치(백분위)이고, 글자는{' '}
+        {(h.levels || []).map((l) =>
+          `${l.label}${l.max != null ? ` ≤${Math.round(l.max * 100)}%` : l.min != null ? ` ≥${Math.round(l.min * 100)}%` : ''}`,
+        ).join(' · ')}
+      </HeatLegend>
       <div className="table-wrap">
         <table className="rg-hist">
           <thead>
@@ -444,9 +420,20 @@ function HistoryTable({ h, factors }) {
                   return (
                     <td key={k}>
                       {c ? (
+                        // 색은 백분위 그대로(연속), 글자는 다섯 단계. 끊는 것은 읽기 위한
+                        // 글자뿐이다 — 색까지 끊으면 71% 와 99% 가 같은 칸이 된다.
                         <span
-                          className={`rg-state is-${stateTone(c.state)}`}
-                          onMouseMove={(e) => tip.show(e, <div className="t-row">{c.v}</div>)}
+                          className="rg-state"
+                          style={heatVars(c.pct)}
+                          onMouseMove={(e) =>
+                            tip.show(e, (
+                              <>
+                                <div className="t-title">{labels[k]} · {ymText(r.ym)}</div>
+                                <div className="t-row">값 {c.v}</div>
+                                <div className="t-row">자기 역사 {Math.round(c.pct * 100)}% 지점</div>
+                              </>
+                            ))
+                          }
                           onMouseLeave={tip.hide}
                         >
                           {c.state}
@@ -470,4 +457,3 @@ function HistoryTable({ h, factors }) {
   )
 }
 
-const stateTone = (s) => (s === '높음' ? 'hi' : s === '낮음' ? 'lo' : 'mid')
