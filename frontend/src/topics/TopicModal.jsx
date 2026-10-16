@@ -140,10 +140,8 @@ function FactorSection({ topic, onLabel }) {
     if (f) onLabel(f.label)
   }, [f])
 
-  // 위아래 그림이 같은 달을 짚는다. 위에서 어떤 달을 가리키면 아래는 그 달부터의 1년이다.
-  const [ym, setYm] = useState(null)
-  // 두 그림의 x 축은 **요인의 기간**으로 맞춘다. 가격은 더 길게(2003~) 있지만, 위에
-  // 없는 해를 아래에만 그리면 같은 자리가 같은 달이 아니게 된다.
+  // x 축은 **요인의 기간**으로 자른다. 가격은 더 길게(2003~) 있지만, 요인이 없는 해까지
+  // 그리면 견줄 것이 없는 구간이 그림의 절반을 차지한다.
   const months = f ? f.series.map((p) => p.ym) : null
   const price = data?.price
 
@@ -159,42 +157,39 @@ function FactorSection({ topic, onLabel }) {
               같은 데이터를 다르게 그린 것처럼 보인다. 숫자는 넣지 않는다 — 모든 요인이
               같은 문장을 쓴다. */}
           <p className="sub">
-            위는 <b>{f.label}</b>({f.region}) — {f.transform_label}입니다. 아래는 그 달부터
-            12개월 동안 <b>{price.region}</b> 매매가격지수가 몇 % 변했는지입니다. 두 그림은
-            같은 달을 같은 자리에 둡니다 — 위에서 한 달을 짚으면 아래는 그 뒤 1년의 결과입니다.
-            아래 그림의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
+            {/* 이름 뒤에 조사를 붙이지 않는다 — 요인마다 받침이 달라('소비심리과') 틀린다. */}
+            선 둘을 겹쳤습니다. <b>왼쪽 축</b> — {f.label}({f.region}), {f.transform_label}.{' '}
+            <b>오른쪽 축</b> — 그 달부터 12개월 동안 {price.region} 매매가격지수 변화(%). 한 달을
+            짚으면 그 달의 값과 그 뒤 1년의 결과가 같이 나옵니다. 단위가 달라 축을 둘로 두었으니
+            두 선의 높이를 서로 견주지 말고 <b>같이 오르내리는지</b>를 보세요.
+            {f.transform !== 'level' && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
+            가격 선의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
           </p>
+          {/* 한 그림에 겹친다. 위아래 두 장으로 나눴더니 같은 달을 눈으로 오가야 해서
+              '같이 움직였나' 가 한 번에 안 보였다(ui-log). 단위가 요인마다 달라(%·%p·
+              지수) 축은 둘이다. 가격 값은 백엔드가 상관을 잴 때 쓴 그 `_fwd12` 다 —
+              그림과 표가 다른 계산을 하지 않는다. */}
           <TimeLines
-            series={[{ key: f.key, label: f.label, color: 'var(--series-1)',
-                       points: f.series.map((p) => ({ ym: p.ym, value: p.v })) }]}
+            series={[
+              { key: f.key, label: f.label, color: 'var(--series-1)',
+                points: f.series.map((p) => ({ ym: p.ym, value: p.v })) },
+              { key: 'fwd12', label: '그 뒤 12개월 가격 변화', color: 'var(--series-2)', axis: 'right',
+                points: (price.fwd12 || []).map((p) => ({ ym: p.ym, value: p.v })) },
+            ]}
             unit={f.unit}
             // 금리 차(%p)는 0.25 단위로 움직여 소수 둘째 자리까지 봐야 한다.
             decimals={f.unit === '%p' ? 2 : 1}
             // 증감률·차이는 0 이 기준이다. 수준값(심리지수·전세가율)은 0 을 넣으면
-            // 선이 위쪽에 납작하게 붙는다.
+            // 선이 위쪽에 납작하게 붙는다. 그때는 0 선도 맞추지 않는다.
             zero={f.transform !== 'level'}
             // 심리지수는 100 이 '사겠다 = 팔겠다' 인 중립선이다(up_means 참조).
             refLine={f.key === 'sentiment' ? 100 : null}
-            height={190}
+            rightUnit="%"
+            rightDecimals={1}
+            rightZero
+            height={260}
             months={months}
-            hoverYm={ym}
-            onHoverYm={setYm}
-            ariaLabel={`${f.label} 추이 (${f.region})`}
-          />
-          {/* 단위가 요인마다 달라(%·%p·지수) 한 축에 겹치면 크기 비교가 거짓이 된다.
-              그래서 축을 따로 두고 시간만 맞춘다. 값은 백엔드가 상관을 잴 때 쓴 그
-              `_fwd12` 를 받는다 — 그림과 표가 다른 계산을 하지 않는다. */}
-          <TimeLines
-            series={[{ key: 'fwd12', label: '그 뒤 12개월 가격 변화', color: 'var(--series-2)',
-                       points: (price.fwd12 || []).map((p) => ({ ym: p.ym, value: p.v })) }]}
-            unit="%"
-            decimals={1}
-            zero
-            height={160}
-            months={months}
-            hoverYm={ym}
-            onHoverYm={setYm}
-            ariaLabel={`그 뒤 12개월 ${price.region} 매매가격 변화`}
+            ariaLabel={`${f.label}(${f.region})과 그 뒤 12개월 ${price.region} 매매가격 변화`}
           />
           <FactorDetail f={f} />
         </>
