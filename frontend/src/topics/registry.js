@@ -30,6 +30,24 @@ export const TOPICS = [
   { id: 'pipeline', title: '공급 파이프라인 — 인허가 · 착공 · 준공', supply: 'pipeline', factor: 'done' },
 ]
 
+/**
+ * 주제 창의 '시군구별 추이' 절에 쓰는 지표. 주제에 가격 분석 지표가 없으면(파이프라인·
+ * 미분양·금리 같은 요인) **매매가격지수**를 보여 준다 — 이 창의 '그 뒤 가격과의 관계'
+ * 가 견주는 가격이 그것이라, 같은 창에서 시군구마다 어떻게 갔는지까지 이어 볼 수 있다.
+ */
+export const PRICE_METRIC = 'sale_index'
+
+/**
+ * **데이터 하나에 카드 하나.** 이 주제의 카드가 어느 탭에 있나. 공급·가격 분석에 원천이
+ * 있으면 그쪽이 카드의 집이고, 거시 분석은 같은 데이터를 카드로 한 번 더 그리지 않고
+ * 위치만 한 줄로 보여 준다. 집이 없는(거시에만 있는) 요인은 null.
+ */
+export function homeOf(topic) {
+  if (topic?.supply) return '공급 분석'
+  if (topic?.metric) return '가격 분석'
+  return null
+}
+
 /** (원천, 키) → 주제. `extra` 는 그 창의 초기값(기간 · 지역)이다. */
 export function topicFor(kind, key, extra = {}) {
   const { title, ...init } = extra
