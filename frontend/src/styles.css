@@ -950,8 +950,24 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-dir.is-up { color: var(--good); }
 .rg-dir.is-down { color: var(--neg); }
 .rg-dir.is-none { color: var(--text-muted); }
-/* 합산 모델의 요인·방향 표. 요인 이름만 접히고 나머지 칸은 한 줄로 둔다. */
-.rg-used td:not(:first-child) { white-space: nowrap; }
+/* 합산 모델의 줄다리기 — 양쪽 힘의 비율 막대와 양쪽 요인 목록. 색은 방향 화살표(.rg-dir)와 같다. */
+.rg-verdict { margin: 4px 0 8px; }
+.rg-tug { display: flex; height: 26px; border-radius: var(--radius); overflow: hidden; font-size: 12px; font-weight: 600; }
+/* 폭은 flex-grow 비율로 — 한쪽이 아주 작아도 글자가 잘리지 않게 글자 폭만큼은 남긴다. */
+.rg-tug-side { display: flex; align-items: center; white-space: nowrap; padding: 0 8px; flex: 0 1 0; min-width: max-content; }
+.rg-tug-side.is-down { background: color-mix(in srgb, var(--neg) 18%, transparent); color: var(--neg); }
+.rg-tug-side.is-up { justify-content: flex-end; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.rg-tug-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 8px; }
+.rg-tug-col h4 { margin: 0 0 6px; font-size: 13.5px; }
+.rg-tug-col.is-up h4 { color: var(--good); }
+.rg-tug-col.is-down h4 { color: var(--neg); }
+.rg-tug-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rg-tug-col li { padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-1); }
+.rg-tug-name { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.rg-dots { flex: none; letter-spacing: 1px; font-size: 11px; }
+.rg-tug-col.is-up .rg-dots { color: var(--good); }
+.rg-tug-col.is-down .rg-dots { color: var(--neg); }
+@media (max-width: 640px) { .rg-tug-cols { grid-template-columns: 1fr; } }
 .rg-name { font-weight: 600; }
 .rg-label { color: var(--text-secondary); }
 .rg-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

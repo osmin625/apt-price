@@ -589,11 +589,48 @@ def _score_model(train: list[dict]) -> dict:
     ms, my = sum(sc) / n, sum(ys) / n
     var = sum((v - ms) ** 2 for v in sc)
     b = sum((v - ms) * (y - my) for v, y in zip(sc, ys)) / var if var else 0.0
-    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs, "mu": mu}
+    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs, "mu": mu, "sd": sd}
 
 
 def _predict(m: dict, x: list[float]) -> float:
     return m["my"] + m["b"] * (sum(m["parts"](x).values()) - m["ms"])
+
+
+# 평소에서 얼마나 벗어났나(|z|). 칸을 셋만 둔다 — 그 이상 잘게 나누면 다시 몫처럼 읽힌다.
+STRENGTH = ((1.5, 3, "크게"), (0.5, 2, "꽤"), (0.0, 1, "조금"))
+
+
+def _plain(f: Factor, z: float, x: float, r: float) -> dict:
+    """요인 하나를 **말로** — 지금 어떤가, 과거에 그런 때 그 뒤 가격은 어땠나.
+
+    처음에는 '과거 관계: 반대로 · 지금: 평균 아래 · 방향: 올림' 처럼 칸을 나눠 적었다.
+    맞는 말이지만 방향을 읽는 사람이 머릿속에서 곱해야 했다. 그래서 두 문장으로 푼다 —
+    "평소보다 크게 줄었다" · "빨리 늘수록 그 뒤 가격은 내렸다". 둘을 이으면 화살표가 나온다.
+
+    요인마다 %p 몫은 내지 않는다. 몫은 점수를 산술로 쪼갠 것인데 '기준금리 때문에 +1.2%p'
+    처럼 원인으로 읽혔다. 요인은 얽혀 함께 움직이고(기준금리–대출금리 0.78), 요인마다 계수를
+    따로 맞추면 앞뒤 시기에 아홉 중 넷의 부호가 뒤집혔다 — 몫을 나눌 근거가 없다.
+    세기는 몫이 아니라 '그 요인이 지금 평소에서 얼마나 벗어났나' 다. 요인 자신에 대한 사실이다.
+
+    변환마다 말이 다르다. 수준(심리·전세가율)은 높다/낮다, 증감(건수·통화량)은 늘었다/줄었다,
+    금리의 1년 차이는 올랐다/내렸다. 평균이 +라면 평균 아래라도 '줄었다' 가 아니라 '덜 늘었다'
+    일 수 있어 값의 부호까지 본다.
+    """
+    deg, level = next((lv, w) for t, lv, w in STRENGTH if abs(z) >= t)
+    if f.transform == "level":
+        now = f"평소보다 {level} {'높다' if z > 0 else '낮다'}"
+        high = "높을"
+    else:
+        rate = f.transform == "diff12"
+        up, down = ("올랐다", "내렸다") if rate else ("늘었다", "줄었다")
+        if z > 0:
+            verb = f"{'많이' if rate else '빨리'} {up}" if x > 0 else f"덜 {down}"
+        else:
+            verb = f"덜 {up}" if x > 0 else down
+        now = f"평소보다 {level} {verb}"
+        high = "많이 오를" if rate else "빨리 늘"
+    rule = f"{high}수록 그 뒤 가격{'도 올랐다' if r > 0 else '은 내렸다'}"
+    return {"strength": deg, "now_text": now, "rule_text": rule}
 
 
 def macro_model(db: Session) -> dict:
@@ -676,6 +713,15 @@ def macro_model(db: Session) -> dict:
     lo = errs[int(len(errs) * 0.1)]
     hi = errs[int(len(errs) * 0.9) - 1]
     keys = [f for f, _ in cols]
+    used = []
+    for j in sorted(parts):
+        z = (now["x"][j] - m["mu"][j]) / m["sd"][j]
+        # 미는 힘 = 방향 × 세기. 점수는 이것의 평균이고 예상은 그 점수에 놓은 직선이다.
+        push = (1 if m["b"] >= 0 else -1) * (1 if m["rs"][j] > 0 else -1) * z
+        used.append({"key": keys[j].key, "label": keys[j].label, "region": keys[j].region,
+                     "r": round(m["rs"][j], 3), "z": round(z, 2), "push": round(push, 2),
+                     "dir": "up" if push > 0 else "down" if push < 0 else "none",
+                     **_plain(keys[j], z, now["x"][j], m["rs"][j])})
     return {
         "available": True,
         "now": now["ym"],
@@ -683,24 +729,20 @@ def macro_model(db: Session) -> dict:
         # 과거 예측이 실제보다 높게 나간 만큼을 빼고 낮게 나간 만큼을 더한 범위(10~90%).
         "band": [round(yhat - hi, 2), round(yhat - lo, 2)],
         "base": round(m["my"], 2),
-        # 쓰인 요인과 **방향만** 낸다. 예전에는 점수를 요인별로 쪼갠 %p(기여)를 막대로 냈다.
-        # 그 쪼갬은 산술일 뿐인데 '기준금리 때문에 +1.2%p' 처럼 원인으로 읽혔다. 요인은
-        # 서로 얽혀 함께 움직이고(기준금리–대출금리 0.78), 요인마다 계수를 따로 맞추면 앞뒤
-        # 시기에 아홉 중 넷의 부호가 뒤집혔다 — 몫을 나눌 근거가 없다. 방향(과거 상관의 부호
-        # × 지금 평균 위/아래)은 점수가 실제로 쓰는 정보 그대로라 지어낸 것이 없다.
-        # 순서도 크기순이 아니라 `FACTORS` 순서다 — 크기순이면 다시 몫처럼 읽힌다.
-        "used": [{"key": keys[j].key, "label": keys[j].label, "region": keys[j].region,
-                  "r": round(m["rs"][j], 3), "above": now["x"][j] > m["mu"][j],
-                  "dir": "up" if m["b"] * parts[j] > 0 else "down" if m["b"] * parts[j] < 0 else "none"}
-                 for j in sorted(parts)],
+        # 요인마다 %p 몫은 내지 않는다(`_plain` 주석). 대신 줄다리기로 보여 준다 — 어느 쪽으로
+        # 미는지(방향)와 지금 평소에서 얼마나 벗어나 있는지(세기). 점수가 실제로 쓰는 정보가
+        # 이 둘뿐이라 지어낸 것이 없다.
+        "used": sorted(used, key=lambda u: -abs(u["push"])),
+        "pull": {"up": round(sum(u["push"] for u in used if u["push"] > 0), 2),
+                 "down": round(-sum(u["push"] for u in used if u["push"] < 0), 2)},
         "excluded": [keys[j].label for j in range(len(keys)) if j not in m["use"]],
         "backtest": back,
         "table": table,
         "train_n": len(known(now) or lab),
         "min_train": MODEL_MIN_TRAIN,
-        "note": ("요인마다 과거 상관의 부호와 지금 위치(z 점수)를 곱해 평균한 점수 하나에 직선 하나를 "
-                 "맞췄습니다. 계수가 하나뿐이라 과거에 덜 맞추는 대신 우연에도 덜 휘둘립니다. "
-                 "아래 성적은 매달 그때 알려진 자료로만 다시 맞춰 다음 1년을 예측해 본 결과입니다."),
+        "note": ("계산은 단순합니다 — 요인마다 미는 방향과 세기를 평균해 점수 하나로 만들고, "
+                 "과거에 그 점수가 높던 때 그 뒤 가격이 얼마나 더 올랐는지로 옮깁니다. 단순하게 "
+                 "묶은 만큼 과거에 덜 맞추는 대신 우연에도 덜 휘둘립니다."),
     }
 
 

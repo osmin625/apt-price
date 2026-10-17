@@ -226,8 +226,6 @@ const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
 const ARROW = { up: '▲', down: '▼', none: '–' }
 const DIRWORD = { up: '상승 압력', down: '하락 압력', none: '방향 없음' }
-// 합산 모델 표는 휴대폰 폭에서 네 칸이 한 줄에 들어가야 해서 짧게 쓴다('상승 압력' 은 세 줄로 쪼개졌다).
-const USEDWORD = { up: '올림', down: '내림', none: '없음' }
 
 function factorSub(f) {
   const v = `${f.latest.value}${f.unit}`
@@ -462,11 +460,47 @@ function HistoryTable({ h, factors }) {
   )
 }
 
+/** 줄다리기 한쪽의 요인 목록. 센 것부터 — 응답이 이미 세기순이다. */
+function TugList({ dir, title, items }) {
+  return (
+    <div className={`rg-tug-col is-${dir}`}>
+      <h4>{title} <span className="muted small">{items.length}개</span></h4>
+      {items.length === 0 ? (
+        <p className="muted small">없음</p>
+      ) : (
+        <ul>
+          {items.map((u) => (
+            <li key={u.key}>
+              <div className="rg-tug-name">
+                <span>{u.label} <span className="muted small">{u.region}</span></span>
+                <span className="rg-dots" aria-label={`세기 ${u.strength}/3`}>
+                  {'●'.repeat(u.strength)}{'○'.repeat(3 - u.strength)}
+                </span>
+              </div>
+              <div className="small">{u.now_text}</div>
+              <div className="muted small">{u.rule_text}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /**
- * 요인을 합친 모델 — 그 뒤 12개월 가격 변화. **성적표와 같이 보여 준다.**
+ * 요인을 합친 모델 — 그 뒤 12개월 가격 변화. **줄다리기로 보여 주고, 성적표를 같이 둔다.**
  *
- * 지금 값만 띄우면 '모델이 그렇다더라' 가 된다. 매달 그때 알려진 자료로만 다시 맞춰 다음
- * 1년을 예측해 본 결과(백테스트)와, 아무 요인도 안 쓰는 기준(과거 평균)과의 비교를 같은
+ * 예상은 '올리는 쪽 요인들' 과 '내리는 쪽 요인들' 중 어느 쪽이 더 센가에서 나온다. 그래서
+ * 그 모양 그대로 그린다 — 양쪽 힘의 비율 막대 하나, 그 아래 양쪽 요인 목록. 요인마다
+ * 두 문장(지금 어떤가 · 과거에 그런 때 그 뒤 가격은 어땠나)을 이으면 화살표가 나온다.
+ *
+ * 앞의 두 판은 읽기 어려웠다. %p 기여 막대는 원인처럼 읽혔고(요인이 얽혀 몫을 나눌 근거가
+ * 없다), 그것을 뺀 '과거 관계 · 지금 · 방향' 표는 읽는 사람이 머릿속에서 곱해야 했다. 게다가
+ * 방향만 있으면 '내리는 쪽이 여섯인데 왜 평소보다 오르나' 가 설명되지 않았다 — 한 요인이
+ * 평소에서 크게 벗어나 있으면 그것 하나가 나머지를 이긴다. 그래서 세기(●)를 같이 둔다.
+ * 세기는 가격의 몫이 아니라 그 요인이 지금 평소에서 얼마나 벗어났나다.
+ *
+ * 매달 그때 알려진 자료로만 다시 맞춰 예측해 본 결과(백테스트)와 과거 평균과의 비교를 같은
  * 카드에 둔다. 기준을 못 이기는 모델이면 그것도 그대로 보인다. 문구에는 숫자를 박지 않는다.
  */
 function MacroModel({ m, price }) {
@@ -474,63 +508,63 @@ function MacroModel({ m, price }) {
   const best = m.table.find((t) => t.key === 'model')
   const mean = m.table.find((t) => t.key === 'mean')
   const beats = best && mean && best.rmse < mean.rmse
+  const ups = m.used.filter((u) => u.dir === 'up')
+  const downs = m.used.filter((u) => u.dir === 'down')
+  const total = m.pull.up + m.pull.down
+  const upPct = Math.round(total ? (m.pull.up / total) * 100 : 50)
+  const diff = m.pred - m.base
+  const upWins = m.pull.up >= m.pull.down
+  const top = (upWins ? ups : downs)[0]
   return (
     <section className="card">
       <h2>요인을 합치면 — 그 뒤 12개월</h2>
-      <p className="sub">{m.note}</p>
+      <p className="sub">
+        요인들이 가격을 올리는 쪽과 내리는 쪽으로 나뉘어 줄다리기를 합니다. 어느 쪽이 더 센지로
+        그 뒤 12개월을 예상합니다.
+      </p>
       <div className="rg-after">
         <div className="rg-after-cell">
-          <div className="muted small">{ymText(m.now)} 기준 그 뒤 12개월</div>
+          <div className="muted small">{ymText(m.now)} 기준 그 뒤 12개월 예상</div>
           <strong className={m.pred >= 0 ? 'tone-pos' : 'tone-neg'}>{sign(m.pred)}{fmt(m.pred, 1)}%</strong>
           <div className="muted small">
-            과거 오차로 본 범위 {sign(m.band[0])}{fmt(m.band[0], 1)} ~ {sign(m.band[1])}{fmt(m.band[1], 1)}%
+            과거에 빗나간 폭으로 보면 {sign(m.band[0])}{fmt(m.band[0], 1)} ~ {sign(m.band[1])}{fmt(m.band[1], 1)}%
           </div>
         </div>
         <div className="rg-after-cell">
-          <div className="muted small">요인 없이 과거 평균만</div>
+          <div className="muted small">평소(과거 평균)</div>
           <strong>{sign(m.base)}{fmt(m.base, 1)}%</strong>
           <div className="muted small">{price.region} 매매가격지수 기준</div>
         </div>
       </div>
-      <p className="muted small">
-        범위는 지난 예측이 실제와 얼마나 어긋났는지(10~90%)를 지금 값에 그대로 옮긴 것입니다.
-        {beats
-          ? ' 표본 밖 오차가 과거 평균보다 작았지만 차이는 크지 않습니다 — 아래 성적표.'
-          : ' 표본 밖 오차가 과거 평균보다 작지 않았습니다 — 이 값은 참고로만 보세요.'}
-      </p>
 
-      {/* 요인별 몫(%p)은 싣지 않는다. 요인은 얽혀 함께 움직여 몫을 나눌 근거가 없고, 막대로
-          쪼개 두면 '기준금리 때문에 +1.2%p' 처럼 원인으로 읽혔다. 쓰인 요인과 방향만 둔다 —
-          순서도 크기순이 아니라 요인 순서다. */}
-      <h3 className="mt16">어느 요인이 어느 쪽으로</h3>
-      <p className="muted small">
-        과거에 그 뒤 가격과 같이 움직인 요인은 지금 평균보다 높으면 올리는 쪽, 반대로 움직인 요인은
-        낮으면 올리는 쪽입니다. 이것들을 한 점수로 합쳐 위의 예상을 냅니다. 요인끼리 얽혀 함께
-        움직이므로 요인마다 몇 %p 인지로 나누지 않습니다.
-        {m.excluded.length > 0 && ` 상관이 약해 뺀 요인: ${m.excluded.join(', ')}.`}
+      <p className="rg-verdict">
+        {Math.abs(diff) < 0.05
+          ? '올리는 힘과 내리는 힘이 비슷해 평소와 비슷한 쪽입니다.'
+          : `${upWins ? '올리는' : '내리는'} 힘이 더 세서 평소보다 ${fmt(Math.abs(diff), 1)}%p ${diff > 0 ? '더 오르는' : '덜 오르는'} 쪽입니다.`}
+        {top && top.strength === 3 && (
+          <> 가장 센 것은 <b>{top.label}</b> — 지금 평소에서 크게 벗어나 있습니다.</>
+        )}
       </p>
-      <div className="table-wrap">
-        <table className="rg-used">
-          <thead>
-            <tr>
-              <th>요인</th>
-              <th>과거 관계</th>
-              <th>지금</th>
-              <th>방향</th>
-            </tr>
-          </thead>
-          <tbody>
-            {m.used.map((u) => (
-              <tr key={u.key}>
-                <td>{u.label} <span className="muted small">{u.region}</span></td>
-                <td className="muted">{u.r > 0 ? '같이' : '반대로'}</td>
-                <td className="muted">{u.above ? '평균 위' : '평균 아래'}</td>
-                <td><span className={`rg-dir is-${u.dir}`}>{ARROW[u.dir]}</span> {USEDWORD[u.dir]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="rg-tug" role="img" aria-label={`내리는 힘 ${100 - upPct}%, 올리는 힘 ${upPct}%`}>
+        <div className="rg-tug-side is-down" style={{ flexGrow: 100 - upPct }}>▼ 내리는 힘 {100 - upPct}%</div>
+        <div className="rg-tug-side is-up" style={{ flexGrow: upPct }}>▲ 올리는 힘 {upPct}%</div>
       </div>
+      <div className="rg-tug-cols">
+        <TugList dir="up" title="▲ 올리는 쪽" items={ups} />
+        <TugList dir="down" title="▼ 내리는 쪽" items={downs} />
+      </div>
+      <p className="muted small">
+        ●는 그 요인이 지금 평소에서 얼마나 벗어나 있는지(조금 · 꽤 · 크게)입니다. 많이 벗어난
+        요인일수록 세게 당깁니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
+        나누지는 않습니다.
+        {m.excluded.length > 0 && ` 과거 관계가 약해 뺀 요인: ${m.excluded.join(', ')}.`}
+      </p>
+      <p className="muted small">
+        {m.note}
+        {beats
+          ? ' 과거 평균만 쓸 때보다 덜 빗나갔지만 차이는 크지 않습니다 — 아래 성적표.'
+          : ' 과거 평균만 쓸 때보다 덜 빗나가지 않았습니다 — 이 값은 참고로만 보세요.'}
+      </p>
 
       <h3 className="mt16">그때 알려진 것만으로 예측했다면</h3>
       <p className="muted small">
