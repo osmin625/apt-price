@@ -589,13 +589,11 @@ def _score_model(train: list[dict]) -> dict:
     ms, my = sum(sc) / n, sum(ys) / n
     var = sum((v - ms) ** 2 for v in sc)
     b = sum((v - ms) * (y - my) for v, y in zip(sc, ys)) / var if var else 0.0
-    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs}
+    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs, "mu": mu}
 
 
-def _predict(m: dict, x: list[float]) -> tuple[float, dict]:
-    pr = m["parts"](x)
-    contrib = {j: m["b"] * v for j, v in pr.items()}
-    return m["my"] + m["b"] * (sum(pr.values()) - m["ms"]), contrib
+def _predict(m: dict, x: list[float]) -> float:
+    return m["my"] + m["b"] * (sum(m["parts"](x).values()) - m["ms"])
 
 
 def macro_model(db: Session) -> dict:
@@ -642,7 +640,7 @@ def macro_model(db: Session) -> dict:
         if len(train) < MODEL_MIN_TRAIN:
             continue
         m = _score_model(train)
-        yhat, _ = _predict(m, t["x"])
+        yhat = _predict(m, t["x"])
         mean = sum(q["y"] for q in train) / len(train)
         back.append({"ym": t["ym"], "pred": round(yhat, 2), "actual": round(t["y"], 2)})
         preds["model"].append((t["ym"], yhat, t["y"]))
@@ -672,7 +670,8 @@ def macro_model(db: Session) -> dict:
     # 지금 — 결과가 알려진 달 전부로 맞추고 가장 최근 달에 적용한다.
     now = rows[-1]
     m = _score_model(known(now) or lab)
-    yhat, contrib = _predict(m, now["x"])
+    yhat = _predict(m, now["x"])
+    parts = m["parts"](now["x"])
     errs = sorted(p - a for _, p, a in preds["model"])
     lo = errs[int(len(errs) * 0.1)]
     hi = errs[int(len(errs) * 0.9) - 1]
@@ -684,10 +683,16 @@ def macro_model(db: Session) -> dict:
         # 과거 예측이 실제보다 높게 나간 만큼을 빼고 낮게 나간 만큼을 더한 범위(10~90%).
         "band": [round(yhat - hi, 2), round(yhat - lo, 2)],
         "base": round(m["my"], 2),
-        "contrib": sorted(
-            [{"key": keys[j].key, "label": keys[j].label, "pp": round(v, 2),
-              "r": round(m["rs"][j], 3)} for j, v in contrib.items()],
-            key=lambda c: -abs(c["pp"])),
+        # 쓰인 요인과 **방향만** 낸다. 예전에는 점수를 요인별로 쪼갠 %p(기여)를 막대로 냈다.
+        # 그 쪼갬은 산술일 뿐인데 '기준금리 때문에 +1.2%p' 처럼 원인으로 읽혔다. 요인은
+        # 서로 얽혀 함께 움직이고(기준금리–대출금리 0.78), 요인마다 계수를 따로 맞추면 앞뒤
+        # 시기에 아홉 중 넷의 부호가 뒤집혔다 — 몫을 나눌 근거가 없다. 방향(과거 상관의 부호
+        # × 지금 평균 위/아래)은 점수가 실제로 쓰는 정보 그대로라 지어낸 것이 없다.
+        # 순서도 크기순이 아니라 `FACTORS` 순서다 — 크기순이면 다시 몫처럼 읽힌다.
+        "used": [{"key": keys[j].key, "label": keys[j].label, "region": keys[j].region,
+                  "r": round(m["rs"][j], 3), "above": now["x"][j] > m["mu"][j],
+                  "dir": "up" if m["b"] * parts[j] > 0 else "down" if m["b"] * parts[j] < 0 else "none"}
+                 for j in sorted(parts)],
         "excluded": [keys[j].label for j in range(len(keys)) if j not in m["use"]],
         "backtest": back,
         "table": table,
