@@ -226,6 +226,8 @@ const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
 const ARROW = { up: '▲', down: '▼', none: '–' }
 const DIRWORD = { up: '상승 압력', down: '하락 압력', none: '방향 없음' }
+// 합산 모델 표는 휴대폰 폭에서 네 칸이 한 줄에 들어가야 해서 짧게 쓴다('상승 압력' 은 세 줄로 쪼개졌다).
+const USEDWORD = { up: '올림', down: '내림', none: '없음' }
 
 function factorSub(f) {
   const v = `${f.latest.value}${f.unit}`
@@ -471,7 +473,6 @@ function MacroModel({ m, price }) {
   const sign = (v) => (v > 0 ? '+' : '')
   const best = m.table.find((t) => t.key === 'model')
   const mean = m.table.find((t) => t.key === 'mean')
-  const span = Math.max(...m.contrib.map((c) => Math.abs(c.pp)), 0.5) * 1.1
   const beats = best && mean && best.rmse < mean.rmse
   return (
     <section className="card">
@@ -498,28 +499,37 @@ function MacroModel({ m, price }) {
           : ' 표본 밖 오차가 과거 평균보다 작지 않았습니다 — 이 값은 참고로만 보세요.'}
       </p>
 
-      <h3 className="mt16">과거 평균에서 얼마나 밀었나</h3>
+      {/* 요인별 몫(%p)은 싣지 않는다. 요인은 얽혀 함께 움직여 몫을 나눌 근거가 없고, 막대로
+          쪼개 두면 '기준금리 때문에 +1.2%p' 처럼 원인으로 읽혔다. 쓰인 요인과 방향만 둔다 —
+          순서도 크기순이 아니라 요인 순서다. */}
+      <h3 className="mt16">어느 요인이 어느 쪽으로</h3>
       <p className="muted small">
-        출발점은 과거 평균({sign(m.base)}{fmt(m.base, 1)}%)이고, 요인마다 그만큼을 더하거나 뺍니다.
-        더한 값이 위의 예상입니다.
+        과거에 그 뒤 가격과 같이 움직인 요인은 지금 평균보다 높으면 올리는 쪽, 반대로 움직인 요인은
+        낮으면 올리는 쪽입니다. 이것들을 한 점수로 합쳐 위의 예상을 냅니다. 요인끼리 얽혀 함께
+        움직이므로 요인마다 몇 %p 인지로 나누지 않습니다.
         {m.excluded.length > 0 && ` 상관이 약해 뺀 요인: ${m.excluded.join(', ')}.`}
       </p>
-      <div className="pbar is-wide">
-        {m.contrib.map((c) => {
-          const w = (Math.abs(c.pp) / span) * 50
-          const pos = c.pp >= 0
-          return (
-            <div className="pbar-row" key={c.key}>
-              <div className="pbar-label">{c.label}</div>
-              <div className="pbar-track">
-                <div className="pbar-zero" />
-                <div className={`pbar-fill ${pos ? 'pos' : 'neg'}`}
-                     style={{ left: `${pos ? 50 : 50 - w}%`, width: `${w}%` }} />
-              </div>
-              <div className="pbar-value">{sign(c.pp)}{fmt(c.pp, 2)}%p</div>
-            </div>
-          )
-        })}
+      <div className="table-wrap">
+        <table className="rg-used">
+          <thead>
+            <tr>
+              <th>요인</th>
+              <th>과거 관계</th>
+              <th>지금</th>
+              <th>방향</th>
+            </tr>
+          </thead>
+          <tbody>
+            {m.used.map((u) => (
+              <tr key={u.key}>
+                <td>{u.label} <span className="muted small">{u.region}</span></td>
+                <td className="muted">{u.r > 0 ? '같이' : '반대로'}</td>
+                <td className="muted">{u.above ? '평균 위' : '평균 아래'}</td>
+                <td><span className={`rg-dir is-${u.dir}`}>{ARROW[u.dir]}</span> {USEDWORD[u.dir]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <h3 className="mt16">그때 알려진 것만으로 예측했다면</h3>
