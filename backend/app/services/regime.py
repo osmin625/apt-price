@@ -43,6 +43,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_left
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -548,6 +549,156 @@ def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
     return out
 
 
+# ──────────────────────────────────────────────────────────
+# 요인을 합친 모델 — 그 뒤 12개월 가격 변화
+# ──────────────────────────────────────────────────────────
+# 학습 표본이 이보다 적은 시점은 예측하지 않는다(백테스트 시작점). 5년치다.
+MODEL_MIN_TRAIN = 60
+
+
+def _score_model(train: list[dict]) -> dict:
+    """요인 방향 합산 점수 → 그 뒤 12개월. **계수는 하나뿐**이다.
+
+    요인마다 (훈련 표본에서 잰 상관의 부호) × (z 점수)를 내고, |상관| 이 `MIN_R` 이상인
+    요인만 평균해 점수 하나로 만든 뒤, 그 점수에 직선 하나를 맞춘다.
+
+    ## 왜 요인마다 계수를 따로 맞추지 않나 — 재 봤다
+
+    2026-10-18 실 DB 사본으로 시점마다 그때까지 알려진 자료로만 맞추고 다음 1년을 예측해
+    봤다(표본 밖 87개월). 과거 평균만 쓰는 예측의 오차(RMSE)가 11.3 일 때 —
+      능형회귀, λ 를 GCV 로      18.7 (λ 가 작게 골라져 과적합 — 겹치는 창이 표본을 부풀린다)
+      능형회귀, λ 를 시간순 CV 로 14.6
+      백분위를 넣은 능형회귀       11.6
+      **방향 합산 점수**           **10.1** — 앞(2018~21)·뒤(2022~25) 두 시기 모두 평균보다 작았다
+    독립 표본이 해마다 하나 남짓이라, 계수 아홉 개를 따로 맞추면 우연에 맞춘다. 거시 탭의
+    방향 판정(부호 × 지금 위치)과 같은 생각을 점수 하나로 줄인 것만 평균을 이겼다.
+    """
+    p = len(train[0]["x"])
+    n = len(train)
+    ys = [r["y"] for r in train]
+    mu = [sum(r["x"][j] for r in train) / n for j in range(p)]
+    sd = [math.sqrt(sum((r["x"][j] - mu[j]) ** 2 for r in train) / n) or 1.0 for j in range(p)]
+    rs = [_corr([r["x"][j] for r in train], ys) for j in range(p)]
+    use = [j for j in range(p) if abs(rs[j]) >= MIN_R]
+
+    def parts(x):
+        k = max(len(use), 1)
+        return {j: (1 if rs[j] > 0 else -1) * (x[j] - mu[j]) / sd[j] / k for j in use}
+
+    sc = [sum(parts(r["x"]).values()) for r in train]
+    ms, my = sum(sc) / n, sum(ys) / n
+    var = sum((v - ms) ** 2 for v in sc)
+    b = sum((v - ms) * (y - my) for v, y in zip(sc, ys)) / var if var else 0.0
+    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs}
+
+
+def _predict(m: dict, x: list[float]) -> tuple[float, dict]:
+    pr = m["parts"](x)
+    contrib = {j: m["b"] * v for j, v in pr.items()}
+    return m["my"] + m["b"] * (sum(pr.values()) - m["ms"]), contrib
+
+
+def macro_model(db: Session) -> dict:
+    """요인을 합쳐 그 뒤 12개월 가격 변화를 낸다 — **표본 밖 성적표와 같이.**
+
+    지금 값만 내면 믿을 근거가 없다. 그래서 과거 매달을 '그때 알려진 자료로만' 다시 맞춰
+    예측해 본 성적(백테스트)을 같이 싣고, 단순한 기준 셋과 견준다 — 과거 평균, 지난 1년
+    변화가 이어진다고 보기, 비슷했던 달(`similar_months` 와 같은 방식). 학습 표본은 결과가
+    알려진 달만이다(그 달 + 12개월 ≤ 예측 시점) — 그래야 미래가 섞이지 않는다.
+    """
+    price = price_series(db)
+    yms = sorted(price)
+    idx = {y: i for i, y in enumerate(yms)}
+    cols = [(f, series_of(db, f)) for f in FACTORS]
+    common = sorted(set.intersection(*[set(s) for _, s in cols]) & set(price))
+    rows = [{"ym": ym, "x": [s[ym] for _, s in cols], "y": _fwd12(price, yms, idx[ym]),
+             "mom": ((price[ym] / price[yms[idx[ym] - 12]] - 1) * 100) if idx[ym] >= 12 else None}
+            for ym in common]
+    lab = [r for r in rows if r["y"] is not None]
+    if len(lab) < MODEL_MIN_TRAIN + 12:
+        return {"available": False, "note": "요인이 모두 갖춰지고 결과까지 알려진 달이 모자라 모델을 세우지 않습니다."}
+
+    def known(t: dict) -> list[dict]:
+        return [q for q in lab if idx[q["ym"]] + 12 <= idx[t["ym"]]]
+
+    def similar(t: dict, train: list[dict]) -> float:
+        hist = [q for q in rows if idx[q["ym"]] <= idx[t["ym"]]]
+        cols_sorted = [sorted(q["x"][j] for q in hist) for j in range(len(t["x"]))]
+        n1 = max(len(hist) - 1, 1)
+
+        # `hist_percentile` 과 같은 값(낮았던 달의 몫)이다. 정렬해 둔 목록에서 이분 탐색으로
+        # 센다 — 매번 처음부터 세면 이 함수가 모델 전체 시간의 88% 를 먹었다(6.0초 중 5.6초).
+        def pct(j, v):
+            return bisect_left(cols_sorted[j], v) / n1
+        now = [pct(j, t["x"][j]) for j in range(len(t["x"]))]
+        near = sorted(train, key=lambda q: sum((pct(j, q["x"][j]) - now[j]) ** 2
+                                               for j in range(len(now))))[:12]
+        vs = sorted(q["y"] for q in near)
+        return (vs[len(vs) // 2] + vs[(len(vs) - 1) // 2]) / 2
+
+    back, preds = [], {"model": [], "mean": [], "mom": [], "similar": []}
+    for t in lab:
+        train = known(t)
+        if len(train) < MODEL_MIN_TRAIN:
+            continue
+        m = _score_model(train)
+        yhat, _ = _predict(m, t["x"])
+        mean = sum(q["y"] for q in train) / len(train)
+        back.append({"ym": t["ym"], "pred": round(yhat, 2), "actual": round(t["y"], 2)})
+        preds["model"].append((t["ym"], yhat, t["y"]))
+        preds["mean"].append((t["ym"], mean, t["y"]))
+        if t["mom"] is not None:
+            preds["mom"].append((t["ym"], t["mom"], t["y"]))
+        preds["similar"].append((t["ym"], similar(t, train), t["y"]))
+
+    def score(ps: list) -> dict:
+        e = [p - a for _, p, a in ps]
+        n = len(e)
+        dec = [(p, a) for ym, p, a in ps if ym.endswith("12")]
+        return {"n": n, "rmse": round(math.sqrt(sum(v * v for v in e) / n), 2),
+                "mae": round(sum(abs(v) for v in e) / n, 2),
+                "hit_pct": round(sum(1 for _, p, a in ps if (p > 0) == (a > 0)) / n * 100),
+                "n_dec": len(dec),
+                "rmse_dec": round(math.sqrt(sum((p - a) ** 2 for p, a in dec) / len(dec)), 2) if dec else None}
+    base = score(preds["mean"])["rmse"]
+    names = {"model": "요인 합산 모델", "mean": "과거 평균", "mom": "지난 1년이 이어진다",
+             "similar": "비슷했던 달(중위)"}
+    table = []
+    for k in ("model", "mean", "mom", "similar"):
+        sc = score(preds[k])
+        sc["r2_vs_mean"] = round(1 - (sc["rmse"] / base) ** 2, 2) if base else None
+        table.append({"key": k, "label": names[k], **sc})
+
+    # 지금 — 결과가 알려진 달 전부로 맞추고 가장 최근 달에 적용한다.
+    now = rows[-1]
+    m = _score_model(known(now) or lab)
+    yhat, contrib = _predict(m, now["x"])
+    errs = sorted(p - a for _, p, a in preds["model"])
+    lo = errs[int(len(errs) * 0.1)]
+    hi = errs[int(len(errs) * 0.9) - 1]
+    keys = [f for f, _ in cols]
+    return {
+        "available": True,
+        "now": now["ym"],
+        "pred": round(yhat, 2),
+        # 과거 예측이 실제보다 높게 나간 만큼을 빼고 낮게 나간 만큼을 더한 범위(10~90%).
+        "band": [round(yhat - hi, 2), round(yhat - lo, 2)],
+        "base": round(m["my"], 2),
+        "contrib": sorted(
+            [{"key": keys[j].key, "label": keys[j].label, "pp": round(v, 2),
+              "r": round(m["rs"][j], 3)} for j, v in contrib.items()],
+            key=lambda c: -abs(c["pp"])),
+        "excluded": [keys[j].label for j in range(len(keys)) if j not in m["use"]],
+        "backtest": back,
+        "table": table,
+        "train_n": len(known(now) or lab),
+        "min_train": MODEL_MIN_TRAIN,
+        "note": ("요인마다 과거 상관의 부호와 지금 위치(z 점수)를 곱해 평균한 점수 하나에 직선 하나를 "
+                 "맞췄습니다. 계수가 하나뿐이라 과거에 덜 맞추는 대신 우연에도 덜 휘둘립니다. "
+                 "아래 성적은 매달 그때 알려진 자료로만 다시 맞춰 다음 1년을 예측해 본 결과입니다."),
+    }
+
+
 def overview(db: Session) -> dict:
     factors = factor_rows(db)
     policy = policy_rows(db)
@@ -576,6 +727,7 @@ def overview(db: Session) -> dict:
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
         "history": history(db),
+        "model": macro_model(db),
         "similar": similar_months(db),
         "note": ("요인마다 가격과의 상관을 재서 방향을 정합니다. "
                  + (f"가장 센 것도 {max_r:.2f} 라 " if max_r is not None else "")

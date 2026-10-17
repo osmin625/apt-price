@@ -6,6 +6,7 @@ import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import { heatVars } from '../components/heat'
+import TimeLines from '../components/TimeLines'
 import TopicModal from '../topics/TopicModal'
 import { homeOf, topicFor } from '../topics/registry'
 
@@ -137,6 +138,8 @@ export default function RegimeView() {
         )}
         <p className="muted small">{data.note}</p>
       </section>
+
+      {data.model?.available && <MacroModel m={data.model} price={data.price} />}
 
       <section className="card">
         <h2>정책과 세금</h2>
@@ -454,6 +457,123 @@ function HistoryTable({ h, factors }) {
       </div>
       {tip.node}
     </>
+  )
+}
+
+/**
+ * 요인을 합친 모델 — 그 뒤 12개월 가격 변화. **성적표와 같이 보여 준다.**
+ *
+ * 지금 값만 띄우면 '모델이 그렇다더라' 가 된다. 매달 그때 알려진 자료로만 다시 맞춰 다음
+ * 1년을 예측해 본 결과(백테스트)와, 아무 요인도 안 쓰는 기준(과거 평균)과의 비교를 같은
+ * 카드에 둔다. 기준을 못 이기는 모델이면 그것도 그대로 보인다. 문구에는 숫자를 박지 않는다.
+ */
+function MacroModel({ m, price }) {
+  const sign = (v) => (v > 0 ? '+' : '')
+  const best = m.table.find((t) => t.key === 'model')
+  const mean = m.table.find((t) => t.key === 'mean')
+  const span = Math.max(...m.contrib.map((c) => Math.abs(c.pp)), 0.5) * 1.1
+  const beats = best && mean && best.rmse < mean.rmse
+  return (
+    <section className="card">
+      <h2>요인을 합치면 — 그 뒤 12개월</h2>
+      <p className="sub">{m.note}</p>
+      <div className="rg-after">
+        <div className="rg-after-cell">
+          <div className="muted small">{ymText(m.now)} 기준 그 뒤 12개월</div>
+          <strong className={m.pred >= 0 ? 'tone-pos' : 'tone-neg'}>{sign(m.pred)}{fmt(m.pred, 1)}%</strong>
+          <div className="muted small">
+            과거 오차로 본 범위 {sign(m.band[0])}{fmt(m.band[0], 1)} ~ {sign(m.band[1])}{fmt(m.band[1], 1)}%
+          </div>
+        </div>
+        <div className="rg-after-cell">
+          <div className="muted small">요인 없이 과거 평균만</div>
+          <strong>{sign(m.base)}{fmt(m.base, 1)}%</strong>
+          <div className="muted small">{price.region} 매매가격지수 기준</div>
+        </div>
+      </div>
+      <p className="muted small">
+        범위는 지난 예측이 실제와 얼마나 어긋났는지(10~90%)를 지금 값에 그대로 옮긴 것입니다.
+        {beats
+          ? ' 표본 밖 오차가 과거 평균보다 작았지만 차이는 크지 않습니다 — 아래 성적표.'
+          : ' 표본 밖 오차가 과거 평균보다 작지 않았습니다 — 이 값은 참고로만 보세요.'}
+      </p>
+
+      <h3 className="mt16">과거 평균에서 얼마나 밀었나</h3>
+      <p className="muted small">
+        출발점은 과거 평균({sign(m.base)}{fmt(m.base, 1)}%)이고, 요인마다 그만큼을 더하거나 뺍니다.
+        더한 값이 위의 예상입니다.
+        {m.excluded.length > 0 && ` 상관이 약해 뺀 요인: ${m.excluded.join(', ')}.`}
+      </p>
+      <div className="pbar is-wide">
+        {m.contrib.map((c) => {
+          const w = (Math.abs(c.pp) / span) * 50
+          const pos = c.pp >= 0
+          return (
+            <div className="pbar-row" key={c.key}>
+              <div className="pbar-label">{c.label}</div>
+              <div className="pbar-track">
+                <div className="pbar-zero" />
+                <div className={`pbar-fill ${pos ? 'pos' : 'neg'}`}
+                     style={{ left: `${pos ? 50 : 50 - w}%`, width: `${w}%` }} />
+              </div>
+              <div className="pbar-value">{sign(c.pp)}{fmt(c.pp, 2)}%p</div>
+            </div>
+          )
+        })}
+      </div>
+
+      <h3 className="mt16">그때 알려진 것만으로 예측했다면</h3>
+      <p className="muted small">
+        매달 그 시점에 결과가 알려진 자료(최소 {m.min_train}개월)로만 다시 맞춰 다음 1년을 예측한
+        값과 실제를 겹쳤습니다. 이웃한 달은 11개월을 공유해 같이 움직이므로, 점이 많아 보여도
+        독립된 시험은 해마다 하나 남짓입니다.
+      </p>
+      <TimeLines
+        series={[
+          { key: 'actual', label: '실제 그 뒤 12개월', color: 'var(--series-2)',
+            points: m.backtest.map((b) => ({ ym: b.ym, value: b.actual })) },
+          { key: 'pred', label: '그때의 예측', color: 'var(--series-1)', dash: true,
+            points: m.backtest.map((b) => ({ ym: b.ym, value: b.pred })) },
+        ]}
+        unit="%"
+        decimals={1}
+        zero
+        height={240}
+        ariaLabel="요인 합산 모델의 표본 밖 예측과 실제"
+      />
+      <div className="table-wrap">
+        <table className="coef">
+          <thead>
+            <tr>
+              <th>예측 방법</th>
+              <th className="num">평균 오차(RMSE)</th>
+              <th className="num">절대 오차</th>
+              <th className="num">방향 적중</th>
+              <th className="num">과거 평균 대비</th>
+              <th className="num">12월만 RMSE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {m.table.map((t) => (
+              <tr key={t.key} className={t.key === 'model' ? 'is-current' : ''}>
+                <td>{t.label}</td>
+                <td className="num">{fmt(t.rmse, 1)}%p</td>
+                <td className="num">{fmt(t.mae, 1)}%p</td>
+                <td className="num">{t.hit_pct}%</td>
+                <td className="num">{t.key === 'mean' ? '기준' : `${sign(t.r2_vs_mean)}${fmt(t.r2_vs_mean, 2)}`}</td>
+                <td className="num muted">{t.rmse_dec == null ? '—' : `${fmt(t.rmse_dec, 1)} (n=${t.n_dec})`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">
+        '과거 평균 대비' 는 1 − (오차 ÷ 과거 평균의 오차)² 입니다. 0 보다 크면 아무 요인도 안 쓴
+        예측보다 나았다는 뜻입니다. 방향 적중은 오를지 내릴지를 맞힌 비율인데, 이 기간은 대체로
+        올라서 '늘 오른다' 만으로도 높게 나옵니다. 요인이 가격을 움직였다는 뜻이 아닙니다 —
+        요인들은 서로 얽혀 있고, 이것은 과거에 같이 움직인 방식을 그대로 옮긴 것입니다.
+      </p>
+    </section>
   )
 }
 
