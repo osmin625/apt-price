@@ -280,6 +280,8 @@ tbody tr.clickable { cursor: pointer; }
 .rdc-unit { font-size: 11px; color: var(--text-muted); font-weight: 400; }
 /* 층 프리미엄 (0% 기준 발산 막대) */
 .pbar-row { display: grid; grid-template-columns: 96px 1fr 62px; align-items: center; gap: 10px; padding: 3px 0; border-radius: var(--radius); }
+/* 이름이 긴 막대(거시 분석 모델의 요인별 기여 — '주택시장 소비심리'). */
+.pbar.is-wide .pbar-row { grid-template-columns: 128px 1fr 70px; }
 .pbar-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .pbar-label { font-size: 12.5px; color: var(--text-secondary); }
 .pbar-track { position: relative; height: 22px; }
