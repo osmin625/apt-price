@@ -43,7 +43,7 @@ backend/
     services/macro.py       공표 통계를 경기 남부 시군구로 묶기
     services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
                             (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
-    services/regime.py      요인별 압력(상관·시차)·과거 국면·비슷했던 달·요인 합산 모델
+    services/regime.py      요인 위치(z)·상관·과거 사례(그때는·비슷했던 시기·기저율)·과거 국면
     services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
 
     clients/molit.py        국토교통부 실거래가 API
@@ -58,7 +58,7 @@ backend/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
     validate_model.py       참값 복원 + 커버리지 검증
     cv_model.py             Stage 2 교차검증 — 요인을 넣을지 정하는 자
-    cv_macro.py             거시 합산 모델 대안 — 같은 백테스트 + DM 검정
+    cv_macro.py             거시 합산 모델(화면에서 걷음) — 같은 백테스트 + DM 검정
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
     verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층

@@ -6,7 +6,7 @@
 
 ## 왜 필요한가
 
-합산 모델(`regime.macro_model`)은 요인마다 (상관 부호 × z)를 같은 무게로 평균해 점수
+합산 모델(2026-10-18 까지 거시 분석 맨 위 카드, 지금은 화면에서 뺐다)은 요인마다 (상관 부호 × z)를 같은 무게로 평균해 점수
 하나를 만들고 직선 하나를 맞춘다. 표본이 작아서다 — 12개월 창이 이웃 달과 11개월을
 공유해 독립된 관측은 해마다 하나 남짓이다. 그래서 "더 나은 합치는 법" 은 짐작이 아니라
 표본 밖 오차로 정해야 하고, 그 차이가 우연과 구분되는지도 같이 봐야 한다.
@@ -15,8 +15,9 @@
 
 운영 코드와 **같은 백테스트**다. 매달 그때 결과가 알려진 달만(그 달 + 12개월 ≤ 예측
 시점)으로 상관 부호·평균·표준편차·기울기를 처음부터 다시 맞추고 그 달을 예측한다.
-학습 60개월 미만은 건너뛴다. 먼저 V0 이 `macro_model` 과 같은 숫자를 내는지 찍는다 —
-틀이 틀리면 나머지 비교가 다 틀린다.
+학습 60개월 미만은 건너뛴다. 먼저 V0 이 기록된 숫자(docs/analysis/macro-model.md)를 내는지
+찍는다 — 틀이 틀리면 나머지 비교가 다 틀린다. 운영 코드에서 모델을 걷은 뒤로는 이 파일이
+그 방식의 유일한 구현이다.
 
     V0  지금 방식 — 요인마다 같은 무게
     V1  그룹 먼저 — 공급·수요·통화량·금리 안에서 평균한 뒤 그룹끼리 같은 무게(이중 계산 걷기)
@@ -58,6 +59,9 @@ DONE = R.Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll
 VALUATION_WINDOW = 60
 LEAD_MONTHS = 24
 NW_LAG = 11  # 12개월 창이 겹쳐 오차가 11개월까지 자기상관을 가진다
+# 합산 모델의 두 상수. 모델이 regime 에 있던 때의 값 그대로다(2026-10-18 에 걷었다).
+MIN_R = 0.15           # |상관| 이 이보다 작은 요인은 뺀다
+MODEL_MIN_TRAIN = 60   # 학습 표본이 이보다 적은 시점은 예측하지 않는다(5년)
 
 
 @dataclass(frozen=True)
@@ -85,7 +89,7 @@ def valuation(price: dict, win: int = VALUATION_WINDOW) -> dict:
 
 
 def backtest(cols: list[Col], price: dict, agg: str) -> dict:
-    """`regime.macro_model` 과 같은 백테스트. `agg` 만 갈아 끼운다(equal | group | absr)."""
+    """합산 모델의 백테스트. `agg` 만 갈아 끼운다(equal | group | absr)."""
     yms = sorted(price)
     idx = {y: i for i, y in enumerate(yms)}
     common = sorted(set.intersection(*[set(c.series) for c in cols]) & set(price))
@@ -109,7 +113,7 @@ def backtest(cols: list[Col], price: dict, agg: str) -> dict:
         ys = [r["y"] for r in train]
         mu, sd = ref
         rs = [R._corr([r["x"][j] for r in train], ys) for j in range(p)]
-        use = [j for j in range(p) if abs(rs[j]) >= R.MIN_R]
+        use = [j for j in range(p) if abs(rs[j]) >= MIN_R]
 
         def score(x):
             if not use:
@@ -137,7 +141,7 @@ def backtest(cols: list[Col], price: dict, agg: str) -> dict:
     preds, means = {}, {}
     for t in lab:
         train = [q for q in lab if idx[q["ym"]] + 12 <= idx[t["ym"]]]
-        if len(train) < R.MODEL_MIN_TRAIN:
+        if len(train) < MODEL_MIN_TRAIN:
             continue
         f, _ = fit(train, ref_at(t["ym"]))
         preds[t["ym"]] = (f(t["x"]), t["y"])
@@ -199,7 +203,7 @@ def run_variants(price: dict, sets: dict) -> None:
         own = sorted(v0["preds"])
         print(f"\n[재현 확인] {name} V0 자기 창 {len(own)}개월({own[0]}~) RMSE {rmse(v0['preds'], own):.2f}"
               f" · 과거 평균 {rmse(v0['means'], own):.2f} · 지금 예상 {v0['pred_now']:+.2f}"
-              f"  ← regime.macro_model 과 같아야 한다")
+              f"  ← macro-model.md 의 기록과 같아야 한다")
         keys = sorted(set.intersection(*[set(o["preds"]) for o in out.values()]))
         print(f"== {name} — 같은 달 {len(keys)}개({keys[0]}~{keys[-1]})")
         print(f"  {'변형':<18}{'시작':>8}{'RMSE':>7}{'평균':>7}{'적중%':>6}{'지금':>8}"
