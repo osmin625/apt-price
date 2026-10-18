@@ -674,6 +674,11 @@ tr.is-deleting td { opacity: 0.4; }
   border-left: 4px solid color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--border));
 }
 .rg-shared-row:hover { border-color: var(--accent); }
+/* 왼쪽 막대만 **방향**으로 — 바탕은 위치(heat), 막대는 오름 초록 · 내림 빨강. `data-edge` 가 없으면
+   막대도 위치 색 그대로다. 호버의 border-color 가 막대까지 덮지 않게 border-left-color 를 따로 둔다. */
+.macro-card.is-heat[data-edge='up'], .rg-shared-row[data-edge='up'] { border-left-color: var(--good); }
+.macro-card.is-heat[data-edge='down'], .rg-shared-row[data-edge='down'] { border-left-color: var(--neg); }
+.macro-card.is-heat[data-edge='none'], .rg-shared-row[data-edge='none'] { border-left-color: var(--border); }
 @media (max-width: 640px) {
   .rg-shared-row { grid-template-columns: 1fr 14px; row-gap: 2px; }
   .rg-shared-row > .muted { grid-column: 1; }
