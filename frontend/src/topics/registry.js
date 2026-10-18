@@ -39,16 +39,8 @@ export const TOPICS = [
  */
 export const PRICE_METRIC = 'sale_index'
 
-/**
- * **데이터 하나에 카드 하나.** 이 주제의 카드가 어느 탭에 있나. 공급·가격 분석에 원천이
- * 있으면 그쪽이 카드의 집이고, 거시 분석은 같은 데이터를 카드로 한 번 더 그리지 않고
- * 위치만 한 줄로 보여 준다. 집이 없는(거시에만 있는) 요인은 null.
- */
-export function homeOf(topic) {
-  if (topic?.supply) return '공급 분석'
-  if (topic?.metric) return '가격 분석'
-  return null
-}
+// `homeOf`(이 주제의 그림 카드가 어느 탭에 있나)가 있었다. 거시 분석이 요인을 그림 없는 작은
+// 카드로만 보이고 창도 열지 않게 되며(2026-10-19) 쓰는 곳이 없어져 걷었다.
 
 /** (원천, 키) → 주제. `extra` 는 그 창의 초기값(기간 · 지역)이다. */
 export function topicFor(kind, key, extra = {}) {
