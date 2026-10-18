@@ -110,62 +110,6 @@ def load_points(
     return points
 
 
-def market_overview(points: list[TradePoint], months: int) -> dict:
-    """층별 / 입지별 / 연식별 / 면적대별 평당가 분포를 한 번에 낸다."""
-    ref_year = date.today().year
-    index = pricing.market_index(points)
-    factors = pricing.estimate_floor_factors(points, index)
-
-    all_ppp = [pricing.adjusted_ppp(p, index) for p in points]
-
-    # 추이 선은 구성 편향을 제거한 지수 기준 가격 수준을 쓴다.
-    # 원시 중앙값은 참고용으로 함께 내보낸다.
-    anchor = median(all_ppp) if all_ppp else 0.0
-    monthly = []
-    buckets: dict[str, list[float]] = {}
-    for p in points:
-        buckets.setdefault(p.deal_ym, []).append(p.ppp)
-    for ym in sorted(buckets):
-        vals = buckets[ym]
-        monthly.append(
-            {
-                "month": ym,
-                "count": len(vals),
-                "median": round(anchor * index[ym], 1) if ym in index else round(median(vals), 1),
-                "raw_median": round(median(vals), 1),
-            }
-        )
-
-    return {
-        "months": months,
-        "trade_count": len(points),
-        "complex_count": len({p.complex_id for p in points}),
-        "overall": pricing.describe(all_ppp),
-        "by_floor": pricing.group_stats(
-            points, lambda t: pricing.floor_band(t.floor, t.max_floor),
-            pricing.FLOOR_BANDS, index,
-        ),
-        "by_station": pricing.group_stats(
-            points, lambda t: pricing.station_band(t.station_distance_m),
-            pricing.STATION_BANDS, index,
-        ),
-        "by_age": pricing.group_stats(
-            points, lambda t: pricing.age_band(t.build_year, ref_year),
-            pricing.AGE_BANDS, index,
-        ),
-        "by_area": pricing.group_stats(
-            points, lambda t: pricing.area_band(t.exclusive_area),
-            pricing.AREA_BANDS, index,
-        ),
-        "floor_factors": [
-            {"band": b, "factor": factors[b], "premium_pct": round((factors[b] - 1) * 100, 1)}
-            for b in pricing.FLOOR_BANDS
-            if b in factors
-        ],
-        "monthly": monthly,
-    }
-
-
 def complex_overview(db: Session, complex_id: int, months: int) -> dict | None:
     cx = db.get(Complex, complex_id)
     if not cx:

@@ -13,69 +13,6 @@ from ..services import analysis
 router = APIRouter(prefix="/api/complexes", tags=["complexes"])
 
 
-@router.get("")
-def list_complexes(
-    db: Session = Depends(get_db),
-    months: int = Query(12, ge=1, le=120),
-    sgg_cd: str | None = None,
-    q: str | None = None,
-    area_band: str | None = None,
-    station_band: str | None = None,
-    age_band: str | None = None,
-    line: str | None = None,
-    station: str | None = None,
-    household_band: str | None = None,
-    min_trades: int = Query(1, ge=0),
-    sort: str = Query("ppp_desc", pattern="^(ppp_desc|ppp_asc|name|trades_desc)$"),
-    limit: int = Query(200, ge=1, le=1000),
-):
-    """단지 목록 + 단지별 전용면적 평당가 요약."""
-    points = analysis.load_points(
-        db,
-        months=months,
-        sgg_cd=sgg_cd,
-        query=q,
-        area_band=area_band,
-        station_band=station_band,
-        age_band=age_band,
-        line=line,
-        station=station,
-        household_band=household_band,
-    )
-
-    grouped: dict[int, list] = {}
-    for p in points:
-        grouped.setdefault(p.complex_id, []).append(p)
-
-    if not grouped:
-        return {"months": months, "count": 0, "items": []}
-
-    index = pricing.market_index(points)
-    rows = db.execute(select(Complex).where(Complex.id.in_(grouped))).scalars().all()
-
-    items = []
-    for cx in rows:
-        pts = grouped[cx.id]
-        if len(pts) < min_trades:
-            continue
-        item = analysis.serialize_complex(cx, pts, index)
-        item["trade_count"] = len(pts)
-        item["latest_deal_date"] = max(p.deal_date for p in pts)
-        items.append(item)
-
-    if sort == "name":
-        items.sort(key=lambda x: x["name"])
-    elif sort == "trades_desc":
-        items.sort(key=lambda x: x["trade_count"], reverse=True)
-    else:
-        items.sort(
-            key=lambda x: x["ppp"]["median"] if x["ppp"] else 0,
-            reverse=sort == "ppp_desc",
-        )
-
-    return {"months": months, "count": len(items), "items": items[:limit]}
-
-
 @router.get("/{complex_id}")
 def get_complex(
     complex_id: int,
@@ -86,29 +23,6 @@ def get_complex(
     if not result:
         raise HTTPException(404, "단지를 찾을 수 없습니다")
     return result
-
-
-@router.get("/{complex_id}/area-types")
-def area_types(complex_id: int, db: Session = Depends(get_db)):
-    """해당 단지에 존재하는 전용면적 타입 목록 — 매물 입력 시 선택지로 쓴다."""
-    cx = db.get(Complex, complex_id)
-    if not cx:
-        raise HTTPException(404, "단지를 찾을 수 없습니다")
-
-    points = analysis.load_points(db, months=120, complex_id=complex_id)
-    keys = sorted({pricing.area_type_key(p.exclusive_area) for p in points})
-    return {
-        "complex_id": complex_id,
-        "max_floor": cx.max_floor,
-        "items": [
-            {
-                "exclusive_area": k,
-                "pyeong": round(pricing.to_pyeong(k), 1),
-                "area_band": pricing.area_band(k),
-            }
-            for k in keys
-        ],
-    }
 
 
 @router.get("/{complex_id}/dongs")
@@ -180,24 +94,6 @@ def dongs(complex_id: int, db: Session = Depends(get_db)):
         "spread_min": round(max(known) - min(known), 1) if len(known) > 1 else None,
         "rental_dongs": sorted(d for d, t in tags.items() if t.rental),
     }
-
-
-@router.get("/{complex_id}/quotes")
-def quotes_summary(
-    complex_id: int,
-    area_key: int | None = Query(None, description="전용면적 반올림(㎡). 주면 그 평형만"),
-    dong: str | None = Query(None, description="주면 그 동의 호가 경로도 함께"),
-    db: Session = Depends(get_db),
-):
-    """누적된 **호가** 현황. 실거래가 뜸한 동을 볼 때 실거래 옆에 놓고 읽는다."""
-    from ..services import quotes
-
-    if not db.get(Complex, complex_id):
-        raise HTTPException(404, "단지를 찾을 수 없습니다")
-    out = quotes.summary(db, complex_id, area_key)
-    if dong:
-        out["history"] = quotes.history(db, complex_id, dong, area_key)
-    return out
 
 
 @router.get("/meta/filters")

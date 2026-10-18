@@ -12,17 +12,12 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from statistics import median
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import pricing
 from ..models import MemoTagPref, Quote
-
-# 이보다 오래된 호가는 '현재 호가' 집계에서 뺀다. 매물은 팔리거나 내려가는데
-# 우리는 내려간 걸 알 방법이 없어서, 시간으로 끊는 수밖에 없다.
-ACTIVE_DAYS = 90
 
 
 def add_memo(old: str | None, new: str | None) -> str:
@@ -90,75 +85,6 @@ def record(db: Session, *, complex_id: int, dong: str | None, exclusive_area: fl
     ))
     db.commit()
     return "created"
-
-
-def summary(db: Session, complex_id: int, area_key: int | None = None) -> dict:
-    """단지의 호가 현황. 동별로 나눠 본다 — 그게 이 데이터를 쌓는 이유다.
-
-    평당가는 **전용 기준**이다(이 서비스의 모든 평당가와 같다).
-    """
-    since = datetime.now() - timedelta(days=ACTIVE_DAYS)
-    stmt = select(Quote).where(Quote.complex_id == complex_id, Quote.last_seen_at >= since)
-    if area_key is not None:
-        stmt = stmt.where(Quote.area_key == area_key)
-    records = db.execute(stmt).scalars().all()
-    # 값을 내린 집의 **옛 호가는 이미 없는 가격**이다. 함께 집계하면 분포가 위로
-    # 끌리는데, 그건 이 데이터를 쌓는 목적과 정반대 방향이다.
-    rows = latest_per_unit(records)
-
-    by_dong: dict[str, list[Quote]] = {}
-    for q in rows:
-        by_dong.setdefault(q.dong or "미상", []).append(q)
-
-    def pack(arr: list[Quote]) -> dict:
-        ppps = sorted(pricing.price_per_pyeong(q.asking_price, q.exclusive_area) for q in arr)
-        prices = sorted(q.asking_price for q in arr)
-        return {
-            "n": len(arr),
-            "median_price": prices[len(prices) // 2],
-            "min_price": prices[0],
-            "max_price": prices[-1],
-            "median_ppp": round(median(ppps), 1),
-            "latest": max(q.last_seen_at for q in arr).date().isoformat(),
-        }
-
-    dongs = {d: pack(a) for d, a in sorted(by_dong.items()) if a}
-    return {
-        "complex_id": complex_id,
-        "area_key": area_key,
-        "active_days": ACTIVE_DAYS,
-        "total": len(rows),
-        "records": len(records),
-        "by_dong": dongs,
-        "overall": pack(rows) if rows else None,
-        "note": (
-            f"최근 {ACTIVE_DAYS}일 안에 확인된 호가만 집계합니다. 호가는 희망가와 급매가 "
-            "섞여 있고 성사 여부를 모르므로 실거래를 대체하지 않습니다 — 거래가 뜸한 동의 "
-            "선행지표로 실거래 옆에 놓고 보세요."
-        ),
-    }
-
-
-def history(db: Session, complex_id: int, dong: str, area_key: int | None = None) -> list[dict]:
-    """그 동 호가의 시간 경로. 같은 층이 값을 내렸는지 보는 용도다."""
-    key = (dong or "").strip().removesuffix("동").strip()
-    stmt = select(Quote).where(Quote.complex_id == complex_id, Quote.dong == key)
-    if area_key is not None:
-        stmt = stmt.where(Quote.area_key == area_key)
-    rows = db.execute(stmt.order_by(Quote.first_seen_at)).scalars().all()
-    return [
-        {
-            "floor": q.floor or None,
-            "floor_band": q.floor_band,
-            "exclusive_area": q.exclusive_area,
-            "asking_price": q.asking_price,
-            "ppp": round(pricing.price_per_pyeong(q.asking_price, q.exclusive_area), 1),
-            "first_seen": q.first_seen_at.date().isoformat(),
-            "last_seen": q.last_seen_at.date().isoformat(),
-            "seen_count": q.seen_count,
-        }
-        for q in rows
-    ]
 
 
 def count(db: Session) -> int:
@@ -383,15 +309,6 @@ def display_units(rows: list[Quote]) -> list[dict]:
         }
         out.append(item)
     return out
-
-
-def latest_per_unit(rows: list[Quote]) -> list[Quote]:
-    """유닛마다 **최신 호가 행만** 남긴다. 집계에서 지난 호가를 빼는 용도다.
-
-    값을 내린 집의 옛 호가는 이미 없는 가격이다. 그것을 중앙값에 함께 넣으면 호가
-    분포가 위로 끌린다 — 하필 이 데이터를 쌓는 이유(내려간 값 포착)와 반대 방향이다.
-    """
-    return [c.latest for c in unit_chains(rows)[0]]
 
 
 def disabled_tags(db: Session) -> set[str]:

@@ -69,6 +69,10 @@ RETIRED_LABELS = {
     "시장 분석": "매물 분석",
     "미시 분석": "매물 분석",
     "매크로 탭": "가격 분석 탭",
+    # **되살아난 이름이라 지금은 검사되지 않는다**(아래 `if old in live`). 거시 국면 탭이
+    # '거시 분석' 이름을 다시 쓰면서, 옛 뜻(지금의 가격 분석)으로 남은 곳을 기계가 못
+    # 가린다. reb.md·pipeline.md 가 공표 통계를 '거시 탭' 이라 부르던 것이 그렇게 남아
+    # 있었다(2026-10-18 에 손으로 찾았다). 공표 통계 이야기에 '거시' 가 나오면 의심한다.
     "거시 분석": "가격 분석",
     # '매물 관리'/'매물 순위' 는 짝이라 같이 옮겼다. 붙여넣는 쪽과 보는 쪽이다.
     "매물 관리": "호가 입력",
@@ -82,6 +86,9 @@ DEAD_OK = {
     "/api/analysis/aspect":
         "향 카드는 뺐지만 측정이 자산이다(칸 안 비교·부트스트랩 퇴화·검출 한계 "
         "±0.78~0.85%p). 호가를 더 모아 다시 볼 때 처음부터 하지 않으려고 남긴다.",
+    "/api/quotes":
+        "화면 없이 손으로 부르는 되돌리기(DELETE)다. 잘못 붙여넣은 목록을 통째로 지울 "
+        "때 쓴다 — 버튼으로 두기에는 되돌릴 수 없는 일이라 처음부터 화면에 없었다.",
 }
 
 # 엔드포인트를 부르는 곳. 프론트가 안 불러도 정적 내보내기가 쓰면 살아 있는 것이다.
@@ -226,11 +233,69 @@ def check_particles(r: Result, live: set[str], docs: list) -> None:
 # ──────────────────────────────────────────────────────────
 # 3. 죽은 API — 라우터에 있는데 아무도 안 부르는 엔드포인트
 # ──────────────────────────────────────────────────────────
+def _api_wrappers(src: str) -> list[tuple[str, str]]:
+    """`api.js` 의 `export const api = { ... }` 를 (이름, 그 항목의 원문) 으로 나눈다."""
+    m = re.search(r"export const api = \{\n(.*?)\n\}", src, flags=re.S)
+    if not m:
+        return []
+    out = []
+    for chunk in re.split(r"\n(?=  \w+:)", m.group(1)):
+        name = re.match(r"\s*(\w+):", chunk)
+        if name:
+            out.append((name.group(1), chunk))
+    return out
+
+
+def _path_re(path: str) -> str:
+    """라우터 경로를 호출 쪽 문자열에서 찾을 정규식으로.
+
+    경로 변수(`{complex_id}`)는 호출 쪽에서 `${id}`(JS)·`{cid}`(f-string)·글자 그대로
+    중 하나로 온다. 예전에는 첫 `{` 앞까지만 잘라 찾았는데, 그러면
+    `/complexes/{complex_id}/area-types` 가 `/complexes` 로 줄어 **목록 엔드포인트가
+    대신 살려 줬다** — 프론트에서 호출을 지운 뒤에도(512bd50) 라우터가 남아 있었다.
+
+    **앞뒤에 단어 문자·`-`·`/` 가 붙으면 다른 경로다.** `/model/groups` 를 부분
+    문자열로 찾으면 `/model/groups_DISABLED` 도 걸리고, `/quotes` 는 `/quotes/ranking`
+    에, `/complexes` 는 `/map/complexes` 에 걸린다 — 마지막 것이 실제로 단지 목록
+    엔드포인트를 살려 두고 있었다.
+    """
+    var = r"(?:\$\{[^}]+\}|\{[^}]+\}|[^/'\"`?$\s]+)"
+    parts = re.split(r"\{[^}]+\}", path)
+    return (r"(?<![\w/-])" + var.join(re.escape(x) for x in parts)
+            + r"(?![\w/-])")
+
+
 def check_endpoints(r: Result) -> None:
     header("API — 라우터에 있는데 아무도 안 부르나")
-    callers = "\n".join(
-        p.read_text(encoding="utf-8") for p in CALLER_FILES if p.exists()
+    # **`api.js` 에 적혀 있는 것만으로는 부르는 것이 아니다.** 화면에서 기능을 빼면
+    # 컴포넌트는 지워도 `api.js` 의 한 줄은 남기 쉽고, 그 한 줄이 엔드포인트를 살아
+    # 있는 것처럼 보이게 했다. A·B 비교를 뺀 뒤(f56aadd) `/model/compare` 와 그 뒤의
+    # `compare_listings` 300줄이 그렇게 2주를 남았고, 같은 식으로 엔드포인트 다섯이
+    # 더 살아 있는 척했다(2026-10-18 에 지웠다). 그래서 `api.js` 는 **화면이 실제로
+    # 부르는 항목만** 호출로 친다.
+    api_src = (FRONT / "api.js").read_text(encoding="utf-8")
+    users = "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in [*FRONT.rglob("*.jsx"), *FRONT.rglob("*.js")]
+        if p.name != "api.js"
     )
+    used_chunks, unused = [], []
+    for name, chunk in _api_wrappers(api_src):
+        # `api.groups(` 도, 줄을 넘긴 `api` ↵ `.groups(` 도 부르는 것이다.
+        if re.search(r"(?<![\w.])api\s*\.\s*" + name + r"(?!\w)", users):
+            used_chunks.append(chunk)
+        else:
+            unused.append(name)
+    for name in unused:
+        r.bad(f"api.js 의 `{name}` 를 부르는 화면이 없습니다. 지우세요 — 남아 있으면 "
+              f"그 엔드포인트가 살아 있는 것처럼 보입니다")
+
+    api_body = re.sub(r"export const api = \{\n.*?\n\}", "", api_src, flags=re.S)
+    callers = "\n".join([
+        api_body, *used_chunks,
+        *(p.read_text(encoding="utf-8") for p in CALLER_FILES
+          if p.exists() and p.name != "api.js"),
+    ])
     found: list[tuple[str, str]] = []
     for p in sorted((BACKEND / "app" / "routers").glob("*.py")):
         src = p.read_text(encoding="utf-8")
@@ -244,22 +309,14 @@ def check_endpoints(r: Result) -> None:
 
     dead = []
     for fname, full in found:
-        # 경로 변수는 프론트가 문자열을 조립하므로 앞부분만 본다.
-        probe = full.split("{")[0].rstrip("/")
         # `api.js` 의 `request()` 가 `/api` 를 붙이므로 프론트에는 `/model/...` 로
         # 적혀 있다. 전체 경로만 찾으면 **살아 있는 엔드포인트를 전부 죽었다고
         # 보고한다** — 처음에 14개를 그렇게 잡았다.
-        short = probe[len("/api"):] if probe.startswith("/api") else probe
-        # **부분 문자열로 찾으면 안 된다.** `/model/groups` 를 그렇게 찾으면
-        # `/model/groups_DISABLED` 도 걸려서, 경로를 잘못 고쳐도 '살아 있다' 고
-        # 보고한다. 일부러 깨뜨려 보고 알았다. 뒤에 단어 문자가 오면 다른 경로다
-        # (`/` 는 경로 변수가 이어지는 것이므로 허용).
-        def called(path: str) -> bool:
-            return bool(re.search(re.escape(path) + r"(?![\w-])", callers))
-
-        if probe and not called(probe) and not called(short):
+        short = full[len("/api"):] if full.startswith("/api") else full
+        if not any(re.search(_path_re(x), callers) for x in (full, short)):
             dead.append((fname, full))
-    print(f"  엔드포인트 {len(found)}개 · 호출되지 않음 {len(dead)}개")
+    print(f"  엔드포인트 {len(found)}개 · 호출되지 않음 {len(dead)}개"
+          f" · api.js 항목 중 부르는 화면이 없음 {len(unused)}개")
     for fname, full in dead:
         if full in DEAD_OK:
             print(f"    (일부러 남김) {full} — {DEAD_OK[full][:46]}...")

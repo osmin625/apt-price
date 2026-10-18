@@ -39,36 +39,6 @@ def fit(
     return mv.fit_payload(_fit(db, months, spec))
 
 
-class ListingSide(BaseModel):
-    complex_id: int
-    exclusive_area: float = Field(gt=0, le=400)
-    floor: int | None = Field(default=None, ge=-5, le=100)
-    asking_price: int | None = Field(default=None, gt=0)  # 만원
-    # 있으면 역까지 도보를 **그 동 좌표 기준**으로 잡는다. 없으면 단지 중심점.
-    dong: str | None = Field(default=None, max_length=20)
-
-
-class CompareRequest(BaseModel):
-    a: ListingSide
-    b: ListingSide
-    months: int = Field(default=24, ge=6, le=120)
-    spec: str = hedonic.DEFAULT_SPEC
-
-
-@router.post("/compare")
-def compare(req: CompareRequest, db: Session = Depends(get_db)):
-    """매물 두 개를 요인별로 분해해 비교한다.
-
-    평당가 차이를 면적·층·거리·연식·세대수·노선·구 기여로 쪼개고,
-    합계(모델 예상 차이)를 실제 호가 차이와 견줘 어느 쪽이 싼지 판정한다.
-    """
-    f = _fit(db, req.months, req.spec)
-    out = mv.compare_listings(db, f, req.a.model_dump(), req.b.model_dump())
-    if out.get("error"):
-        raise HTTPException(status_code=422, detail=out["error"])
-    return out
-
-
 @router.get("/status")
 def status(
     db: Session = Depends(get_db),

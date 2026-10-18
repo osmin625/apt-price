@@ -181,8 +181,6 @@ function detailText(body, status) {
 export const api = {
   health: () => request('/health'),
   filters: () => request('/complexes/meta/filters'),
-  market: (params) => request(`/analysis/market${qs(params)}`),
-  complexes: (params) => request(`/complexes${qs(params)}`),
   complex: (id, params) => request(`/complexes/${id}${qs(params)}`),
   dongs: (id) => request(`/complexes/${id}/dongs`),
   setDongRental: (id, dong, rental) =>
@@ -190,15 +188,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ rental }),
     }),
-  quotes: (id, params) => request(`/complexes/${id}/quotes${qs(params)}`),
 
   // 역거리 연속 모델 + 지도
   modelFit: (params) => request(`/model/fit${qs(params)}`),
   groups: (params) => request(`/model/groups${qs(params)}`),
   factors: (params) => request(`/model/factors${qs(params)}`),
   modelStatus: (params) => request(`/model/status${qs(params)}`),
-  compare: (body) =>
-    request('/model/compare', { method: 'POST', body: JSON.stringify(body) }),
   quoteRanking: (params) => request(`/quotes/ranking${qs(params)}`),
   deleteQuote: (id) => request(`/quotes/${id}`, { method: 'DELETE' }),
   putQuoteNote: (body) =>
