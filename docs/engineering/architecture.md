@@ -58,6 +58,7 @@ backend/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
     validate_model.py       참값 복원 + 커버리지 검증
     cv_model.py             Stage 2 교차검증 — 요인을 넣을지 정하는 자
+    cv_macro.py             거시 합산 모델 대안 — 같은 백테스트 + DM 검정
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
     verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층
