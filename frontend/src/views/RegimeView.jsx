@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt, useMeasure, useTooltip } from '../components/Charts'
-import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import { heatVars, zText } from '../components/heat'
@@ -17,8 +16,17 @@ import { homeOf, topicFor } from '../topics/registry'
  *
  * 각 요인과 '그 뒤 12개월 가격 변화' 의 상관을 전부 쟀더니 **가장 센 것도 0.45**
  * 였고, 심리는 18개월 뒤에 부호가 뒤집혔다(과열의 끝). 통화량과 기준금리는 0에
- * 가까웠다. 그래서 방향 배지 옆에 **세기와 근거를 늘 같이** 적고, 눌러서 시차
- * 프로파일을 볼 수 있게 한다. 방향만 큼직하게 띄우면 없는 확신을 파는 셈이다.
+ * 가까웠다. 그래서 방향 옆에 **세기와 근거를 늘 같이** 둔다 — 맨 위 합산 카드의 요인마다
+ * '평소의 몇 배' 를, 마우스를 올리면 '지금 어떤가 · 과거에 그런 때 그 뒤 가격' 을. 요인
+ * 카드를 누르면 시차 프로파일이 뜬다. 방향만 큼직하게 띄우면 없는 확신을 파는 셈이다.
+ *
+ * ## '지금 무엇이 가격을 밀고 있나' 카드를 뺐다
+ *
+ * 공급·수요·통화량·금리·정책·세금 여섯 줄로 방향을 적던 카드가 둘째에 있었다. 요인별 방향은
+ * 맨 위 합산 카드의 줄다리기와, 가장 센 상관은 '요인별로 하나씩' 의 note 와, 정책·세금은
+ * 그 아래 '정책과 세금' 카드와 같은 말이었다. 같은 화면에서 같은 것을 두 번 말하면 판정이
+ * 조금만 갈려도(그 카드는 '보통' 위치·약한 상관에서 방향을 비웠다) 어느 쪽이 맞는지 묻게
+ * 된다. 합산 카드 쪽으로 모으고, 거기에만 있던 '지난 12개월 실제 변화' 는 합산 카드로 옮겼다.
  *
  * ## 정책·세금은 방향을 내지 않는다
  *
@@ -67,7 +75,6 @@ export default function RegimeView() {
     )
   }
 
-  const p = data.price
   // 요인 카드 왼쪽 막대의 방향. 맨 위 합산 모델의 판정을 쓴다 — 요인별 `pressure` 는 '보통'(30~70%)·
   // 약한 상관에서 방향을 비워 두어, 같은 화면에서 합산 카드는 '내림' 인데 막대는 회색인 요인이
   // 생겼다(미분양·전세가율·M2). 막대가 맨 위 카드와 다른 말을 하면 막대가 없는 것보다 나쁘다.
@@ -77,27 +84,6 @@ export default function RegimeView() {
     <>
       {/* 합쳐 본 결론이 맨 위다. 요인별 방향·카드는 그 근거라 아래로 둔다. */}
       {data.model?.available && <MacroModel m={data.model} price={data.price} />}
-
-      <section className="card">
-        <h2>지금 무엇이 가격을 밀고 있나</h2>
-        <p className="sub">
-          {p.region} 매매가격지수는 {ymText(p.ym)} 기준 전년비{' '}
-          <b className={p.yoy >= 0 ? 'tone-pos' : 'tone-neg'}>
-            {p.yoy >= 0 ? '+' : ''}
-            {p.yoy}%
-          </b>{' '}
-          입니다. 아래 방향은 <b>각 요인이 과거에 가격과 어떻게 움직였는지를 재서</b>{' '}
-          정한 것입니다
-          {data.max_abs_r != null && <> — 가장 센 상관도 {data.max_abs_r.toFixed(2)} 라</>}, 어느
-          하나도 혼자서는 가격을 설명하지 못합니다.
-        </p>
-
-        <div className="rg-groups">
-          {data.groups_detail.map((g) => (
-            <GroupRow key={g.group} g={g} onOpen={() => setOpen({ kind: 'group', g })} />
-          ))}
-        </div>
-      </section>
 
       <section className="card">
         <h2>요인별로 하나씩</h2>
@@ -226,114 +212,17 @@ export default function RegimeView() {
         <TopicModal topic={topicFor('factor', open.f.key, { title: open.f.label })}
                     onClose={() => setOpen(null)} />
       )}
-      {open?.kind === 'group' && (
-        <Modal title={`${open.g.group} — 어떻게 정했나`} onClose={() => setOpen(null)} wide>
-          <GroupDetail g={open.g} />
-        </Modal>
-      )}
     </>
   )
 }
 
 const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
-const ARROW = { up: '▲', down: '▼', none: '–' }
-const DIRWORD = { up: '상승 압력', down: '하락 압력', none: '방향 없음' }
-
 function factorSub(f) {
   const v = `${f.latest.value}${f.unit}`
   return (
     <>
       {ymText(f.latest.ym)} {v} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
-    </>
-  )
-}
-
-/** 그룹 한 줄. **배지 혼자 두지 않는다** — 세기와 근거가 늘 붙어 있어야 한다. */
-function GroupRow({ g, onOpen }) {
-  const isPolicy = g.kind === 'policy'
-  return (
-    <button className="rg-group" onClick={onOpen} aria-haspopup="dialog">
-      <span className={`rg-dir is-${g.dir}`}>{ARROW[g.dir]}</span>
-      <span className="rg-name">{g.group}</span>
-      <span className="rg-label">{g.label}</span>
-      <span className="muted small rg-why">
-        {isPolicy
-          ? g.latest
-            ? `최근 ${g.latest.date} ${g.latest.name}`
-            : '적힌 조치가 없습니다'
-          : g.members
-              .map((m) => `${m.label} ${ARROW[m.dir]}`)
-              .join(' · ')}
-      </span>
-    </button>
-  )
-}
-
-function GroupDetail({ g }) {
-  if (g.kind === 'policy') {
-    return (
-      <>
-        <p className="sub">{g.why}</p>
-        <table>
-          <thead>
-            <tr>
-              <th>종류</th>
-              <th>건수</th>
-              <th>그 뒤 12개월 중위</th>
-              <th>범위</th>
-            </tr>
-          </thead>
-          <tbody>
-            {g.aftermath.map((a) => (
-              <tr key={a.kind}>
-                <td>{a.kind}</td>
-                <td>{a.n}</td>
-                <td className={a.median >= 0 ? 'tone-pos' : 'tone-neg'}>
-                  {a.median >= 0 ? '+' : ''}
-                  {a.median}%
-                </td>
-                <td className="muted">
-                  {a.min}~{a.max}%
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </>
-    )
-  }
-  return (
-    <>
-      <p className="sub">
-        요인별 방향을 <b>상관의 세기로 가중해</b> 합한 값입니다(합 {g.score}). 엇갈리면
-        0 쪽으로 가고 '엇갈림' 으로 적습니다. 방향은 <b>상관 부호 × 지금 위치</b>라,
-        상관이 음수여도 지금 값이 낮으면 상승 쪽이 됩니다.
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>요인</th>
-            <th>방향</th>
-            <th>세기</th>
-            <th>가격과의 상관</th>
-            <th>지금 위치</th>
-          </tr>
-        </thead>
-        <tbody>
-          {g.members.map((m) => (
-            <tr key={m.label}>
-              <td>{m.label}</td>
-              <td>
-                {ARROW[m.dir]} {DIRWORD[m.dir]}
-              </td>
-              <td className="muted">{m.strength}</td>
-              <td>{m.r == null ? '—' : m.r > 0 ? `+${m.r}` : m.r}</td>
-              <td className="muted">{zText(m.z)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </>
   )
 }
@@ -472,8 +361,24 @@ function HistoryTable({ h, factors }) {
   )
 }
 
-/** 줄다리기 한쪽의 요인 목록. 센 것부터 — 응답이 이미 세기순이다. */
-function TugList({ dir, title, items }) {
+/**
+ * 줄다리기 한쪽의 요인 목록. 센 것부터 — 응답이 이미 세기순이다.
+ *
+ * **이름과 배율만** 보이는 작은 카드다. 예전에는 요인마다 지역 · '지금 어떤가' · '과거에 그런
+ * 때 그 뒤 가격' 세 줄을 늘 펼쳐 두어, 내리는 쪽이 여섯이면 카드 하나가 화면을 한참 차지했다.
+ * 줄다리기에서 먼저 읽을 것은 '어느 쪽에 무엇이 얼마나 세게' 라 그 둘만 두고, 문장은 마우스를
+ * 올리거나 탭으로 머무를 때 띄운다. 방향은 카드 색이다 — 올리는 쪽 초록, 내리는 쪽 빨강(화면
+ * 공통 규칙). 머리말의 ▲▼ 글자가 같이 있어 색만으로 말하지 않는다.
+ */
+function TugList({ dir, title, items, tip }) {
+  const content = (u) => (
+    <>
+      <div className="t-title">{u.label} · {u.region}</div>
+      <div className="t-row">{u.now_text}</div>
+      <div className="t-row">{u.rule_text}</div>
+      <div className="t-row muted">평소 오르내림 폭의 {Math.abs(u.z).toFixed(1)}배 벗어나 있음</div>
+    </>
+  )
   return (
     <div className={`rg-tug-col is-${dir}`}>
       <h4>{title} <span className="muted small">{items.length}개</span></h4>
@@ -482,15 +387,18 @@ function TugList({ dir, title, items }) {
       ) : (
         <ul>
           {items.map((u) => (
-            <li key={u.key}>
-              <div className="rg-tug-name">
-                <span>{u.label} <span className="muted small">{u.region}</span></span>
-                <span className="rg-push" title="평소 오르내림 폭(표준편차)의 몇 배만큼 벗어났나">
-                  {Math.abs(u.z).toFixed(1)}배
-                </span>
-              </div>
-              <div className="small">{u.now_text}</div>
-              <div className="muted small">{u.rule_text}</div>
+            <li key={u.key} tabIndex={0}
+                aria-label={`${u.label} ${Math.abs(u.z).toFixed(1)}배 — ${u.now_text}, ${u.rule_text}`}
+                onMouseMove={(e) => tip.show(e, content(u), 'is-wide')}
+                onMouseLeave={tip.hide}
+                onFocus={(e) => {
+                  // 키보드로 머무를 때도 같은 설명을 띄운다 — 카드 아래 왼쪽에.
+                  const r = e.currentTarget.getBoundingClientRect()
+                  tip.show({ clientX: r.left - 14, clientY: r.bottom + 18 }, content(u), 'is-wide')
+                }}
+                onBlur={tip.hide}>
+              <span>{u.label}</span>
+              <b className="rg-push">{Math.abs(u.z).toFixed(1)}배</b>
             </li>
           ))}
         </ul>
@@ -528,6 +436,7 @@ function MacroModel({ m, price }) {
   const diff = m.pred - m.base
   const upWins = m.pull.up >= m.pull.down
   const top = (upWins ? ups : downs)[0]
+  const tip = useTooltip()
   return (
     <section className="card">
       <h2>요인을 합치면 — 그 뒤 12개월</h2>
@@ -548,6 +457,13 @@ function MacroModel({ m, price }) {
           <strong>{sign(m.base)}{fmt(m.base, 1)}%</strong>
           <div className="muted small">{price.region} 매매가격지수 기준</div>
         </div>
+        {price.yoy != null && (
+          <div className="rg-after-cell">
+            <div className="muted small">지난 12개월 실제({ymText(price.ym)}까지)</div>
+            <strong className={price.yoy >= 0 ? 'tone-pos' : 'tone-neg'}>{sign(price.yoy)}{fmt(price.yoy, 1)}%</strong>
+            <div className="muted small">매매가격지수 전년비</div>
+          </div>
+        )}
       </div>
 
       <p className="rg-verdict">
@@ -565,13 +481,14 @@ function MacroModel({ m, price }) {
       <div className="rg-tug-cols">
         {/* 위 막대와 같은 좌우 — 내리는 쪽이 왼쪽, 올리는 쪽이 오른쪽. 처음에는 목록만 반대라
             막대의 ▼ 아래에 ▲ 목록이 있었다. */}
-        <TugList dir="down" title="▼ 내리는 쪽" items={downs} />
-        <TugList dir="up" title="▲ 올리는 쪽" items={ups} />
+        <TugList dir="down" title="▼ 내리는 쪽" items={downs} tip={tip} />
+        <TugList dir="up" title="▲ 올리는 쪽" items={ups} tip={tip} />
       </div>
+      {tip.node}
       <p className="muted small">
         '몇 배' 는 그 요인이 지금 평소에서 얼마나 벗어나 있는지입니다 — 평소 오르내림 폭(표준편차)의
         몇 배인가. 1배 안쪽은 흔한 범위이고, 많이 벗어난 요인일수록 세게 당깁니다. 막대의 비율이 이
-        값들의 합입니다. 아홉 요인이 모두 나온 {ymText(m.now)} 값이라, 그 뒤 달이 먼저 나온 요인은
+        값들의 합입니다. 요인에 마우스를 올리면 지금 어떤지와 과거에 그런 때 그 뒤 가격이 보입니다. 아홉 요인이 모두 나온 {ymText(m.now)} 값이라, 그 뒤 달이 먼저 나온 요인은
         아래 요인 카드와 숫자가 조금 다를 수 있습니다 — 평균은 같습니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
         나누지는 않습니다.
         {m.excluded.length > 0 && ` 과거 관계가 약해 뺀 요인: ${m.excluded.join(', ')}.`}
