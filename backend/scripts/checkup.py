@@ -421,6 +421,11 @@ def leftover_work_dirs() -> list[str]:
     여덟 곳과 머지된 워크트리 하나에 든 **옛 CLAUDE.md·옛 코드**였다. 다음 사람(에이전트)
     이 그 사본을 지금 것으로 읽으면 이미 고친 규칙을 따라 한다 — 컨텍스트가 썩는
     가장 조용한 길이다. 다른 세션이 쓰는 중일 수 있으므로 지울지는 사람이 정한다.
+
+    **지우려 하면 '사용 중' 으로 안 지워질 수 있다.** 2026-10-18 에 `wt-*` 여덟 곳이
+    전부 그랬는데, 부모 세션이 끝난 뒤에도 살아남은 적합 워커(`multiprocessing-fork`
+    로 뜬 python.exe, 부모 pid 가 없다)가 그 폴더의 `backend/` 를 작업 디렉터리로
+    쥐고 있었다 — 폴더마다 하나씩, 생성 시각이 폴더와 맞았다. 그 워커를 끝내야 지워진다.
     """
     try:
         lst = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=ROOT,
@@ -445,7 +450,10 @@ def leftover_work_dirs() -> list[str]:
         return []
     main_root = Path(next(iter(worktrees)))  # 첫 줄이 주 체크아웃이다
     cdir = main_root / ".claude"
-    children = [norm(str(p)) for p in cdir.iterdir() if p.is_dir()] if cdir.exists() else []
+    # `worktrees/` 안도 본다. 처음엔 그 폴더를 통째로 건너뛰어, git 에서 떨어져 나간
+    # 빈 워크트리 폴더 둘(세션이 끝나며 등록만 풀린 것)을 못 잡았다.
+    children = [norm(str(p)) for d in (cdir, cdir / "worktrees") if d.exists()
+                for p in d.iterdir() if p.is_dir()]
     merged = {b.strip() for b in mg.splitlines() if b.strip() and b.strip() != "main"}
     return stray_dirs(children, worktrees, merged)
 

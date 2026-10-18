@@ -177,10 +177,13 @@ def check_stray() -> bool:
 
     c = "e:/r/.claude"
     wts = {"e:/r": "main", f"{c}/worktrees/live": "feat/x", f"{c}/worktrees/old": "fix/done"}
-    got = stray_dirs([f"{c}/worktrees", f"{c}/wt-old"], wts, {"fix/done"})
-    caught = len(got) == 2 and "wt-old" in got[0] and "fix/done" in got[1]
-    clean = stray_dirs([f"{c}/worktrees"], {"e:/r": "main", f"{c}/worktrees/live": "feat/x"},
-                       set()) == []
+    # `worktrees/` 안의 등록 풀린 폴더(`gone`)도 잡아야 한다 — 처음엔 놓쳤다.
+    got = stray_dirs([f"{c}/worktrees", f"{c}/wt-old", f"{c}/worktrees/live",
+                      f"{c}/worktrees/old", f"{c}/worktrees/gone"], wts, {"fix/done"})
+    caught = (len(got) == 3 and "wt-old" in got[0] and "gone" in got[1]
+              and "fix/done" in got[2])
+    clean = stray_dirs([f"{c}/worktrees", f"{c}/worktrees/live"],
+                       {"e:/r": "main", f"{c}/worktrees/live": "feat/x"}, set()) == []
     print(f"  {'남은 작업 폴더 — 잡을 것만 잡나':<34} {'잡음' if caught and clean else '못 잡음'}")
     return caught and clean
 
