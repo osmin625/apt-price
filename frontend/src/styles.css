@@ -33,6 +33,8 @@
      stroke 가 무효가 되면 SVG 기본값 none 으로 떨어져 조용히 사라진다.
      파랑·주황과 구분되면서 --good(초록)·--neg(빨강)의 뜻과도 겹치지 않는 청록. */
   --series-3: #1f9e8c;
+  /* 넷째 — 거시 분석 겹친 그림의 금리 그룹. 그룹 넷을 색으로 가르려고 더했다(2026-10-19). */
+  --series-4: #8b5cf6;
   --neg: #e34948;
   --good: #0ca30c;
   --warning: #fab219;
@@ -62,6 +64,7 @@
     --series-1-wash: #1f3a6b;
     --series-2: #d95926;
     --series-3: #35b7a2;
+    --series-4: #a78bfa;
     --neg: #ff6b6b;
   }
 }
@@ -318,6 +321,9 @@ tr.is-current { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-selected='true'] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+/* 켜고 끄는 단추 묶음(겹친 그림의 그룹). 꺼진 것은 흐리게 — 켜진 것이 기본이다. */
+.seg button[aria-pressed='false'] { opacity: 0.45; }
+.seg .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
 .map-scale { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .map-scale i { width: 96px; height: 9px; border-radius: var(--radius); border: 1px solid var(--border); }
 .map-scale .grad-seq { background: linear-gradient(90deg, color-mix(in srgb, var(--series-1) 15%, var(--surface-1)), var(--series-1)); }

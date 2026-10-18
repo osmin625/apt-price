@@ -13,7 +13,7 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  * 세로선 하나로 그 달을 짚는 쪽이 맞다 — "2023년 착공이 줄 때 준공은 어땠나" 가 이
  * 그림이 답할 질문이다.
  *
- * `series`: [{ key, label, color, points: [{ ym, value }], dash?, axis? }]. 계열마다
+ * `series`: [{ key, label, color, points: [{ ym, value }], dash?, axis?, width? }]. 계열마다
  * 시작 달이 달라도 된다(인허가가 착공보다 길다). x 축은 모든 계열의 달을 합친 것이다.
  *
  * ## 오른쪽 축
@@ -184,8 +184,9 @@ export default function TimeLines({
           </text>
         ))}
         {g.paths.map((p) => (
-          <path key={p.key} d={p.d} fill="none" stroke={p.color} strokeWidth="1.9"
-                strokeLinejoin="round" strokeDasharray={p.dash ? '5 4' : undefined} />
+          <path key={p.key} d={p.d} fill="none" stroke={p.color} strokeWidth={p.width ?? 1.9}
+                strokeLinejoin="round"
+                strokeDasharray={typeof p.dash === 'string' ? p.dash : p.dash ? '5 4' : undefined} />
         ))}
         {hm && (
           <g pointerEvents="none">

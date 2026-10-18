@@ -6,6 +6,7 @@ import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
 import Hint from '../components/Hint'
 import { heatVars, zText } from '../components/heat'
+import TimeLines from '../components/TimeLines'
 import TopicModal from '../topics/TopicModal'
 import { homeOf, topicFor } from '../topics/registry'
 
@@ -24,8 +25,13 @@ import { homeOf, topicFor } from '../topics/registry'
  *
  * '비슷했던 달 12개 중 12개 상승' 은 재 보니 두 시기였고, 아무 달이나 골라도 그 뒤 1년이 오른
  * 달이 70~85% 였다. 그래서 요인 카드마다 '지금과 비슷한 자리였던 때 몇 번 · 그 뒤 1년 오른 때' 를
- * 기저율과 같이 적고, 요인 전부가 비슷했던 시기는 표와 가격 경로로 보인다. 숫자는 전부 응답이
- * 그 자리에서 센다(regime.factor_then · similar_periods).
+ * 기저율과 같이 적는다. 숫자는 전부 응답이 그 자리에서 센다(regime.factor_then).
+ *
+ * ## 요인과 매매지수는 한 그림에
+ *
+ * '비슷했던 시기'(요인 전부가 가까웠던 시기와 그 뒤 가격 경로)와 요인 창의 '그 뒤 가격과의 관계'
+ * 가 있었다. 2026-10-19 요청으로 둘을 걷고, 모든 요인과 매매지수 1년 변화율을 z 로 한 그림에
+ * 겹쳤다(`Overlay`). 과거 국면 표는 분기·월로 촘촘하게, 글자 없이 배수만.
  *
  * ## 정책·세금은 방향을 내지 않는다
  *
@@ -77,7 +83,7 @@ export default function RegimeView() {
               '값이 아니라 자기 평균보다 얼마나 위·아래인지로 봅니다. 미분양 몇 호가 많은 것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.',
               "'몇 배' 는 평소 오르내림 폭(표준편차)의 몇 배인가입니다.",
               "카드 아래 '비슷했던 때' 는 그 요인이 지금과 비슷한 자리였던 시기의 수와 그 뒤 1년 집값이 오른 시기의 수입니다. 이웃한 달은 한 시기로 묶고, 지금과 이어진 최근은 뺍니다. '기저' 는 같은 기간 아무 달이나 골랐을 때 그 뒤 1년이 오른 비율입니다.",
-              '요인 하나만 맞춘 것이라 그때 다른 요인은 전혀 달랐을 수 있습니다 — 요인 전부로 본 것은 아래 비슷했던 시기입니다.',
+              '요인 하나만 맞춘 것이라 그때 다른 요인은 전혀 달랐을 수 있습니다 — 요인들이 함께 어땠는지는 아래 한 그림과 과거 국면 표에서 봅니다.',
               data.note,
             ]}
           />
@@ -132,21 +138,25 @@ export default function RegimeView() {
 
       <section className="card">
         <h2>
-          전에도 이런 적이 있었나 — 비슷했던 시기
-          {data.similar.note && <Hint notes={[data.similar.note]} />}
+          요인과 매매지수 — 한 그림에
+          <Hint
+            wide
+            notes={[
+              '모든 요인과 매매지수를 같은 자로 겹쳤습니다 — 자기 평균에서 평소 오르내림 폭(표준편차)의 몇 배인가. 단위가 호·%·%p·지수로 제각각이라 값 그대로는 한 축에 놓을 수 없습니다.',
+              '매매지수는 1년 변화율로 그립니다(굵은 선). 지수 수준은 추세로만 올라, 요인들(대개 증감)과 같은 결로 견주려면 변화율이어야 합니다.',
+              '그룹마다 색이 같고 그룹 안에서는 선 모양이 다릅니다. 아래 단추로 그룹을 켜고 끕니다. 그림 위에 마우스를 올리면 그 달의 모든 값이 나옵니다.',
+              '같이 움직였다고 원인이라는 뜻은 아닙니다 — 요인들도 서로 얽혀 움직입니다.',
+            ]}
+          />
         </h2>
-        {data.similar.available ? (
-          <SimilarPeriods sim={data.similar} factors={data.factors} />
-        ) : (
-          <p className="empty">{data.similar.note}</p>
-        )}
-        {/* 표를 **바로 펼쳐 둔다.** 이 섹션이 답하는 것은 '그때 요인들이 어땠나' 다. */}
-        <h3 className="mt16">
-          과거 국면 표{' '}
-          <span className="muted small">
-            {data.history.step_months}개월마다 · {data.history.rows.length}행
-          </span>
-        </h3>
+        <Overlay factors={data.factors} price={data.price} />
+      </section>
+
+      <section className="card">
+        <h2>
+          과거 국면 표
+          <Hint notes={[data.history.note]} />
+        </h2>
         <HistoryTable h={data.history} factors={data.factors} />
       </section>
 
@@ -264,40 +274,51 @@ const kindTone = (k) => (k.endsWith('강화') ? 'tight' : k === '공급확대' ?
 
 /** 축소판: 가격이 오른 구간과 내린 구간만 색으로. */
 function HistoryTable({ h, factors }) {
+  // 기본은 분기(3·6·9·12월). 달마다 펴면 스무 해가 260줄이 넘는다 — 월은 고를 수 있게 둔다.
+  const [step, setStep] = useState('q')
   const tip = useTooltip()
   const keys = factors.map((f) => f.key)
   const labels = Object.fromEntries(factors.map((f) => [f.key, f.label]))
+  const rows = [...h.rows].reverse().filter((r) => step === 'm' || ['03', '06', '09', '12'].includes(r.ym.slice(4)))
   return (
     <>
+      <div className="seg" role="tablist" aria-label="얼마나 촘촘히">
+        {[['q', '분기'], ['m', '월']].map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={step === k} onClick={() => setStep(k)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="muted small"> {rows.length}행</span>
       <HeatLegend>
-        {h.note}{' '}
-        칸 색은 자기 평균에서의 위치(평소 폭의 몇 배)이고, 글자는{' '}
-        {(h.levels || []).map((l) =>
-          `${l.label}${l.max != null ? ` ${l.max}배 이하` : l.min != null ? ` +${l.min}배 이상` : ''}`,
-        ).join(' · ')}
+        칸의 숫자와 색은 자기 평균에서 평소 폭(표준편차)의 몇 배입니다. 색은 끊지 않고 이어집니다.
       </HeatLegend>
-      <div className="table-wrap">
+      <div className="table-wrap rg-hist-wrap">
         <table className="rg-hist">
           <thead>
             <tr>
               <th>시점</th>
+              <th>그 뒤 12개월</th>
               {keys.map((k) => (
                 <th key={k}>{labels[k]}</th>
               ))}
-              <th>그 뒤 12개월</th>
             </tr>
           </thead>
           <tbody>
-            {[...h.rows].reverse().map((r) => (
+            {rows.map((r) => (
               <tr key={r.ym}>
                 <td>{ymText(r.ym)}</td>
+                {/* 그 뒤를 앞에 둔다 — 요인 열이 아홉이라 뒤에 두면 가로로 밀어야 보였다. */}
+                <td className={r.fwd12 == null ? 'muted' : r.fwd12 >= 0 ? 'tone-pos' : 'tone-neg'}>
+                  {r.fwd12 == null ? '—' : `${r.fwd12 >= 0 ? '+' : ''}${r.fwd12}%`}
+                </td>
                 {keys.map((k) => {
                   const c = r.states[k]
                   return (
                     <td key={k}>
                       {c ? (
-                        // 색은 z 그대로(연속), 글자는 다섯 단계. 끊는 것은 읽기 위한
-                        // 글자뿐이다 — 색까지 끊으면 0.6배와 1.4배가 같은 칸이 된다.
+                        // '낮음·매우 낮음' 같은 글자를 적었었다(±0.5·±1.5 에서 끊겨 0.49 와 0.51 이
+                        // 다른 말이 됐다). 이제 배수만 적는다 — 색도 숫자도 이어진다.
                         <span
                           className="rg-state"
                           style={heatVars(c.z)}
@@ -312,7 +333,7 @@ function HistoryTable({ h, factors }) {
                           }
                           onMouseLeave={tip.hide}
                         >
-                          {c.state}
+                          {c.z > 0 ? '+' : ''}{fmt(c.z, 1)}
                         </span>
                       ) : (
                         <span className="muted">—</span>
@@ -320,9 +341,6 @@ function HistoryTable({ h, factors }) {
                     </td>
                   )
                 })}
-                <td className={r.fwd12 == null ? 'muted' : r.fwd12 >= 0 ? 'tone-pos' : 'tone-neg'}>
-                  {r.fwd12 == null ? '—' : `${r.fwd12 >= 0 ? '+' : ''}${r.fwd12}%`}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -365,149 +383,60 @@ function ThenLine({ t }) {
   )
 }
 
-/**
- * 요인 **전부**가 지금과 가까웠던 시기. 표는 시기마다 요인 위치(지금 줄과 견주게)와 그 뒤
- * 6·12·24개월, 그림은 시기 기준 달을 0 에 맞춘 가격 경로다.
- */
-function SimilarPeriods({ sim, factors }) {
-  const tip = useTooltip()
-  const keys = factors.map((f) => f.key).filter((k) => k in sim.now_z)
-  const labels = Object.fromEntries(factors.map((f) => [f.key, f.label]))
-  const b = sim.base
-  const cell = (z, label, when) => (
-    <span
-      className="rg-state"
-      style={heatVars(z)}
-      onMouseMove={(e) => tip.show(e, (
-        <>
-          <div className="t-title">{label} · {when}</div>
-          <div className="t-row">{zText(z)}</div>
-        </>
-      ))}
-      onMouseLeave={tip.hide}
-    >
-      {sgn(z)}{fmt(z, 1)}
-    </span>
-  )
+// 그룹마다 색 하나, 그룹 안에서는 선 모양으로 가른다. 열 줄을 색 열 개로 가르면 비슷한 색끼리
+// 헷갈린다 — 같은 그룹(금리 둘, 통화 둘)이 같은 색이면 '어느 쪽 이야기인가' 가 먼저 읽힌다.
+const GROUP_COLOR = {
+  공급: 'var(--series-1)', 수요: 'var(--series-2)', 통화량: 'var(--series-3)', 금리: 'var(--series-4)',
+}
+const DASHES = [null, '6 3', '2 3']
+
+/** 모든 요인(z)과 매매지수 1년 변화율(z)을 한 그림에. 그룹 단추로 켜고 끈다. */
+function Overlay({ factors, price }) {
+  const groups = [...new Set(factors.map((f) => f.group))]
+  const [on, setOn] = useState(() => new Set(groups))
+  const toggle = (g) => setOn((prev) => {
+    const next = new Set(prev)
+    if (next.has(g)) next.delete(g)
+    else next.add(g)
+    return next
+  })
+  const seen = {}
+  const series = [
+    { key: 'price', label: `매매지수 1년 변화(${price.region})`, color: 'var(--text-primary)', width: 3,
+      points: (price.yoy_series || []).map((p) => ({ ym: p.ym, value: p.z })) },
+    ...factors.filter((f) => on.has(f.group)).map((f) => {
+      const n = (seen[f.group] = (seen[f.group] ?? -1) + 1)
+      return {
+        key: f.key, label: f.label, color: GROUP_COLOR[f.group] || 'var(--text-muted)',
+        dash: DASHES[n % DASHES.length], width: 1.5,
+        points: f.series.map((p) => ({ ym: p.ym, value: p.z })),
+      }
+    }),
+  ]
+  // **매매지수 1년 변화가 시작하는 달부터** 그린다. 처음에는 가장 이른 요인(가계대출 금리,
+  // 1997년~)부터 그렸더니 견줄 매매지수가 없는 앞 8년이 그림의 3분의 1을 차지했다. 늦게
+  // 시작하는 요인은 그 달부터 나타난다.
+  const start = series[0].points[0]?.ym ?? '000000'
+  const months = [...new Set(series.flatMap((s) => s.points.map((p) => p.ym)))]
+    .filter((ym) => ym >= start).sort()
   return (
     <>
-      <p className="muted small">
-        비슷했던 시기 {sim.summary.episodes}번 · 그 뒤 1년 오른 시기 {sim.summary.up}/{sim.summary.episodes}
-        {sim.summary.episodes <= FEW && <span data-tone="warn"> · 사례 적음</span>}
-        {' '}· 기저 {b.up_pct}% (같은 기간 아무 달이나, 중위 {pctText(b.median)})
-        <Hint
-          notes={[
-            `가까운 달 ${sim.params.near_months}개를 고른 뒤 ${sim.params.episode_gap}개월 안에 이어지는 달을 한 시기로 묶고, 시기마다 가장 가까운 달을 기준 달로 삼았습니다.`,
-            `지금과 이어진 최근 ${sim.params.exclude_recent}개월은 뺐습니다 — 요인은 천천히 움직여 지난 1~2년이 늘 가장 비슷하게 나옵니다.`,
-            `기저: ${ymText(b.from)}~${ymText(b.to)} 의 모든 달 가운데 그 뒤 1년이 오른 비율입니다. 비슷했던 시기의 결과는 이것과 견줘 읽습니다.`,
-            '칸의 숫자는 평균에서 평소 폭의 몇 배(z)입니다. 지금 줄과 색이 비슷할수록 그 요인이 그때도 비슷했습니다.',
-          ]}
-        />
-      </p>
-      <div className="table-wrap">
-        <table className="rg-hist">
-          <thead>
-            <tr>
-              <th>시기 (기준 달)</th>
-              {/* 그 뒤를 앞에 둔다. 요인 열이 아홉이라 뒤에 두면 가로로 밀어야 보였다. */}
-              <th>6개월 뒤</th>
-              <th>1년 뒤</th>
-              <th>2년 뒤</th>
-              {keys.map((k) => <th key={k}>{labels[k]}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="is-current">
-              <td><b>지금</b> <span className="muted small">{ymText(sim.now)}</span></td>
-              <td className="muted">—</td><td className="muted">—</td><td className="muted">—</td>
-              {keys.map((k) => <td key={k}>{cell(sim.now_z[k], labels[k], '지금')}</td>)}
-            </tr>
-            {sim.episodes.map((e) => (
-              <tr key={e.pick}>
-                <td>
-                  {periodText(e)} <span className="muted small">({ymText(e.pick)})</span>
-                </td>
-                {['6', '12', '24'].map((h) => (
-                  <td key={h} className={e.fwd[h] == null ? 'muted' : e.fwd[h] >= 0 ? 'tone-pos' : 'tone-neg'}>
-                    {pctText(e.fwd[h])}
-                  </td>
-                ))}
-                {keys.map((k) => <td key={k}>{cell(e.z[k], labels[k], ymText(e.pick))}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="seg" role="group" aria-label="그룹 켜고 끄기">
+        {groups.map((g) => (
+          <button key={g} aria-pressed={on.has(g)} onClick={() => toggle(g)}>
+            <span className="swatch" style={{ background: GROUP_COLOR[g] }} /> {g}
+          </button>
+        ))}
       </div>
-      {tip.node}
-      <PathChart episodes={sim.episodes} />
+      <TimeLines
+        series={series}
+        unit="배"
+        decimals={1}
+        zero
+        height={340}
+        months={months}
+        ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림"
+      />
     </>
-  )
-}
-
-// 시기마다 선 하나. 정의된 계열 색이 셋뿐이라 넷째부터는 같은 색을 점선으로 쓴다.
-const PATH_STYLE = [
-  ['var(--series-1)', null], ['var(--series-2)', null], ['var(--series-3)', null],
-  ['var(--series-1)', '4 3'], ['var(--series-2)', '4 3'],
-]
-
-/** 시기 기준 달을 0 에 맞춘 가격 경로(기준 달 대비 %). 앞 12개월과 뒤 24개월. */
-function PathChart({ episodes }) {
-  const [ref, width] = useMeasure()
-  const tip = useTooltip()
-  const pts = episodes.flatMap((e) => e.path)
-  if (!pts.length) return null
-  const ks = pts.map((p) => p.k)
-  const vs = pts.map((p) => p.v)
-  const k0 = Math.min(...ks)
-  const k1 = Math.max(...ks)
-  const lo = Math.min(0, ...vs)
-  const hi = Math.max(0, ...vs)
-  const W = Math.max(width, 280)
-  const H = 200
-  const PAD = { l: 40, r: 10, t: 10, b: 22 }
-  const x = (k) => PAD.l + ((k - k0) / (k1 - k0 || 1)) * (W - PAD.l - PAD.r)
-  const y = (v) => PAD.t + (1 - (v - lo) / (hi - lo || 1)) * (H - PAD.t - PAD.b)
-  const ticks = [lo, 0, hi].filter((v, i, a) => a.indexOf(v) === i)
-  return (
-    <div ref={ref} className="mt16">
-      <div className="legend">
-        {episodes.map((e, i) => (
-          <span key={e.pick} className="key">
-            <span className="swatch" style={{ background: PATH_STYLE[i % PATH_STYLE.length][0] }} />
-            {periodText(e)}
-          </span>
-        ))}
-      </div>
-      <svg width={W} height={H} role="img" aria-label="비슷했던 시기의 기준 달 앞뒤 가격 경로">
-        {ticks.map((v) => (
-          <g key={v}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="var(--grid)"
-                  strokeDasharray={v === 0 ? null : '2 3'} />
-            <text x={PAD.l - 6} y={y(v) + 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{sgn(v)}{fmt(v, 0)}%</text>
-          </g>
-        ))}
-        <line x1={x(0)} x2={x(0)} y1={PAD.t} y2={H - PAD.b} stroke="var(--text-muted)" />
-        {[k0, 0, 12, k1].filter((k, i, a) => a.indexOf(k) === i).map((k) => (
-          <text key={k} x={x(k)} y={H - 6} textAnchor="middle" fontSize="10.5" fill="var(--text-muted)">
-            {k === 0 ? '기준 달' : `${sgn(k)}${k}개월`}
-          </text>
-        ))}
-        {episodes.map((e, i) => {
-          const [c, dash] = PATH_STYLE[i % PATH_STYLE.length]
-          const d = e.path.map((p, j) => `${j ? 'L' : 'M'}${x(p.k).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')
-          return (
-            <path key={e.pick} d={d} fill="none" stroke={c} strokeWidth="1.8" strokeDasharray={dash}
-                  onMouseMove={(ev) => tip.show(ev, (
-                    <>
-                      <div className="t-title">{periodText(e)} · 기준 {ymText(e.pick)}</div>
-                      <div className="t-row">1년 뒤 {pctText(e.fwd['12'])} · 2년 뒤 {pctText(e.fwd['24'])}</div>
-                    </>
-                  ))}
-                  onMouseLeave={tip.hide} />
-          )
-        })}
-      </svg>
-      {tip.node}
-    </div>
   )
 }

@@ -43,7 +43,7 @@ backend/
     services/macro.py       공표 통계를 경기 남부 시군구로 묶기
     services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
                             (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
-    services/regime.py      요인 위치(z)·상관·과거 사례(그때는·비슷했던 시기·기저율)·과거 국면
+    services/regime.py      요인 위치(z)·그때는·기저율·과거 국면(월별)
     services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
 
     clients/molit.py        국토교통부 실거래가 API
