@@ -20,37 +20,37 @@ backend/
 
     routers/                HTTP 만 맡는다 — 입력 검증, 서비스 호출, 오류를 상태 코드로.
                             해석 규칙·집계는 services 에 둔다(아래 '라우터는 얇게').
-    routers/complexes.py    단지 목록·상세·평형·동·민간임대 표시
-    routers/analysis.py     구간 기반 기술통계(매물 분석 탭)
-    routers/model.py        적합·요인·묶음·두 매물 비교·목록 붙여넣기
+    routers/complexes.py    단지 상세·동·민간임대 표시·필터 선택지
+    routers/analysis.py     향 프리미엄 측정만 남았다(화면 없음 — services/aspect.py)
+    routers/model.py        적합·요인·묶음·적합 상태·목록 붙여넣기
     routers/quotes.py       쌓인 호가의 순위·삭제·비고·메모 사전
     routers/map.py          지도 마커·역·도보 경로
     routers/macro.py        한국부동산원 공표 통계
     routers/supply.py       공급 분석
     routers/regime.py       거시 국면
 
-    services/analysis.py    DB → 기술통계 (구간 기반, 기존 3개 탭)
+    services/analysis.py    DB → 거래 점·단지 상세·실거래 기준 적정가(비교표본 중앙값)
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)
     services/fit_worker.py  적합을 별도 프로세스에서 돌린다(FIT_IN_PROCESS=1 로 끈다)
-    services/model_view.py  적합 결과 → 지도 마커·등가격 링·요인 곡선·매물 적정가·비교
+    services/model_view.py  적합 결과 → 지도 마커·요인 곡선·묶음·매물 요인 기준 적정가
     services/listing_parse.py   붙여넣은 텍스트 → 단지명·면적·층·호가·메모 (글자만 읽는다)
     services/listing_match.py   읽은 값 → 우리 단지·실제 거래 평형에 맞추고 순위·저장까지
     services/ranking.py     여러 매물을 한꺼번에 평가·중복 합치기·쌓인 호가 순위
-    services/quotes.py      호가 누적·유닛 접기·이력, 메모 원문과 끈 태그 조회
+    services/quotes.py      호가 누적·유닛 접기·이어 붙이기, 메모 원문과 끈 태그 조회
     services/memo_tags.py   중개사 메모 → 키워드 (DB 를 모르는 순수 규칙)
     services/aspect.py      향 프리미엄 측정 — 화면에서는 뺐지만 측정이 자산이라 남김
     services/macro.py       공표 통계를 경기 남부 시군구로 묶기
     services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
-    services/regime.py      요인별 압력(상관·시차)·과거 국면·비슷했던 달
-    services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
                             (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
+    services/regime.py      요인별 압력(상관·시차)·과거 국면·비슷했던 달·요인 합산 모델
+    services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
 
     clients/molit.py        국토교통부 실거래가 API
     clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
     clients/tmap.py         보행자 경로안내
     clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
-    clients/ecos.py         한국은행 ECOS — M2 와 기준금리만 (키 없으면 sample 폴백)
+    clients/ecos.py         한국은행 ECOS — M2·기준금리·소비자물가 (키 없으면 sample 폴백)
     clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
     clients/kapt.py         K-apt 단지 세대수·동수
     clients/reb.py          한국부동산원 R-ONE 공표 통계
@@ -69,7 +69,7 @@ backend/
     migrate.py              모델에 있는데 DB 에 없는 컬럼 추가
     ingest_reb.py           한국부동산원 공표 통계
     ingest_supply.py        공급 통계(인허가·착공·준공·멸실·가구수) — 시도 단위
-    ingest_macro.py         거시 요인(미분양·심리·가계대출·금리·M2·기준금리)
+    ingest_macro.py         거시 요인(미분양·심리·가계대출·금리·M2·기준금리·소비자물가)
     ingest_kapt.py          K-apt 단지 상세(세대수 등) — 우리 단지에 붙인다
     ingest_kapt_all.py      K-apt 시군구 전수 — 붙이지 않고 담는다(경기 남부 공급)
     ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
@@ -92,6 +92,8 @@ frontend/
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
   src/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
+  src/components/heat.js    평균 대비 위치(z)의 색·말 — 탭 공통의 자 (백엔드 regime.hist_z 와 같은 공식)
+  src/topics/               같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가

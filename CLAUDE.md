@@ -17,6 +17,7 @@
 | | 추정 방법·수식을 건드린다 | [model/method.md](docs/model/method.md) |
 | `data/` 출처 | 데이터를 채우거나 지역을 넓힌다 | [data/pipeline.md](docs/data/pipeline.md) |
 | | 공표 통계(한국부동산원)를 건드린다 | [data/reb.md](docs/data/reb.md) |
+| | 붙여넣은 매물을 단지·평형에 맞추거나 메모를 읽는 규칙을 바꾼다 | [data/listings.md](docs/data/listings.md) |
 | `analysis/` 공급·거시 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
 | | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
 | `engineering/` 코드 다루기 | 코드 위치를 찾는다 | [engineering/architecture.md](docs/engineering/architecture.md) |
@@ -104,7 +105,7 @@
 종료 코드 0 으로 끝나며 비교를 전부 FAIL 로 찍었다. 메모리 부족이 정확성 실패와
 똑같이 보였고 가드는 한 번도 걸리지 않았다.
 
-- `scripts/verify_guard.py` — 실패 모양을 직접 만들어 넣어 본다(27개 경우).
+- `scripts/verify_guard.py` — 실패 모양을 직접 만들어 넣어 본다.
   **걸리지 말아야 할 때 안 걸리는지도** 같이 본다 — 그게 없으면 전부 걸리게 해 놓고
   통과했다고 할 수 있다.
 
@@ -137,6 +138,11 @@
 
 검증 스크립트가 늘었다. **하나씩 기억해서 돌리는 구조는 반드시 뒤처진다** —
 '손으로 유지하는 목록' 에서 이미 당한 것과 같은 함정이다. 입구를 하나로 둔다.
+`backend/scripts/verify_*.py` 를 **찾아서** 돌리므로 새 검사는 어디에도 적지 않아도
+돈다(예전에는 돌릴 목록을 손으로 적어 셋이 빠져 있었고, 그중 하나는 실패 중이었다).
+
+이 문서의 `scripts/…` 는 전부 `backend/scripts/` 다. **`backend/` 에서 돌린다** —
+저장소 루트에서 `python -m scripts.checkup` 을 치면 모듈을 못 찾는다.
 
 세 가지를 본다.
 
@@ -151,7 +157,7 @@
 
 **언제 도나**
 
-- 기능을 더하거나 이름을 바꾼 뒤 — `--fast` 로 충분하다
+- 기능을 더하거나 이름을 바꾼 뒤 — `--fast` 로 충분하다(느린 검사는 건너뛴다)
 - PR 을 열기 전 — 전체
 - 한동안 안 건드렸다가 다시 열 때 — 전체. 신선도는 **아무것도 안 해도 썩는다**
 
