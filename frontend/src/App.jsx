@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
+import Hint from './components/Hint'
 import MacroView from './views/MacroView'
 import MarketView from './views/MarketView'
 import ComplexDetail from './views/ComplexDetail'
@@ -139,8 +140,8 @@ export default function App() {
             </>
           ) : (
             '생성 시점을 읽지 못했습니다.'
-          )}{' '}
-          매물을 새로 넣거나 모델을 다시 돌리는 것은 로컬 대시보드에서 합니다.
+          )}
+          <Hint notes={['매물을 새로 넣거나 모델을 다시 돌리는 것은 로컬 대시보드에서 합니다.']} />
         </div>
       )}
 

@@ -990,6 +990,8 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .rg-timeline li { padding-left: 12px; border-left: 2px solid var(--border); }
 .rg-tl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.rg-tl-foot { display: flex; align-items: center; gap: 6px; }
+.rg-tl-foot .hint { margin-left: 0; }
 .rg-tl-after { margin-left: auto; font-variant-numeric: tabular-nums; }
 .rg-kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
 .rg-kind.is-tight { background: color-mix(in srgb, var(--neg) 16%, transparent); color: var(--neg); }

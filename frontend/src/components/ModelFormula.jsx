@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { fmt } from './Charts'
 import CoefTable from './CoefTable'
+import Hint from './Hint'
 
 /**
  * 분해 모델의 **입구** — 맨 위에 수식을 두고, 항을 누르면 그 항의 상세가 아래에 뜬다.
@@ -357,12 +358,15 @@ export default function ModelFormula({ fit }) {
   const linkedId = pick === 'alpha' ? 'y2' : pick === 'y2' ? 'alpha' : null
   return (
     <div className="card mf">
-      <h2>모델은 이렇게 생겼다</h2>
-      <p className="sub">
-        두 단계입니다. <b>Stage 1</b> 은 거래 하나하나로 층·면적·시점과 단지마다의 수준(α)을 나누고,{' '}
-        <b>Stage 2</b> 는 그 단지 수준을 역거리·연식 같은 단지 요인으로 다시 나눕니다. 항을 누르면
-        그 항이 무엇이고 얼마로 추정됐는지가 아래에 나옵니다.
-      </p>
+      <h2>
+        모델은 이렇게 생겼다
+        <Hint
+          notes={[
+            '두 단계입니다. Stage 1 은 거래 하나하나로 층·면적·시점과 단지마다의 수준(α)을 나누고, Stage 2 는 그 단지 수준을 역거리·연식 같은 단지 요인으로 다시 나눕니다.',
+            '항을 누르면 그 항이 무엇이고 얼마로 추정됐는지가 아래에 나옵니다.',
+          ]}
+        />
+      </h2>
       <Line label="Stage 1 · 거래 단위" terms={stage1Terms(fit)} pick={pick} setPick={setPick} linkedId={linkedId} />
       <Line label="Stage 2 · 단지 단위" terms={stage2Terms(fit)} pick={pick} setPick={setPick} linkedId={linkedId} />
       <div className="mf-foot">

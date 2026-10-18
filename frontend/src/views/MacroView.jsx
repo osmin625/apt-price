@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
+import Hint from '../components/Hint'
 import { heatColor, zText } from '../components/heat'
 import QuadrantScatter from '../components/QuadrantScatter'
 import { MultiLine } from '../topics/RegionMetric'
@@ -95,12 +96,15 @@ export default function MacroView() {
   return (
     <>
       <div className="card">
-        <h2>경기 남부 시군구를 한 화면에</h2>
-        <p className="sub">
-          한국부동산원이 공표하는 <b>아파트 통계</b>입니다. 다른 탭은 우리 모델이 낸
-          값이지만 이 탭만 바깥에서 가져온 공표 통계라, 모델을 견주어 볼 바깥 기준이
-          됩니다. KB 등 다른 기관 수치와 다를 수 있습니다 — 조사 주체와 표본이 다릅니다.
-        </p>
+        <h2>
+          경기 남부 시군구를 한 화면에
+          <Hint
+            notes={[
+              '한국부동산원이 공표하는 아파트 통계입니다. 다른 탭은 우리 모델이 낸 값이지만 이 탭만 바깥에서 가져온 공표 통계라, 모델을 견주어 볼 바깥 기준이 됩니다.',
+              'KB 등 다른 기관 수치와 다를 수 있습니다 — 조사 주체와 표본이 다릅니다.',
+            ]}
+          />
+        </h2>
 
         <div className="filters">
           <div className="field">
@@ -677,11 +681,11 @@ function GapTable({ gap }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small" style={{ marginTop: 6 }}>
+      <p className="muted small" style={{ marginTop: 6 }}><Hint pill wide label="설명">
         가장 많이 벌어진 다섯 곳입니다. 어느 쪽이 맞는지는 이 표가 말해 주지 않습니다 —
         그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나, 모델이 뭔가를
         놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
-      </p>
+      </Hint></p>
     </>
   )
 }

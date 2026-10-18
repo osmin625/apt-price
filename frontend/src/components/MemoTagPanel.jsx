@@ -84,14 +84,10 @@ export default function MemoTagPanel() {
             '중개사가 매물에 적은 한 줄 메모에서 키워드를 뽑아 호가 분석의 비고에 띄웁니다.',
             '누르면 비고에 띄울지가 바뀝니다. 꺼도 원문은 그대로 저장되고, 다시 켜면 그 자리에서 되살아납니다.',
             '숫자는 쌓인 메모에서 그 키워드가 몇 번 나왔는지입니다. 볼 때마다 다시 셉니다.',
+            `비고 칸이 좁아 켜 둔 것 중 앞 ${data.max_badges}개만 배지로 나가고 나머지는 +N 으로 접힙니다 — 앞 순서일수록 가격에 걸리는 키워드입니다.`,
           ]}
         />
       </h2>
-      <p className="sub">
-        누르면 <b>비고에 띄울지</b>가 바뀝니다. 비고 칸이 좁아 켜 둔 것 중{' '}
-        <b>앞 {data.max_badges}개</b>만 배지로 나가고 나머지는 <code>+N</code> 으로
-        접힙니다 — 앞 순서일수록 가격에 걸리는 키워드입니다.
-      </p>
       {err && <p className="paste-warn">{err}</p>}
 
       {data.n_memos === 0 ? (
@@ -142,10 +138,12 @@ export default function MemoTagPanel() {
           {open && (
             <div className="memo-unknown">
               <p className="muted small">
-                아직 아무 규칙에도 안 걸리는 낱말입니다(2번 이상). 규칙을 늘릴 거리가
-                여기 있습니다 — 다만 사전은 코드(<code>app/services/memo_tags.py</code>)
-                에 있고, 늘린 뒤에는 <code>python -m scripts.memo_report</code> 로 다시
-                재서 적중 수를 주석에 남깁니다. 눈으로 보고 늘리지 않습니다.
+                아직 아무 규칙에도 안 걸리는 낱말(2번 이상)
+                <Hint
+                  notes={[
+                    '규칙을 늘릴 거리가 여기 있습니다. 사전은 코드(app/services/memo_tags.py)에 있고, 늘린 뒤에는 python -m scripts.memo_report 로 다시 재서 적중 수를 주석에 남깁니다.',
+                  ]}
+                />
               </p>
               {data.unknown.length > 0 ? (
                 <div className="dong-chips">

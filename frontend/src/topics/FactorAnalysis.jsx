@@ -5,6 +5,7 @@
  * (`TopicModal`)의 '가격과의 관계' 절로 들어간다.
  */
 import { zText } from '../components/heat'
+import Hint from '../components/Hint'
 
 const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
@@ -19,7 +20,7 @@ export function FactorDetail({ f }) {
       </p>
       <p className="sub">{f.pressure.why}</p>
       <h4>시차별 상관</h4>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         그림의 두 선이 같이 움직였는지입니다. <b>시차 N개월</b>은 요인 값을 본 달에서
         N개월 지나 시작하는 1년의 가격 변화와 견준 것이고, 0개월은 보고 나서 바로 다음
         1년 — 그림에서 같은 달에 겹친 두 값입니다. 방향(위 판정)은 0개월 값으로 정하고 겹치지 않는 표본과
@@ -27,7 +28,7 @@ export function FactorDetail({ f }) {
         거꾸로 민다는 뜻이 아니라, 1~2년이면 시장 국면이 바뀌어 다음 국면과 겹쳐 보이는
         것에 가깝습니다. 가장 센 시차 하나만 고르지 않습니다 — 여럿 중 최대를 고르면 고른
         값 자체가 우연을 탑니다.
-      </p>
+      </Hint></p>
       <table>
         <thead>
           <tr>
@@ -50,11 +51,11 @@ export function FactorDetail({ f }) {
           </tr>
         </tbody>
       </table>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         월별 상관의 n 은 {m.n} 이지만 12개월 창이 겹쳐 있어 <b>독립 표본은 해마다 하나,{' '}
         {m.nonoverlap_n}개 남짓</b>입니다. 그래서 매년 12월만 쓴 값을 같이 냅니다.
         {m.agree ? ' 두 값의 부호가 같습니다.' : ' 두 값의 부호가 달라 약하게 봅니다.'}
-      </p>
+      </Hint></p>
     </>
   )
 }

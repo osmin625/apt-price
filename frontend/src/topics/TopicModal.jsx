@@ -9,6 +9,7 @@ import { FactorDetail } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
 import { PRICE_METRIC } from './registry'
 import { PipeTable, UnsoldTable } from './SupplyTables'
+import Hint from '../components/Hint'
 
 /**
  * 주제 창 — 어느 탭에서 열든 같은 내용이다(`registry.js` 참조).
@@ -161,7 +162,7 @@ function FactorSection({ topic, onLabel }) {
           {/* 이 절이 무엇을 무엇과 견주는지. 위 절과 단위·지역이 달라 말해 두지 않으면
               같은 데이터를 다르게 그린 것처럼 보인다. 숫자는 넣지 않는다 — 모든 요인이
               같은 문장을 쓴다. */}
-          <p className="sub">
+          <p className="muted small"><Hint pill wide label="설명">
             {/* 이름 뒤에 조사를 붙이지 않는다 — 요인마다 받침이 달라('소비심리과') 틀린다. */}
             선 둘을 겹쳤습니다. <b>왼쪽 축</b> — {f.label}({f.region}), {f.transform_label}.{' '}
             <b>오른쪽 축</b> — 그 달부터 12개월 동안 {price.region} 매매가격지수 변화(%). 한 달을
@@ -169,7 +170,7 @@ function FactorSection({ topic, onLabel }) {
             두 선의 높이를 서로 견주지 말고 <b>같이 오르내리는지</b>를 보세요.
             {f.transform !== 'level' && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
             가격 선의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
-          </p>
+          </Hint></p>
           {/* 한 그림에 겹친다. 위아래 두 장으로 나눴더니 같은 달을 눈으로 오가야 해서
               '같이 움직였나' 가 한 번에 안 보였다(ui-log). 단위가 요인마다 달라(%·%p·
               지수) 축은 둘이다. 가격 값은 백엔드가 상관을 잴 때 쓴 그 `_fwd12` 다 —

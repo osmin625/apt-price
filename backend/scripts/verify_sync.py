@@ -572,6 +572,54 @@ def _str_of(node) -> str:
     return ""
 
 
+# 화면에 펼쳐 둔 설명의 길이. **설명은 호버(`Hint`)로 접는다** — 2026-10-18 에 탭마다
+# 카드 아래 두세 줄짜리 `p.sub`·`muted small` 이 깔려 그림보다 글이 먼저 보였다(문단
+# 서른 곳 남짓). 화면에 남는 것은 제목과 값, 한 줄짜리 상태뿐이다.
+#
+# 60자는 '한 줄' 의 선이다 — 카드 폭 300px 남짓에서 작은 글씨 두 줄이 넘으면 설명이다.
+# 세는 것은 **고정 글자**뿐이다. `{...}` 로 그 자리에서 계산해 넣는 값과 `<Hint>` 안은
+# 세지 않는다 — 앞은 데이터이고 뒤는 이미 접혀 있다.
+LONG_COPY_LIMIT = 60
+
+# 일부러 펼쳐 둔 긴 문단. **이유를 적어야 통과한다.** 키는 '파일:첫 20자'.
+LONG_COPY_OK: dict[str, str] = {}
+
+_COPY_TAG = re.compile(r'<(p|div|span)\s+className="([^"]*)"[^>]*>(.*?)</\1>', re.S)
+
+
+def _static_copy(inner: str) -> str:
+    inner = re.sub(r"<Hint[\s>].*?</Hint>", " ", inner, flags=re.S)
+    prev = None
+    while prev != inner:
+        prev = inner
+        inner = re.sub(r"\{[^{}]*\}", " ", inner)
+    inner = re.sub(r"<[^>]+>", " ", inner)
+    return re.sub(r"\s+", " ", inner).strip()
+
+
+def check_long_copy(r: Result) -> None:
+    """설명 문단(`sub`·`muted`)이 화면에 길게 펼쳐져 있나 — 있으면 `Hint` 로 접는다."""
+    header("문구 — 화면에 펼쳐 둔 긴 설명")
+    hits = 0
+    for p in sorted(FRONT.rglob("*.jsx")):
+        src = re.sub(r"/\*.*?\*/", lambda m: " " * len(m.group(0)), p.read_text(encoding="utf-8"),
+                     flags=re.S)
+        for m in _COPY_TAG.finditer(src):
+            if not ({"sub", "muted"} & set(m.group(2).split())):
+                continue
+            text = _static_copy(m.group(3))
+            if len(text) <= LONG_COPY_LIMIT:
+                continue
+            rel = p.relative_to(FRONT).as_posix()
+            if f"{rel}:{text[:20]}" in LONG_COPY_OK:
+                continue
+            hits += 1
+            line = src[: m.start()].count("\n") + 1
+            r.bad(f"{rel}:{line} 화면에 펼쳐 둔 설명 {len(text)}자 — '{text[:30]}…'. "
+                  f"제목 옆 <Hint> 로 접으세요(긴 설명은 호버로)")
+    print(f"  {LONG_COPY_LIMIT}자 넘게 펼쳐 둔 설명 {hits}곳")
+
+
 def check_css(r: Result) -> None:
     """CSS 가 **구문으로** 성한가.
 
@@ -972,6 +1020,7 @@ def main() -> int:
     check_dead_components(r)
     check_markdown(r)
     check_frozen_numbers(r)
+    check_long_copy(r)
     check_css(r)
     check_commands(r)
     check_doc_names(r)
