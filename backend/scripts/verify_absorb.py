@@ -298,15 +298,21 @@ def main() -> int:
     cd = {t["name"]: t["coef"] for t in m_d["terms"]}
     ca = {t["name"]: t["coef"] for t in m_a["terms"]}
     shared = [k for k in cd if k in ca]
+    # 분모는 **계수와 표준오차 중 큰 것**이다. 계수만 쓰던 때 2026-10-18 에 실거래 2,107건이
+    # 더 들어오자 `elem_dist` 가 1.1e-05 vs 1.0e-05 로 '상대차 9.09%' 가 나와 실패했다.
+    # 그 계수의 표준오차는 2.36e-04 — 차이는 표준오차의 0.4% 였고, 계수는 소수 6자리에서
+    # 반올림돼 있어 0 근처에서는 반올림만으로 수십 % 가 된다. 흡수가 틀린 것이 아니라
+    # 0 에 가까운 계수에서 상대차가 터진 것이다. 0 에서 먼 계수는 예전과 똑같이 본다.
+    se_d = {t["name"]: (t.get("se") or 0.0) for t in m_d["terms"]}
     worst, wname = 0.0, ""
     for k in shared:
-        d = abs(cd[k] - ca[k]) / max(abs(cd[k]), 1e-6)
+        d = abs(cd[k] - ca[k]) / max(abs(cd[k]), se_d.get(k, 0.0), 1e-6)
         if d > worst:
             worst, wname = d, k
     p4 = worst < 0.02
     ok &= p4
     print(f"[{'PASS' if p4 else 'FAIL'}] 4. Stage 2 계수 {len(shared)}개 최대 상대차 "
-          f"{worst:.2%} (<2%, 최악 '{wname}')")
+          f"{worst:.2%} (max(|계수|, se) 대비 <2%, 최악 '{wname}')")
 
     lw_d = m_d["linear_walk"]["coef"]; lw_a = m_a["linear_walk"]["coef"]
     print(f"        도보 선형계수 {lw_d:.6f} vs {lw_a:.6f} "

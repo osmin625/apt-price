@@ -13,10 +13,15 @@
 - **죽은 API 검사**가 안 걸렸다 — 경로를 부분 문자열로 찾아서 `/model/groups` 를
   `/model/groups_DISABLED` 로 바꿔도 '살아 있다' 고 했다. 진짜 버그였다
 
-넣어 놓고 안 걸리면 없는 것과 같다 — 이 저장소에서 한 번 당했다.
-저장소를 건드리므로 **끝나면 반드시 되돌린다**(try/finally).
+그리고 **시험 자체가 뒤처진다.** 그 `/model/groups` 시험은 정적 내보내기가
+`/api/model/groups` 를 부르기 시작한 뒤로 '못 잡음' 이 됐다 — 검사가 아니라 시험이
+틀린 것이었는데, 검진(`checkup`)이 이 파일을 돌리지 않아 아무도 몰랐다.
+
+저장소를 건드리므로 **끝나면 반드시 되돌린다**(try/finally). 되돌릴 때는 **바이트
+그대로** 쓴다. 예전에는 글자로 읽어 LF 로 썼는데, 윈도우 작업 트리(autocrlf)의 CRLF
+파일 일곱 개가 LF 로 바뀌어 `git status` 가 더러워졌다. 내용은 같아서 '되돌린 뒤'
+검사도 통과했다 — 그래서 끝에 바이트까지 대조한다.
 """
-import io
 import os
 import subprocess
 import sys
@@ -57,15 +62,22 @@ def check_freshness() -> bool:
     return caught
 
 
-def edit(rel: str, fn):
-    p = ROOT / rel
-    before = p.read_text(encoding="utf-8")
-    after = fn(before)
-    assert after != before, f"{rel} 를 못 바꿨다"
+def _write_bytes(p: Path, data: bytes) -> None:
     tmp = p.with_suffix(p.suffix + ".tmp")
-    with io.open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        f.write(after)
+    tmp.write_bytes(data)
     os.replace(tmp, p)
+
+
+def edit(rel: str, fn):
+    """바이트로 읽고 줄바꿈을 그대로 둔 채 고친다. 돌려주는 `before` 는 바이트다."""
+    p = ROOT / rel
+    before = p.read_bytes()
+    text = before.decode("utf-8")
+    nl = "\r\n" if "\r\n" in text else "\n"
+    # 고치는 함수는 `\n` 만 안다. CRLF 파일이면 잠깐 LF 로 보고 다시 CRLF 로 돌린다.
+    after = fn(text.replace(nl, "\n")).replace("\n", nl)
+    assert after != text, f"{rel} 를 못 바꿨다"
+    _write_bytes(p, after.encode("utf-8"))
     return p, before
 
 
@@ -85,8 +97,20 @@ CASES = [
      # 순위 payload 를 단지/유닛 두 조각으로 나누면서 `premium_pct` 가 사라졌다.
      # 이 시험이 "못 바꿨다" 로 죽어서 알았다 — 시험도 같이 뒤처진다.
      lambda s: s.replace("p.complex", "p.없는키", 1), "없는키", True),
+    # 경로를 고쳐 엔드포인트를 아무도 안 부르게 만든다. 정적 내보내기가 부르지 않는
+    # 것을 골라야 한다 — `/model/groups` 로 하다가 내보내기가 부르기 시작해 못 잡음이 됐다.
+    # POST 라 정적으로 내보낼 일이 없는 `parse-bulk` 를 쓴다.
     ("죽은 API — 호출을 지움", "frontend/src/api.js",
-     lambda s: s.replace("/model/groups", "/model/groups_DISABLED", 1), "groups"),
+     lambda s: s.replace("/model/parse-bulk", "/model/parse-bulk_DISABLED", 1), "parse-bulk"),
+    # api.js 에는 그대로 두고 **화면의 호출만** 지운다. 화면에서 기능을 빼면 실제로
+    # 이 모양이 된다(A·B 비교를 뺀 뒤 `/model/compare` 가 2주를 살아 있는 척했다).
+    ("죽은 API — 화면의 호출만 지움", "frontend/src/views/BulkPaste.jsx",
+     lambda s: s.replace("api.parseBulk(", "api.parseBulkGone(", 1), "parseBulk"),
+    # 경로 변수가 있는 엔드포인트. 첫 `{` 앞까지만 보던 때는 `/quotes/memo-tags` 가
+    # 대신 살려 줘서 못 잡았다.
+    ("죽은 API — 경로 변수 뒤를 바꿈", "frontend/src/api.js",
+     lambda s: s.replace("`/quotes/memo-tags/${", "`/quotes/memo-tagz/${", 1),
+     "memo-tags/{name}"),
     # 실제로 겪은 모양 그대로 — 닫는 `*/` 가 선택자와 함께 지워지면 뒤따르는
     # 규칙들이 주석에 먹힌다. 호가 분석 탭 버튼이 이렇게 죽었다.
     ("CSS — 주석을 닫지 않음", "frontend/src/styles.css",
@@ -154,10 +178,10 @@ def main() -> int:
                 tail = [l for l in out.splitlines() if l.startswith("[X]")]
                 print(f"      종료 {code} · 보고 {tail[:2]}")
         finally:
-            tmp = p.with_suffix(p.suffix + ".tmp")
-            with io.open(tmp, "w", encoding="utf-8", newline="\n") as f:
-                f.write(before)
-            os.replace(tmp, p)
+            _write_bytes(p, before)
+            if p.read_bytes() != before:
+                ok = False
+                print(f"      [X] {rel} 가 바이트 그대로 돌아오지 않았습니다")
 
     ok &= check_freshness()
 

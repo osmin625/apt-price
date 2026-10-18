@@ -83,9 +83,15 @@ def main() -> int:
         side = {"complex_id": int(fit["alpha"]["complex_id"].iloc[0]),
                 "exclusive_area": 84.9, "floor": 10, "dong": None}
         mv.model_price(db, fit, side)
-        other = dict(side, exclusive_area=59.9, floor=3)
-        mv.compare_listings(db, fit, side, other)
-        print(f"  (파생값이 붙었나: {'_index' in fit})")
+        # 예전에는 두 매물 비교(`compare_listings`)도 불렀는데, 그 기능을 지웠다
+        # (2026-10-18). 파생값을 붙이는 것은 `model_price` 안의 `fit_index` 다.
+        mv.model_price(db, fit, dict(side, exclusive_area=59.9, floor=3))
+        # **안 붙었으면 아래 두 검사는 아무것도 안 본다.** 지나가게 두지 않는다.
+        if "_index" not in fit:
+            print("  [실패] 파생값(_index)이 붙지 않았습니다 — 아래 검사가 빈 검사가 됩니다")
+            ok = False
+        else:
+            print("  (파생값이 붙었다: _index)")
 
         ok &= check("fit_payload (파생값이 붙은 뒤)", mv.fit_payload(fit))
         ok &= check("factor_payload (파생값이 붙은 뒤)", mv.factor_payload(fit))

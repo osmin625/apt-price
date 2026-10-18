@@ -17,7 +17,8 @@
 | [docs/screens/ui-log.md](docs/screens/ui-log.md) | 화면을 바꾸며 무엇을 시도하고 버렸나 | 같은 자리를 또 건드리기 전에 |
 | [docs/model/method.md](docs/model/method.md) | 2단계 헤도닉 회귀와 비교표본 방식의 수식 | 숫자가 어떻게 나오는지 알아야 할 때 |
 | [docs/model/factors.md](docs/model/factors.md) | 모델에 어떤 요인이 왜 들어 있나 | 요인을 더하거나 뺄 때 |
-| [docs/data/pipeline.md](docs/data/pipeline.md) | 공공 API 적재, 파싱 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
+| [docs/data/pipeline.md](docs/data/pipeline.md) | 공공 API 적재와 그 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
+| [docs/data/listings.md](docs/data/listings.md) | 붙여넣은 매물을 단지·평형에 맞추기, 중개사 메모 | 매물이 엉뚱한 단지에 붙거나 안 붙을 때 |
 | [docs/data/reb.md](docs/data/reb.md) | 한국부동산원 공표 통계 (가격 분석 탭) | 공표 통계를 건드릴 때 |
 | [docs/analysis/supply.md](docs/analysis/supply.md) | 적정 공급량·파이프라인·노후 압력 (공급 분석 탭) | 공급을 건드릴 때 |
 | [docs/analysis/macro.md](docs/analysis/macro.md) | 여섯 요인의 압력과 과거 국면 (거시 분석 탭) | 요인을 더하거나 방향을 바꿀 때 |
@@ -53,7 +54,7 @@ URL 에 남지 않아 열 때마다 17번을 다시 골라야 했다. 그래서 
 ```bash
 cd backend
 python -m scripts.probe_reb      # 연결·지역코드 대조
-python -m scripts.ingest_reb     # 적재 (16,452행 · 2012-01~)
+python -m scripts.ingest_reb     # 적재 (2012-01~)
 ```
 
 `REB_SERVICE_KEY` 가 필요하다. data.go.kr 15134761 은 API 유형이 LINK 라
@@ -203,7 +204,7 @@ cloudflared tunnel --url http://localhost:5173
   이 표를 대체하면 된다.
 - 강남 접근성은 구 고정효과와 상관이 높다. 신분당선 역(광교·상현)이 전부 영통구/이의동에
   몰려 있어 두 변수가 같은 것을 가리키는 구간이 있다. 계수는 보고하되 과신하면 안 된다.
-- 요인 곡선을 얼마나 촘촘히 볼 수 있는지는 **표본이 정한다**. 지금은 단지 2,018곳이라
-  매듭 7개를 쓰지만, 대상을 좁히면 자동으로 줄어든다(`hedonic.knots_for`).
+- 요인 곡선을 얼마나 촘촘히 볼 수 있는지는 **표본이 정한다**. 단지가 1,500곳을 넘으면
+  매듭 7개를 쓰고, 대상을 좁히면 자동으로 줄어든다(`hedonic.knots_for`).
 - 동향·조망·리모델링 여부·학군 등 가격에 영향을 주는 다른 요인은 반영하지 않는다.
   모델 잔차에 이것들이 전부 섞여 있다. 결과는 참고용이며 투자 판단의 근거로 쓸 수 없다.

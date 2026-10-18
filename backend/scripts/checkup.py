@@ -2,14 +2,20 @@
 
 사용법:
     python -m scripts.checkup              # 전부
-    python -m scripts.checkup --fast       # 적합이 필요한 것은 건너뛴다
+    python -m scripts.checkup --fast       # 느린 검사(적합·전수 대조)는 건너뛴다
     python -m scripts.checkup --only 신선도
 
 ## 왜 이것이 따로 있나
 
-검증 스크립트가 여덟 개가 됐다. 하나씩 기억해서 돌리는 구조는 **반드시 뒤처진다** —
+검증 스크립트가 계속 는다. 하나씩 기억해서 돌리는 구조는 **반드시 뒤처진다** —
 이 저장소가 '손으로 유지하는 목록' 에서 이미 당한 것과 같은 함정이다. 그래서 입구를
 하나로 둔다.
+
+그 입구가 **또 손으로 유지하는 목록**이었다. 돌릴 스크립트를 여섯 개만 적어 두어
+`verify_absorb`·`verify_name_match`·`verify_sync_guard` 가 빠져 있었고, 그동안
+`verify_sync_guard` 는 실패하고 있었다(죽은 API 시험이 '못 잡음'). CLAUDE.md 는
+"`verify_*` 를 전부 돌린다" 고 적고 있었다. 지금은 `scripts/verify_*.py` 를 **찾아서**
+돌린다. 새로 만든 검사는 아무 데도 적지 않아도 돈다.
 
 그리고 기존 검사들이 못 보던 두 축을 더한다.
 
@@ -111,22 +117,49 @@ class Report:
 # ──────────────────────────────────────────────────────────
 # 1) 정합성 — 기존 검증 스크립트를 전부 돌린다
 # ──────────────────────────────────────────────────────────
-# (모듈, 설명, 적합이 필요한가)
-SUITES = [
-    ("scripts.verify_docs", "문서 링크·앵커·라우팅 표", False),
-    ("scripts.verify_guard", "실패 감지가 걸리는지", False),
-    ("scripts.verify_sync", "코드↔문서↔데이터↔프론트", True),
-    ("scripts.verify_spline", "스플라인 기저", False),
-    ("scripts.verify_listing_parse", "매물 파서가 주석의 사례대로", False),
-    ("scripts.verify_payloads", "페이로드가 JSON 이 되는지", True),
-]
+# 돌릴 목록은 **파일에서 찾는다**(`suites()`). 여기에는 보여 줄 이름과 느린지만
+# 적는다 — 빠뜨려도 검사는 돌고, 이름이 독스트링 첫 줄로 나올 뿐이다.
+# 느림의 근거는 2026-10-18 에 잰 값이다: 적합을 돌리는 것(sync·payloads·absorb 110초),
+# DB 전수 대조(name_match 240초), 저장소를 깨뜨려 보며 sync 를 스무 번 남짓 도는 것
+# (sync_guard 125초). 나머지는 몇 초다.
+SUITE_META = {
+    "verify_docs": ("문서 링크·앵커·라우팅 표", False),
+    "verify_guard": ("실패 감지가 걸리는지", False),
+    "verify_sync": ("코드↔문서↔데이터↔프론트", True),
+    "verify_sync_guard": ("싱크 검사가 깨뜨렸을 때 걸리는지", True),
+    "verify_spline": ("스플라인 기저", False),
+    "verify_absorb": ("고정효과 흡수 vs 더미 회귀", True),
+    "verify_listing_parse": ("매물 파서가 주석의 사례대로", False),
+    "verify_name_match": ("단지명 매칭 전수 대조", True),
+    "verify_payloads": ("페이로드가 JSON 이 되는지", True),
+}
+
+# 일부러 안 돌리는 검사. **이유를 적어야** 여기 넣는다(DEAD_OK 와 같은 생각).
+SUITE_SKIP: dict[str, str] = {}
+
+
+def suites() -> list[tuple[str, str, bool]]:
+    """(모듈, 설명, 느린가). `SUITE_META` 순서를 먼저, 거기 없는 것은 이름순으로 뒤에."""
+    found = sorted(p.stem for p in (BACKEND / "scripts").glob("verify_*.py"))
+    order = [n for n in SUITE_META if n in found] + [n for n in found if n not in SUITE_META]
+    out = []
+    for name in order:
+        if name in SUITE_SKIP:
+            continue
+        what, slow = SUITE_META.get(name, (None, False))
+        if what is None:
+            doc = (BACKEND / "scripts" / f"{name}.py").read_text(encoding="utf-8")
+            first = re.search(r'"""\s*(.+)', doc)
+            what = (first.group(1).strip("*. ") if first else name)[:28]
+        out.append((f"scripts.{name}", what, slow))
+    return out
 
 
 def run_suites(rep: Report, fast: bool) -> None:
     print("\n== 정합성 ==")
     env = {**os.environ, "FIT_IN_PROCESS": "1", "PYTHONIOENCODING": "utf-8"}
-    for mod, what, needs_fit in SUITES:
-        if fast and needs_fit:
+    for mod, what, slow in suites():
+        if fast and slow:
             print(f"  {what:<28} 건너뜀 (--fast)")
             continue
         p = subprocess.run([PY, "-m", mod], cwd=BACKEND,
@@ -139,9 +172,17 @@ def run_suites(rep: Report, fast: bool) -> None:
             for t in (l for l in out.splitlines() if l.startswith("[!]")):
                 rep.add("!", "정합성", f"{mod}: {t[4:]}")
         else:
-            tail = [l for l in out.splitlines() if l.startswith(("[X]", "[!]"))]
+            # 스크립트마다 실패를 찍는 모양이 다르다(`[X]`·`[FAIL]`·트레이스백). 예전에는
+            # `[X]`/`[!]` 줄만 골라서, `verify_payloads` 가 지운 함수를 부르다 죽었을 때도
+            # `verify_absorb` 가 `[FAIL]` 을 찍었을 때도 '실패 — 0건' 만 남았다. 고른 줄이
+            # 없으면 stderr·stdout 의 끝을 보여 준다 — 왜 실패했는지가 검진에 남아야 한다.
+            lines = out.splitlines()
+            tail = [l for l in lines if l.lstrip().startswith(("[X]", "[!]", "[FAIL]"))]
+            if not tail:
+                err = p.stderr.decode("utf-8", "replace").strip().splitlines()
+                tail = (err or lines)[-3:]
             print(f"  {what:<28} 실패")
-            rep.add("X", "정합성", f"{mod} 실패 — {len(tail)}건")
+            rep.add("X", "정합성", f"{mod} 실패 — {tail[-1].strip()[:90] if tail else '출력 없음'}")
             for t in tail[:4]:
                 print(f"      {t}")
 
@@ -344,7 +385,7 @@ SECTIONS = {"정합성": None, "신선도": None, "군살": None}
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="저장소 건강검진")
-    ap.add_argument("--fast", action="store_true", help="적합이 필요한 검사는 건너뛴다")
+    ap.add_argument("--fast", action="store_true", help="느린 검사(적합·전수 대조)는 건너뛴다")
     ap.add_argument("--only", choices=list(SECTIONS), help="한 절만")
     ap.add_argument("--today", help="신선도 기준일 (YYYY-MM-DD) — 검사 시험용")
     args = ap.parse_args()
