@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
-import { fmt, useMeasure, useTooltip } from '../components/Charts'
-import PanelCard from '../components/PanelCard'
+import { fmt, useTooltip } from '../components/Charts'
 import HeatLegend from '../components/HeatLegend'
 import Hint from '../components/Hint'
 import { heatVars, zText } from '../components/heat'
 import TimeLines from '../components/TimeLines'
-import TopicModal from '../topics/TopicModal'
-import { homeOf, topicFor } from '../topics/registry'
 
 /**
  * 거시 분석 — 집값에 닿는 거시 요인이 **지금 어떤 상태인지**, 그리고 **과거에 비슷했던 때
@@ -41,7 +38,6 @@ import { homeOf, topicFor } from '../topics/registry'
 export default function RegimeView() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
-  const [open, setOpen] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -82,58 +78,18 @@ export default function RegimeView() {
             notes={[
               '값이 아니라 자기 평균보다 얼마나 위·아래인지로 봅니다. 미분양 몇 호가 많은 것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.',
               "'몇 배' 는 평소 오르내림 폭(표준편차)의 몇 배인가입니다.",
-              "카드 아래 '비슷했던 때' 는 그 요인이 지금과 비슷한 자리였던 시기의 수와 그 뒤 1년 집값이 오른 시기의 수입니다. 이웃한 달은 한 시기로 묶고, 지금과 이어진 최근은 뺍니다. '기저' 는 같은 기간 아무 달이나 골랐을 때 그 뒤 1년이 오른 비율입니다.",
+              "카드 아래 '그때' 는 그 요인이 지금과 비슷한 자리였던 시기의 수와 그 뒤 1년 집값이 오른 시기의 수입니다. 이웃한 달은 한 시기로 묶고, 지금과 이어진 최근은 뺍니다. '기저' 는 같은 기간 아무 달이나 골랐을 때 그 뒤 1년이 오른 비율입니다.",
               '요인 하나만 맞춘 것이라 그때 다른 요인은 전혀 달랐을 수 있습니다 — 요인들이 함께 어땠는지는 아래 한 그림과 과거 국면 표에서 봅니다.',
               data.note,
             ]}
           />
         </h2>
         <HeatLegend>카드 색은 자기 평균에서의 위치입니다. 좋고 나쁨이 아닙니다.</HeatLegend>
-        {/* **데이터 하나에 카드 하나.** 준공·미분양·거래량·전세가율은 공급·가격 분석에
-            카드가 있어, 여기서 같은 선을 또 그리면 같은 데이터가 두 탭에 카드로 선다.
-            그런 요인은 그림 없이 위치만 한 줄로 두고, 누르면 같은 주제 창을 연다.
-            어느 요인이 그런지는 `registry.js` 의 `homeOf` 가 정한다. */}
-        <div className="macro-grid">
-          {data.factors.filter((f) => !homeOf(topicFor('factor', f.key))).map((f) => (
-            <PanelCard
-              key={f.key}
-              title={f.label}
-              sub={<>{factorSub(f)}<ThenLine t={f.then} /></>}
-              heat={heatVars(f.z)}
-              onOpen={() => setOpen({ kind: 'factor', f })}
-            >
-              <Spark f={f} />
-            </PanelCard>
-          ))}
+        {/* 그림 없는 작은 카드로 한눈에. 추이는 아래 '한 그림에' 가 모든 요인을 겹쳐 보이므로
+            카드마다 그리지 않는다(2026-10-19). 눌러서 여는 창도 없다 — 시기 목록은 '그때는' 호버에. */}
+        <div className="rg-tiles">
+          {data.factors.map((f) => <FactorTile key={f.key} f={f} />)}
         </div>
-        {data.factors.some((f) => homeOf(topicFor('factor', f.key))) && (
-          <>
-            <h3 className="mt16">카드가 다른 탭에 있는 요인</h3>
-            <div className="rg-shared">
-              {data.factors.filter((f) => homeOf(topicFor('factor', f.key))).map((f) => (
-                <button key={f.key} className="rg-shared-row" style={heatVars(f.z)}
-                        onClick={() => setOpen({ kind: 'factor', f })} aria-haspopup="dialog">
-                  <strong>{f.label}</strong>
-                  {/* 값을 같이 둔다. 위치(몇 배)만 있으면 '적정의 몇 % 를 지었나' 같은 값
-                      자체를 보려고 창을 열어야 했다. */}
-                  <b className="rg-shared-val">
-                    {fmt(f.latest.value, f.unit === '호' ? 0 : 1)}{f.unit}
-                    <span className="muted small"> {ymText(f.latest.ym)}</span>
-                  </b>
-                  {/* 무엇의 위치인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
-                      여기는 그 전년비의 위치라, 같은 자라도 숫자가 다를 수 있다. */}
-                  <span className="muted small">
-                    {f.transform_label} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
-                    {f.caveat && <Hint tone="warn" notes={[f.caveat]} />}
-                    <ThenLine t={f.then} />
-                  </span>
-                  <span className="muted small">카드는 {homeOf(topicFor('factor', f.key))}</span>
-                  <span className="factor-caret" aria-hidden="true">&#10530;</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
       </section>
 
       <section className="card">
@@ -187,57 +143,37 @@ export default function RegimeView() {
         <PolicyList rows={data.policy} />
       </section>
 
-      {/* 요인 창 — 주제 창으로 띄운다. 전세가율·거래량·미분양·공급은 가격 분석·공급
-          분석에도 카드가 있어, 어디서 열든 같은 창이 그 주제의 전체를 보여 준다. */}
-      {open?.kind === 'factor' && (
-        <TopicModal topic={topicFor('factor', open.f.key, { title: open.f.label })}
-                    onClose={() => setOpen(null)} />
-      )}
     </>
   )
 }
 
 const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
-function factorSub(f) {
-  const v = `${f.latest.value}${f.unit}`
+/**
+ * 요인 하나 — **콤팩트 카드.** 이름 · 값 · 평균에서 몇 배 · '그때는'. 변환 방식·지역·추정 여부는
+ * 호버로. 예전에는 카드마다 미니 차트가 있었고 공급·가격 분석에 집이 있는 요인은 따로 한 줄로
+ * 빠져 있었다 — 그림이 없으니 그 구분도 필요 없다(데이터 하나에 **그림** 카드 하나).
+ */
+function FactorTile({ f }) {
   return (
-    <>
-      {ymText(f.latest.ym)} {v} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
-    </>
-  )
-}
-
-/** 계열 한 줄 + 지금 위치. 축소판에는 그림만 둔다(PanelCard 규칙). */
-function Spark({ f }) {
-  const [ref, width] = useMeasure()
-  const s = f.series
-  if (!s?.length) return <p className="empty">값이 없습니다</p>
-  const vs = s.map((d) => d.v)
-  const lo = Math.min(...vs)
-  const hi = Math.max(...vs)
-  const span = hi - lo || 1
-  const H = 76
-  const W = Math.max(width, 240)
-  const x = (i) => (i / Math.max(s.length - 1, 1)) * W
-  const y = (v) => H - ((v - lo) / span) * (H - 8) - 4
-  const d = s.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')
-  const zero = lo < 0 && hi > 0 ? y(0) : null
-
-  return (
-    <div ref={ref}>
-      <svg width={W} height={H} role="img" aria-label={`${f.label} 추이`}>
-        {zero != null && (
-          <line x1="0" x2={W} y1={zero} y2={zero} stroke="var(--border)" strokeDasharray="3 3" />
-        )}
-        <path d={d} fill="none" stroke="var(--series-1)" strokeWidth="1.6" />
-        <circle
-          cx={x(s.length - 1)}
-          cy={y(vs[vs.length - 1])}
-          r="3"
-          fill="var(--series-1)"
+    <div className="rg-tile" style={heatVars(f.z)}>
+      <div className="rg-tile-head">
+        <strong>{f.label}</strong>
+        <Hint
+          notes={[
+            `${f.transform_label} · ${f.region}`,
+            zText(f.z),
+            f.caveat,
+          ]}
+          tone={f.caveat ? 'warn' : 'info'}
         />
-      </svg>
+      </div>
+      <div className="rg-tile-val">
+        <b>{fmt(f.latest.value, f.unit === '호' ? 0 : f.unit === '%p' ? 2 : 1)}{f.unit}</b>
+        <span className="heat-pos">{f.z > 0 ? '+' : ''}{fmt(f.z, 1)}배</span>
+      </div>
+      <div className="muted small">{ymText(f.latest.ym)} · {f.region}</div>
+      <ThenLine t={f.then} />
     </div>
   )
 }
@@ -366,12 +302,12 @@ function ThenLine({ t }) {
   const { episodes, up } = t.summary
   const base = t.base
   if (!episodes) {
-    return <span className="rg-then">비슷했던 때 없음 · 기저 {base.up_pct ?? '—'}%</span>
+    return <span className="rg-then">그때 없음 · 기저 {base.up_pct ?? '—'}%</span>
   }
   return (
     <span className="rg-then">
-      비슷했던 때 {episodes}번 · 그 뒤 1년 오름 {up}/{episodes}
-      {episodes <= FEW && <span data-tone="warn"> · 사례 적음</span>}
+      그때 {episodes}번 · 1년 뒤 오름 {up}/{episodes}
+      {episodes <= FEW && <span data-tone="warn"> · 적음</span>}
       {' '}· 기저 {base.up_pct}%
       <Hint
         notes={[
