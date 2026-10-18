@@ -70,6 +70,9 @@ export default function RegimeView() {
   const p = data.price
   return (
     <>
+      {/* 합쳐 본 결론이 맨 위다. 요인별 방향·카드는 그 근거라 아래로 둔다. */}
+      {data.model?.available && <MacroModel m={data.model} price={data.price} />}
+
       <section className="card">
         <h2>지금 무엇이 가격을 밀고 있나</h2>
         <p className="sub">
@@ -138,8 +141,6 @@ export default function RegimeView() {
         )}
         <p className="muted small">{data.note}</p>
       </section>
-
-      {data.model?.available && <MacroModel m={data.model} price={data.price} />}
 
       <section className="card">
         <h2>정책과 세금</h2>
@@ -473,8 +474,8 @@ function TugList({ dir, title, items }) {
             <li key={u.key}>
               <div className="rg-tug-name">
                 <span>{u.label} <span className="muted small">{u.region}</span></span>
-                <span className="rg-dots" aria-label={`세기 ${u.strength}/3`}>
-                  {'●'.repeat(u.strength)}{'○'.repeat(3 - u.strength)}
+                <span className="rg-push" title="평소 오르내림 폭(표준편차)의 몇 배만큼 벗어났나">
+                  {Math.abs(u.z).toFixed(1)}배
                 </span>
               </div>
               <div className="small">{u.now_text}</div>
@@ -497,7 +498,8 @@ function TugList({ dir, title, items }) {
  * 앞의 두 판은 읽기 어려웠다. %p 기여 막대는 원인처럼 읽혔고(요인이 얽혀 몫을 나눌 근거가
  * 없다), 그것을 뺀 '과거 관계 · 지금 · 방향' 표는 읽는 사람이 머릿속에서 곱해야 했다. 게다가
  * 방향만 있으면 '내리는 쪽이 여섯인데 왜 평소보다 오르나' 가 설명되지 않았다 — 한 요인이
- * 평소에서 크게 벗어나 있으면 그것 하나가 나머지를 이긴다. 그래서 세기(●)를 같이 둔다.
+ * 평소에서 크게 벗어나 있으면 그것 하나가 나머지를 이긴다. 그래서 세기를 같이 둔다 —
+ * 처음엔 ●○○ 세 칸이었는데 수치(평소 오르내림 폭의 몇 배)가 더 낫다는 요청으로 바꿨다.
  * 세기는 가격의 몫이 아니라 그 요인이 지금 평소에서 얼마나 벗어났나다.
  *
  * 매달 그때 알려진 자료로만 다시 맞춰 예측해 본 결과(백테스트)와 과거 평균과의 비교를 같은
@@ -554,8 +556,9 @@ function MacroModel({ m, price }) {
         <TugList dir="down" title="▼ 내리는 쪽" items={downs} />
       </div>
       <p className="muted small">
-        ●는 그 요인이 지금 평소에서 얼마나 벗어나 있는지(조금 · 꽤 · 크게)입니다. 많이 벗어난
-        요인일수록 세게 당깁니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
+        '몇 배' 는 그 요인이 지금 평소에서 얼마나 벗어나 있는지입니다 — 평소 오르내림 폭(표준편차)의
+        몇 배인가. 1배 안쪽은 흔한 범위이고, 많이 벗어난 요인일수록 세게 당깁니다. 막대의 비율이 이
+        값들의 합입니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
         나누지는 않습니다.
         {m.excluded.length > 0 && ` 과거 관계가 약해 뺀 요인: ${m.excluded.join(', ')}.`}
       </p>

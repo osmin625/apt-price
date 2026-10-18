@@ -285,7 +285,12 @@ tbody tr.clickable { cursor: pointer; }
 .pbar-track { position: relative; height: 22px; }
 .pbar-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
 .pbar-fill { position: absolute; top: 5px; height: 12px; min-width: 2px; }
-.pbar-fill.pos { background: var(--series-1); border-radius: 0 4px 4px 0; }
+/* 색 규칙은 화면 전체가 하나다 — **오름(+)은 초록, 내림(−)은 빨강.** 부호가 없는 크기 막대
+   (세대수·비율)는 plain, 부호와 상관없이 눈여겨볼 칸은 warn 이다. 예전에는 + 를 파랑으로
+   칠한 곳과 초록으로 칠한 곳이 섞여 있었고, 미분양 증가처럼 '나쁜 +' 를 빨강으로 칠한 곳도 있었다. */
+.pbar-fill.pos { background: var(--good); border-radius: 0 4px 4px 0; }
+.pbar-fill.plain { background: var(--series-1); border-radius: 0 4px 4px 0; }
+.pbar-fill.warn { background: var(--warning); border-radius: 0 4px 4px 0; }
 .pbar-fill.neg { background: var(--neg); border-radius: 4px 0 0 4px; }
 .pbar-value { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .pbar-value.pos { color: var(--text-primary); }
@@ -294,7 +299,9 @@ tbody tr.clickable { cursor: pointer; }
 
 .muted { color: var(--text-secondary); }
 .small { font-size: 12px; }
-.tone-pos { color: var(--series-1); }
+/* 오름 초록 · 내림 빨강(위 .pbar-fill 주석). 예전에는 이 규칙이 세 곳에 있었고 첫 줄은 파랑이었다 —
+   뒤의 것이 이겨서 초록으로 보였을 뿐이다. 한 곳에만 둔다. */
+.tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
 .tile .value.sm { font-size: 17px; }
 .tiles.compact { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; }
@@ -519,8 +526,6 @@ tr.is-current { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 /* 적정가 진단 실거래 표에서 '같은 동' 거래를 강조 */
 tr.is-same-dong td { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
 tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
-.tone-pos { color: var(--good); }
-.tone-neg { color: var(--neg); }
 /* 값에 붙는 주석 — 호버/포커스에서만 펼친다 */
 .hint { position: relative; display: inline-block; margin-left: 4px; outline: none; }
 .hint-dot {
@@ -603,8 +608,6 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
    클래스 이름에 `fh-` 를 붙인 이유: 전역 `.is-thin` 은 향 카드가 '표본 부족'
    을 흐리게 칠하는 데 이미 쓰고 있어서, 겹치면 정반대로 보인다. */
 .fh-foot.fh-thin { color: var(--warning); font-weight: 600; }
-.tone-pos { color: var(--good); }
-.tone-neg { color: var(--neg); }
 tr.is-deleting td { opacity: 0.4; }
 /* ── 매크로 ───────────────────────────────────────────────────────────────
    시군구 17개를 한 축에 그린다. KB 가 5개까지만 그려 주던 것을 전부 펼치는 것이
@@ -898,9 +901,11 @@ tr.is-deleting td { opacity: 0.4; }
 .mbar-track { position: relative; height: 16px; }
 .mbar-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
 .mbar-fill { position: absolute; top: 3px; height: 10px; min-width: 2px; }
-.mbar-fill.pos { background: var(--series-1); border-radius: 0 3px 3px 0; }
+.mbar-fill.pos { background: var(--good); border-radius: 0 3px 3px 0; }
+.mbar-fill.plain { background: var(--series-1); border-radius: 0 3px 3px 0; }
 .mbar-fill.neg { background: var(--neg); border-radius: 3px 0 0 3px; }
-.mbar-row.marked .mbar-fill.pos { background: var(--neg); }
+/* 얇은 표본 표시는 부호가 아니라 주의라서 빨강(내림)이 아니라 경고색이다. */
+.mbar-row.marked .mbar-fill { background: var(--warning); }
 .mbar-value {
   font-size: 12.5px; font-weight: 600; text-align: right;
   font-variant-numeric: tabular-nums; color: var(--text-primary);
@@ -964,9 +969,9 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-tug-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rg-tug-col li { padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-1); }
 .rg-tug-name { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
-.rg-dots { flex: none; letter-spacing: 1px; font-size: 11px; }
-.rg-tug-col.is-up .rg-dots { color: var(--good); }
-.rg-tug-col.is-down .rg-dots { color: var(--neg); }
+.rg-push { flex: none; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.rg-tug-col.is-up .rg-push { color: var(--good); }
+.rg-tug-col.is-down .rg-push { color: var(--neg); }
 @media (max-width: 640px) { .rg-tug-cols { grid-template-columns: 1fr; } }
 .rg-name { font-weight: 600; }
 .rg-label { color: var(--text-secondary); }
