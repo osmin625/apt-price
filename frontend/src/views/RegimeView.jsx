@@ -417,6 +417,12 @@ function Reflect({ r }) {
           ]}
         />
       </h2>
+      {/* 이론 방향은 막대 색(초록·빨강 — '그만큼 올렸나·내렸나')과 다른 색으로 이름 앞에 둔다.
+          같은 초록·빨강을 쓰면 '비례인데 지금은 끌어내림' 이 한 색으로 겹쳐 읽힌다. */}
+      <div className="legend">
+        <span className="key"><span className="rf-dir is-pro">↗ 비례</span>평균보다 높으면 가격 상승 쪽(이론)</span>
+        <span className="key"><span className="rf-dir is-anti">↘ 반비례</span>평균보다 높으면 가격 하락 쪽</span>
+      </div>
       <p className="muted small">
         {ymText(r.now)} 실제 {pp(r.actual)}% · 요인으로 맞춘 값 {pp(r.fitted)}% · 설명 안 된 몫 {pp(r.residual)}%p
         · 설명력 R² {r.r2} ({ymText(r.from)}~{ymText(r.to)}, {r.months}개월)
@@ -430,6 +436,10 @@ function Reflect({ r }) {
           return (
             <div key={f.key} className={`rf-row${zero ? ' is-zero' : ''}`}>
               <span>
+                <span className={`rf-dir ${f.sign > 0 ? 'is-pro' : 'is-anti'}`}
+                      title={f.sign > 0 ? '비례 — 평균보다 높으면 가격 상승 쪽' : '반비례 — 평균보다 높으면 가격 하락 쪽'}>
+                  {f.sign > 0 ? '↗' : '↘'}
+                </span>
                 {f.label}
                 <span className="muted small">{f.lag ? ` · ${f.lag}개월 전` : ''}</span>
                 <Hint
