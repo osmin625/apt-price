@@ -25,6 +25,7 @@
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # 파일 위치에서 구한다. 예전에는 메인 체크아웃 경로를 박아 두어서, git worktree 에서
@@ -63,9 +64,24 @@ def check_freshness() -> bool:
 
 
 def _write_bytes(p: Path, data: bytes) -> None:
+    """임시 파일에 쓰고 바꿔 끼운다. 윈도우에서는 **잠깐 잠긴 파일**에 막힐 수 있어 몇 번 다시 한다.
+
+    2026-10-18 에 개발 서버·다른 세션이 같은 작업 트리를 보는 동안 `os.replace` 가
+    `PermissionError [WinError 5]` 로 한 번 막혔고, 시험은 실패로 끝나며 `MarketView.jsx.tmp`
+    를 저장소에 남겼다(원본은 멀쩡했다). 끝내 못 바꾸면 임시 파일을 치우고 오류를 그대로 올린다
+    — 조용히 넘어가면 '되돌렸다' 고 믿게 된다.
+    """
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_bytes(data)
-    os.replace(tmp, p)
+    for attempt in range(6):
+        try:
+            os.replace(tmp, p)
+            return
+        except PermissionError:
+            if attempt == 5:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.5)
 
 
 def edit(rel: str, fn):
