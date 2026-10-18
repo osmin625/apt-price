@@ -36,6 +36,14 @@ import numpy as np  # noqa: E402
 from app.clients import sdsc  # noqa: E402
 from app.services import hedonic  # noqa: E402
 
+# 페이징 경우는 가짜 클라이언트를 쓰지만 stores_in_radius 가 그보다 먼저 키를 본다.
+# 키가 없으면(backend/.env 가 없는 워크트리) 그 자리에서 SdscError 가 나서 '걸리지
+# 말아야 할' 둘이 실패로 찍히고, '총건수에 못 미침' 은 **엉뚱한 이유로 통과**한다 —
+# 페이징 검사가 아니라 키 검사가 걸린 것이다. 2026-10-18 checkup 에서 그렇게 보였다.
+# 네트워크는 타지 않으므로 아무 값이나 채운다. 진짜 키가 있으면 건드리지 않는다.
+if not sdsc.settings.molit_service_key:
+    sdsc.settings.molit_service_key = "verify-guard-dummy"
+
 import ingest_amenity  # noqa: E402
 import verify_absorb as V  # noqa: E402
 
