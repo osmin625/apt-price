@@ -699,6 +699,12 @@ tr.is-deleting td { opacity: 0.4; }
 .rf-bar.neg { background: var(--neg); }
 .rf-track.is-rest .rf-bar { opacity: 0.45; }
 .rf-whisker { position: absolute; top: 6px; height: 2px; background: var(--text-secondary); opacity: 0.7; }
+/* 이론 방향 표식 — 비례(청록) · 반비례(보라). 막대의 초록·빨강(지금 올렸나·내렸나)과 겹치지 않는 색. */
+.rf-dir { display: inline-block; min-width: 16px; margin-right: 5px; padding: 0 4px; font-size: 11px; font-weight: 700;
+  text-align: center; border-radius: 3px; }
+.rf-dir.is-pro { color: var(--series-3); background: color-mix(in srgb, var(--series-3) 16%, transparent); }
+.rf-dir.is-anti { color: var(--series-4); background: color-mix(in srgb, var(--series-4) 16%, transparent); }
+.legend .rf-dir { margin-right: 4px; }
 @media (max-width: 640px) { .rf-row { grid-template-columns: 1fr 1fr 70px; } }
 .heat-pos { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
 /* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */
