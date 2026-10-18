@@ -57,7 +57,7 @@ export default function MacroBars({
             <span className="mbar-track">
               {diverging && <i className="mbar-zero" />}
               <i
-                className={`mbar-fill ${neg ? 'neg' : 'pos'}`}
+                className={`mbar-fill ${!diverging ? 'plain' : neg ? 'neg' : 'pos'}`}
                 style={
                   diverging
                     ? { width: `${w}%`, [neg ? 'right' : 'left']: '50%' }

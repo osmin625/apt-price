@@ -374,7 +374,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img"
            aria-label="적정 공급과 준공 비교">
         {bands.map((b) => (
-          <path key={b.key} d={b.d} fill={b.short ? 'var(--neg)' : 'var(--series-1)'}
+          <path key={b.key} d={b.d} fill={b.short ? 'var(--neg)' : 'var(--good)'}
                 opacity="0.14" />
         ))}
         {c2 && (
@@ -489,6 +489,10 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
           <span className="swatch" style={{ background: 'var(--neg)', opacity: 0.3 }} />
           덜 지은 해
         </span>
+        <span className="key">
+          <span className="swatch" style={{ background: 'var(--good)', opacity: 0.3 }} />
+          더 지은 해
+        </span>
         {c2 && (
           <span className="key">
             <span className="swatch dash" style={{ background: 'var(--text-secondary)' }} />
@@ -576,7 +580,7 @@ function AgeBars({ bands }) {
           <div className="pbar-label">{b.band}</div>
           <div className="pbar-track">
             <div
-              className={`pbar-fill ${b.band.startsWith('3') || b.band.startsWith('4') ? 'neg' : 'pos'}`}
+              className={`pbar-fill ${b.band.startsWith('3') || b.band.startsWith('4') ? 'warn' : 'plain'}`}
               style={{ left: 0, width: `${(b.pct / max) * 100}%` }}
             />
           </div>
@@ -632,7 +636,7 @@ function SouthBars({ d }) {
             <div className="pbar-label">{y.year.slice(2)}</div>
             <div className="pbar-track">
               <div
-                className="pbar-fill pos"
+                className="pbar-fill plain"
                 style={{
                   left: 0,
                   width: `${(y.households / max) * 100}%`,
@@ -746,7 +750,7 @@ function UnsoldLine({ u }) {
            aria-label={`${u.region} 미분양 추이`}>
         <path d={`${d} L${x(s.length - 1)},${H} L0,${H} Z`} fill="var(--series-1)" opacity="0.1" />
         <path d={d} fill="none" stroke="var(--series-1)" strokeWidth="1.8" />
-        {pi >= 0 && <circle cx={x(pi)} cy={y(u.peak.value)} r="3" fill="var(--neg)" />}
+        {pi >= 0 && <circle cx={x(pi)} cy={y(u.peak.value)} r="3" fill="var(--text-primary)" />}
         <circle cx={x(s.length - 1)} cy={y(s[s.length - 1].value)} r="3" fill="var(--series-1)" />
       </svg>
       <div className="muted small">

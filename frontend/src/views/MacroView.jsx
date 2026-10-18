@@ -668,7 +668,7 @@ function GapTable({ gap }) {
                     {fmt(d.coef_pct, 1)}%
                   </span>
                 </td>
-                <td className={`num ${d.rank_gap > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                <td className={`num ${d.rank_gap > 0 ? 'tone-pos' : d.rank_gap < 0 ? 'tone-neg' : ''}`}>
                   {d.rank_gap > 0 ? '+' : ''}
                   {d.rank_gap}
                 </td>

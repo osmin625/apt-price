@@ -34,7 +34,7 @@ export function UnsoldTable({ d }) {
                 <td className="num">
                   {fmt(u.latest.value)}호<span className="muted"> ({fmtYm(u.latest.ym)})</span>
                 </td>
-                <td className={`num ${u.yoy == null ? '' : u.yoy > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                <td className={`num ${u.yoy == null ? '' : u.yoy > 0 ? 'tone-pos' : u.yoy < 0 ? 'tone-neg' : ''}`}>
                   {u.yoy == null ? '—' : `${u.yoy > 0 ? '+' : ''}${u.yoy}%`}
                 </td>
                 <td className="num muted">

@@ -204,7 +204,7 @@ function GroupCompare({ months }) {
                   <td className="num muted">
                     {fmt(g.p25)} ~ {fmt(g.p75)}
                   </td>
-                  <td className={`num ${g.residual_pct > 0 ? 'tone-neg' : 'tone-pos'}`}>
+                  <td className={`num ${g.residual_pct > 0 ? 'tone-pos' : g.residual_pct < 0 ? 'tone-neg' : ''}`}>
                     {g.residual_pct > 0 ? '+' : ''}
                     {fmt(g.residual_pct, 1)}%
                   </td>
