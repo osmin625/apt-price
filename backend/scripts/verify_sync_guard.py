@@ -145,7 +145,44 @@ CASES = [
     # 잡으면 조사 검사는 전부 잡아 놓고 통과했다고 하는 셈이 된다.
     ("조사 — ㄹ 받침 '로' 는 그냥 둔다(통과해야 함)", "docs/engineering/performance.md",
      lambda s: s.replace("모델링 경로,", "분해 모델로 가는 모델링 경로,", 1), None),
+    # 문서가 가르치는 실행법·이름이 실물과 어긋난 모양. 플래그나 함수 이름을 바꾸면
+    # 코드는 멀쩡히 돌고 문서만 옛 이름을 가르친다.
+    # 문자열을 쪼개 적는다 — 통째로 적으면 이 파일 자체가 명령 검사에 걸린다(실제로 걸렸다).
+    ("명령 — 문서에 없는 플래그", "docs/engineering/performance.md",
+     lambda s: s + "\n    python -m scripts" + ".checkup --no-such-flag\n", "--no-such-flag"),
+    ("명령 — 문서에 없는 ps1 인자", "docs/engineering/performance.md",
+     lambda s: s + "\n    ." + "\\sync_static.ps1 -NoSuchArg\n", "NoSuchArg"),
+    ("명령 — 있는 플래그는 둔다(통과해야 함)", "docs/engineering/performance.md",
+     lambda s: s + "\n    python -m scripts.checkup --fast --only 군살\n"
+                   "    .\\sync_static.ps1 -NoPublish\n", None),
+    ("이름 — 문서가 없는 함수를 부름", "docs/engineering/performance.md",
+     lambda s: s + "\n바뀐 이름 `_no_such_helper()` 를 적어 본다.\n", "_no_such_helper"),
+    ("이름 — 문서가 없는 파일을 부름", "docs/engineering/performance.md",
+     lambda s: s + "\n`components/NoSuchPanel.jsx` 를 적어 본다.\n", "NoSuchPanel.jsx"),
+    ("이름 — 있는 이름은 둔다(통과해야 함)", "docs/engineering/performance.md",
+     lambda s: s + "\n`regime.hist_z` · `_undo_ytd()` · `DATABASE_URL` · "
+                   "`components/Modal.jsx` · `clr.dll` 을 적어 본다.\n", None),
+    # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
+    ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
+     lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),
+     "gone_tool.py"),
 ]
+
+
+def check_stray() -> bool:
+    """남은 작업 폴더 검사(`checkup.stray_dirs`)가 걸리는지 — 파일을 안 만들고 순수
+    함수로 본다. 진짜 폴더를 만들었다 지우면 다른 세션의 것과 헷갈릴 수 있다."""
+    sys.path.insert(0, str(ROOT / "backend"))
+    from scripts.checkup import stray_dirs
+
+    c = "e:/r/.claude"
+    wts = {"e:/r": "main", f"{c}/worktrees/live": "feat/x", f"{c}/worktrees/old": "fix/done"}
+    got = stray_dirs([f"{c}/worktrees", f"{c}/wt-old"], wts, {"fix/done"})
+    caught = len(got) == 2 and "wt-old" in got[0] and "fix/done" in got[1]
+    clean = stray_dirs([f"{c}/worktrees"], {"e:/r": "main", f"{c}/worktrees/live": "feat/x"},
+                       set()) == []
+    print(f"  {'남은 작업 폴더 — 잡을 것만 잡나':<34} {'잡음' if caught and clean else '못 잡음'}")
+    return caught and clean
 
 
 def main() -> int:
@@ -184,6 +221,7 @@ def main() -> int:
                 print(f"      [X] {rel} 가 바이트 그대로 돌아오지 않았습니다")
 
     ok &= check_freshness()
+    ok &= check_stray()
 
     code, out = run()
     print(f"\n되돌린 뒤: 종료 코드 {code} ({'통과' if code == 0 else '실패 — 복구 안 됨!'})")

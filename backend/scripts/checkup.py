@@ -332,12 +332,17 @@ def check_cruft(rep: Report) -> None:
     # 줄일지·나눌지·그대로 둘지 고른다.
     # docs/ 는 묶음 폴더 아래에 둔다(verify_docs 가 지킨다). 그래서 rglob 이고,
     # 찍을 때는 묶음까지 보이게 docs/ 아래 경로를 쓴다.
-    docs = sorted((ROOT / "docs").rglob("*.md"))
+    #
+    # **CLAUDE.md 도 잰다.** 매 세션이 통째로 읽는 유일한 문서라 길어지는 비용이 가장
+    # 크다 — 라우팅 표로 '필요한 것만 읽게' 해 놓고 입구가 뚱뚱해지면 소용이 없다.
+    # 2026-10-18 에 규칙이 쌓여 280줄이 되도록 이 검사 밖에 있었다.
+    docs = [ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md"))]
     long_docs = []
     for d in docs:
         n = len(d.read_text(encoding="utf-8").splitlines())
         if n > DOC_LINES_WARN and d.name not in DOC_LONG_OK:
-            long_docs.append((d.relative_to(ROOT / "docs").as_posix(), n))
+            long_docs.append((d.relative_to(ROOT / "docs").as_posix()
+                              if d.parent != ROOT else d.name, n))
     print(f"  긴 지침서       {len(long_docs)}/{len(docs)} "
           f"({DOC_LINES_WARN}줄 넘음)")
     if long_docs:
@@ -380,6 +385,69 @@ def check_cruft(rep: Report) -> None:
     for p in junk[:5]:
         rep.add("!", "군살", f"임시 파일이 저장소에 있습니다: "
                              f"{p.relative_to(ROOT).as_posix()}")
+
+    stray = leftover_work_dirs()
+    print(f"  남은 작업 폴더    {len(stray)}개")
+    for s in stray:
+        rep.add("!", "군살", s)
+
+
+def stray_dirs(claude_dir_children: list[str], worktrees: dict[str, str | None],
+               merged: set[str]) -> list[str]:
+    """`.claude/` 아래 남은 작업 폴더. 순수 함수라 자체 시험이 쉽다.
+
+    `claude_dir_children` 은 `.claude/` 바로 아래 폴더의 절대 경로(정규화),
+    `worktrees` 는 git 이 아는 워크트리 경로 → 브랜치, `merged` 는 main 에 머지된 브랜치.
+    """
+    out = []
+    known = set(worktrees)
+    for d in claude_dir_children:
+        if d.endswith("/worktrees") or d in known:
+            continue
+        out.append(f"git 이 모르는 작업 폴더 {d.rsplit('/', 1)[-1]} — 옛 CLAUDE.md·코드 "
+                   f"사본이 검색에 섞입니다. 쓰는 세션이 없으면 지우세요")
+    for path, branch in worktrees.items():
+        if branch and branch in merged and "/.claude/" in path:
+            out.append(f"워크트리 {path.rsplit('/', 1)[-1]} 의 브랜치 {branch} 는 이미 main 에 "
+                       f"머지됐습니다 — 쓰는 세션이 없으면 `git worktree remove`")
+    return out
+
+
+def leftover_work_dirs() -> list[str]:
+    """에이전트 세션이 남긴 작업 폴더를 찾는다 — **지우지 않고 알리기만 한다.**
+
+    `.claude/` 는 gitignore 라 ripgrep(Grep 도구)은 건너뛰지만 `grep -r` 는 들어간다.
+    2026-10-18 에 문서를 정리하며 `grep -rn` 을 쳤더니 결과의 절반이 `.claude/wt-*`
+    여덟 곳과 머지된 워크트리 하나에 든 **옛 CLAUDE.md·옛 코드**였다. 다음 사람(에이전트)
+    이 그 사본을 지금 것으로 읽으면 이미 고친 규칙을 따라 한다 — 컨텍스트가 썩는
+    가장 조용한 길이다. 다른 세션이 쓰는 중일 수 있으므로 지울지는 사람이 정한다.
+    """
+    try:
+        lst = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=ROOT,
+                             capture_output=True, text=True, encoding="utf-8").stdout
+        mg = subprocess.run(["git", "branch", "--merged", "main", "--format=%(refname:short)"],
+                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8").stdout
+    except OSError:
+        return []
+
+    def norm(p: str) -> str:
+        return Path(p).resolve().as_posix().lower()
+
+    worktrees: dict[str, str | None] = {}
+    cur = None
+    for line in lst.splitlines():
+        if line.startswith("worktree "):
+            cur = norm(line[len("worktree "):])
+            worktrees[cur] = None
+        elif line.startswith("branch ") and cur:
+            worktrees[cur] = line[len("branch refs/heads/"):]
+    if not worktrees:
+        return []
+    main_root = Path(next(iter(worktrees)))  # 첫 줄이 주 체크아웃이다
+    cdir = main_root / ".claude"
+    children = [norm(str(p)) for p in cdir.iterdir() if p.is_dir()] if cdir.exists() else []
+    merged = {b.strip() for b in mg.splitlines() if b.strip() and b.strip() != "main"}
+    return stray_dirs(children, worktrees, merged)
 
 
 SECTIONS = {"정합성": None, "신선도": None, "군살": None}

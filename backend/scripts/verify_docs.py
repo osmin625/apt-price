@@ -20,6 +20,7 @@
 - CLAUDE.md 라우팅 표가 **있는 문서를 가리키는가**, 그리고 `docs/` 의 문서가
   표에서 **빠져 있지 않은가** (나눠 놓고 표에 안 넣으면 아무도 못 찾는다)
 - 문서가 **묶음 폴더 한 단계 아래**에 있는가 — `docs/<묶음>/<문서>.md`
+- **코드 주석**이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는가
 
 ## 계층을 검사로 지킨다
 
@@ -88,12 +89,53 @@ def layout_problems(rels: list[str]) -> list[str]:
     return bad
 
 
+# 코드가 문서를 가리키는 모양. `docs/engineering/deploy.md` 와, 거기에 절 제목을 붙인
+# `docs/engineering/deploy.md '스케줄러가 띄운 PowerShell 이 죽는다'`(`의` 가 끼기도 한다).
+CODE_DOC_REF = re.compile(r"(docs/[\w/.-]+?\.md)(?:#[\w-]+)?(?:\s*의)?(?:\s*'([^'\n]{2,80})')?")
+
+
+def _plain(title: str) -> str:
+    return re.sub(r"[`*]", "", title).strip()
+
+
+def code_doc_problems(items: list[tuple[str, str]],
+                      heads: dict[str, list[str]]) -> list[str]:
+    """코드(주석·독스트링)가 가리키는 문서 경로와 절 제목이 아직 있나. 순수 함수다.
+
+    문서를 옮기거나 절 제목을 바꾸면 **문서끼리의 링크는 위에서 잡히지만 코드 주석은
+    아무도 안 본다.** 문서를 묶음 폴더로 옮길 때 주석 속 경로 13개 파일을 손으로
+    고쳤고, CLAUDE.md 는 그 확인을 이 스크립트가 한다고 적었는데 실제로는 문서만 보고
+    있었다. 주석이 '경위는 deploy.md 의 그 절' 이라고 하는데 그 절이 없으면, 읽는
+    사람은 경위가 지워진 줄 안다.
+
+    `items` 는 (어디, 본문), `heads` 는 문서 경로 → 제목 목록.
+    """
+    bad = []
+    for where, text in items:
+        for m in CODE_DOC_REF.finditer(text):
+            path, quote = m.group(1), m.group(2)
+            if path not in heads:
+                bad.append(f"{where}  없는 문서 → {path}")
+                continue
+            if quote and not any(_plain(quote) in _plain(h) for h in heads[path]):
+                bad.append(f"{where}  {path} 에 '{quote}' 절이 없습니다")
+    return bad
+
+
 def self_test() -> bool:
-    """계층 검사가 **걸리는지**, 그리고 멀쩡한 것은 **안 걸리는지**."""
+    """계층 검사와 코드→문서 검사가 **걸리는지**, 그리고 멀쩡한 것은 **안 걸리는지**."""
     caught = (len(layout_problems(["new.md"])) == 1
               and len(layout_problems(["model/deep/x.md"])) == 1)
     clean = layout_problems(["model/method.md", "screens/ui-log.md"]) == []
-    return caught and clean
+    heads = {"docs/a/x.md": ["# 문서", "## 스케줄러가 **죽는다**"]}
+    ref_caught = (len(code_doc_problems([("f", "docs/a/gone.md 참조")], heads)) == 1
+                  and len(code_doc_problems([("f", "docs/a/x.md '없는 절'")], heads)) == 1)
+    ref_clean = code_doc_problems([
+        ("f", "경위는 docs/a/x.md '스케줄러가 죽는다'"),
+        ("f", "docs/a/x.md 의 '스케줄러가 죽는다' 참조"),
+        ("f", "(docs/a/x.md — 설명)"),
+    ], heads) == []
+    return caught and clean and ref_caught and ref_clean
 
 
 def main() -> int:
@@ -140,6 +182,28 @@ def main() -> int:
         for m in missing:
             print(f"      {m}")
 
+    # 코드 → 문서 — 주석이 가리키는 경로와 절
+    heads = {d.relative_to(ROOT).as_posix(): [m.group(1) for line in
+                                             d.read_text(encoding="utf-8").splitlines()
+                                             if (m := HEADING.match(line))]
+             for d in docs}
+    code = [p for p in [*(ROOT / "backend" / "app").rglob("*.py"),
+                        *(ROOT / "backend" / "scripts").glob("*.py"),
+                        *(ROOT / "frontend" / "src").rglob("*.js*"),
+                        *(ROOT / "frontend" / "src").rglob("*.css"),
+                        *ROOT.glob("*.ps1"), *(ROOT / "tools").glob("*.*"),
+                        ROOT / "backend" / "data" / "manual" / "README.md"]
+            if p.is_file() and "__pycache__" not in p.parts and p.name != "verify_docs.py"]
+    items = [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8", errors="replace"))
+             for p in code]
+    refs = code_doc_problems(items, heads)
+    # 본 개수를 찍는다 — 0 이면 검사가 아무것도 안 보고 통과한 것이다
+    found = [m for _w, t in items for m in CODE_DOC_REF.finditer(t)]
+    print(f"\n코드 {len(code)}개 파일 · 문서 경로 {len(found)}개(절 인용 "
+          f"{sum(1 for m in found if m.group(2))}개) · 없는 것 {len(refs)}")
+    for b in refs:
+        print(f"  [X] {b}")
+
     # 계층 — 묶음 폴더 한 단계 아래
     layout = layout_problems([d.relative_to(ROOT / "docs").as_posix() for d in docs])
     groups = sorted({d.parent.name for d in docs if d.parent != ROOT / "docs"})
@@ -147,11 +211,11 @@ def main() -> int:
     for b in layout:
         print(f"  [X] {b}")
     tested = self_test()
-    print(f"자체 시험 — 계층 검사가 {'걸려야 할 때 걸리고, 아닐 때 안 걸림' if tested else '제대로 걸리지 않음'}")
+    print(f"자체 시험 — 계층·코드→문서 검사가 {'걸려야 할 때 걸리고, 아닐 때 안 걸림' if tested else '제대로 걸리지 않음'}")
     if not tested:
-        print("  [X] 계층 검사가 일부러 어긴 경우를 못 잡거나 멀쩡한 것을 잡습니다")
+        print("  [X] 계층·코드→문서 검사가 일부러 어긴 경우를 못 잡거나 멀쩡한 것을 잡습니다")
 
-    ok = not bad and not missing and not layout and tested
+    ok = not bad and not missing and not layout and not refs and tested
     print("\n" + ("전부 통과" if ok else "고칠 것이 있습니다"))
     return 0 if ok else 1
 
