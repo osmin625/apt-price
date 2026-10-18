@@ -35,9 +35,10 @@
 한 번에 돌리는 것은 `sync_static.ps1` 이다.
 
 ```powershell
-.\sync_static.ps1              # 내보내기 + 빌드 + 배포
-.\sync_static.ps1 -NoPublish   # 배포 없이 로컬에서 확인만
-.\sync_static.ps1 -NoQuotes    # 호가(호가 분석·단지 상세) 제외
+.\sync_static.ps1                  # 내보내기 + 빌드 + 배포(전제가 안 맞으면 배포만 생략)
+.\sync_static.ps1 -NoPublish       # 배포 없이 로컬에서 확인만(전제 검사도 없다)
+.\sync_static.ps1 -NoQuotes        # 호가(호가 분석·단지 상세) 제외
+.\sync_static.ps1 -AllowAnyBranch  # 전제가 안 맞는 줄 알고도 올린다
 ```
 
 배포 전 확인:
@@ -48,9 +49,8 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 
 ## 크기는 문서에 적지 않는다
 
-예전에는 흐름도에 "80개 파일 · 8.2MB" 라고 적어 뒀다. 재 보니 **2,160개 · 38.3MB**
-였다. 단지 상세와 도보 경로가 단지 수만큼 늘어난 뒤로 자릿수가 달라졌는데 문서만
-그대로였다.
+흐름도에 적어 둔 "80개 파일 · 8.2MB" 가 재 보니 **2,160개 · 38.3MB** 였다 — 단지 수만큼
+느는 응답이 생긴 뒤로 자릿수가 달라졌는데 문서만 그대로였다.
 
 지금 크기는 `python -m scripts.checkup` 이 찍는다. 임계값도 거기 있다 — 넘으면
 `[!]` 로 알려 준다.
@@ -78,7 +78,7 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 | 매물 분석 | O | 요인별 보정계수 + 도보거리 상세 창까지 전부 |
 | 가격 분석 | O | 한국부동산원 공표 통계. 카드가 있는 지표 × 기간 셋이라 전부 내보낸다(목록은 `macro.METRICS` 에서 뽑는다) |
 | 공급 분석 | O | 응답 하나(`/api/supply/overview`). 파라미터가 없다 |
-| 거시 분석 | O | 응답 하나. 요인 상관을 서버에서 재서 담는다(88KB) |
+| 거시 분석 | O | 응답 하나. 요인 상관을 서버에서 재서 담는다 |
 | 호가 분석 | O | 단지명을 누르면 단지 상세도 열린다 |
 | 지도 | 조건부 | 데이터는 늘 내보낸다. **키 때문에** 기본은 꺼 둔다 — 아래 참조 |
 | 분해 모델 | O | `/model/fit` 은 이미 내보내던 것이고, 묶어 보기(`/model/groups`)를 기준 × 기간만큼 더했다(기준 목록은 `model_view.GROUP_BY` 에서 뽑는다) |
@@ -86,16 +86,9 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 
 ## 지도 탭 — 데이터가 아니라 키가 문제다
 
-지도가 부르는 넷 중 둘은 다른 화면 때문에 **이미 스냅샷에 있었다.**
-
-| 요청 | 크기 |
-|---|---|
-| `/map/complexes?months=N` | 1.1MB × 3 (도보거리 상세 창이 이미 쓰고 있었다) |
-| `/model/fit?months=N` | 14KB × 3 |
-| `/map/stations` | 10KB · 파라미터 없어 한 개 |
-| `/map/walk-path/{id}` | 365바이트 × 1,851 ≈ 0.7MB |
-
-그래서 지도를 켜도 **데이터가 늘지 않는다** — 도보 경로는 어차피 내보낸다.
+지도가 부르는 넷(`/map/complexes`·`/model/fit`·`/map/stations`·`/map/walk-path/{id}`) 중
+단지 목록과 적합은 도보거리 상세 창 때문에 **이미 스냅샷에 있었고**, 역은 파라미터가
+없어 한 개, 도보 경로는 어차피 내보낸다. 그래서 지도를 켜도 **데이터가 늘지 않는다.**
 막는 것은 **카카오 JS 키 하나**다.
 
 지도를 띄우려면 키가 번들에 들어가야 한다. `App.jsx` 가 `MapView` 를 정적
@@ -227,13 +220,7 @@ GitHub Pages 는 `https://<user>.github.io/<repo>/` 하위에 올라간다. `bas
 목록에 없었다) 반쯤 고친 화면이 공개될 수 있는 구조였다.
 
 막는 것은 **공개되는 행위뿐**이다. 내보내기·빌드는 그대로 돈다 — 로컬에서 확인하는
-것은 언제나 되어야 한다. 그래서 `-NoPublish` 는 검사를 거치지 않는다.
-
-```powershell
-.\sync_static.ps1                  # 전제를 보고, 안 맞으면 배포만 생략
-.\sync_static.ps1 -NoPublish       # 검사 없음(어차피 안 올린다)
-.\sync_static.ps1 -AllowAnyBranch  # 알고도 올린다
-```
+것은 언제나 되어야 한다. 그래서 `-NoPublish` 는 검사를 거치지 않는다(명령은 위 '흐름').
 
 **실패가 아니라 생략이라 종료 코드는 0 이다.** 스케줄러에 거짓 실패를 남기면 진짜
 실패와 구분할 수 없게 된다(같은 이유로 `Run` 함수가 stderr 를 실패로 세지 않는다).

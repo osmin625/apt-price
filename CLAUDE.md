@@ -11,12 +11,14 @@
 | 묶음 | 하려는 일 | 읽을 것 |
 |---|---|---|
 | `screens/` 화면 | 화면·기능 동작을 바꾼다 | [screens/design.md](docs/screens/design.md) |
+| | 새 카드·그림·창을 만든다(색·로딩·창·카드를 둘 탭) | [screens/conventions.md](docs/screens/conventions.md) |
 | | 호가를 읽거나 줄 세우는 것을 바꾼다 | [screens/quotes.md](docs/screens/quotes.md) |
 | | 그 화면이 왜 그렇게 됐는지 찾는다 | [screens/ui-log.md](docs/screens/ui-log.md) |
 | `model/` 추정 | 모델에 요인을 더하거나 뺀다 | [model/factors.md](docs/model/factors.md) |
 | | 추정 방법·수식을 건드린다 | [model/method.md](docs/model/method.md) |
 | `data/` 출처 | 데이터를 채우거나 지역을 넓힌다 | [data/pipeline.md](docs/data/pipeline.md) |
-| | 공표 통계(한국부동산원)를 건드린다 | [data/reb.md](docs/data/reb.md) |
+| | 공표 통계(한국부동산원·한국은행)를 건드린다 | [data/reb.md](docs/data/reb.md) |
+| | 경기 남부 공급·멸실을 직접 세는 자료(K-apt·건축물대장 전수, 스냅샷)를 건드린다 | [data/south-supply.md](docs/data/south-supply.md) |
 | | 붙여넣은 매물을 단지·평형에 맞추거나 메모를 읽는 규칙을 바꾼다 | [data/listings.md](docs/data/listings.md) |
 | `analysis/` 공급·거시 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
 | | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
