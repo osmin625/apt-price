@@ -285,7 +285,12 @@ tbody tr.clickable { cursor: pointer; }
 .pbar-track { position: relative; height: 22px; }
 .pbar-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
 .pbar-fill { position: absolute; top: 5px; height: 12px; min-width: 2px; }
-.pbar-fill.pos { background: var(--series-1); border-radius: 0 4px 4px 0; }
+/* 색 규칙은 화면 전체가 하나다 — **오름(+)은 초록, 내림(−)은 빨강.** 부호가 없는 크기 막대
+   (세대수·비율)는 plain, 부호와 상관없이 눈여겨볼 칸은 warn 이다. 예전에는 + 를 파랑으로
+   칠한 곳과 초록으로 칠한 곳이 섞여 있었고, 미분양 증가처럼 '나쁜 +' 를 빨강으로 칠한 곳도 있었다. */
+.pbar-fill.pos { background: var(--good); border-radius: 0 4px 4px 0; }
+.pbar-fill.plain { background: var(--series-1); border-radius: 0 4px 4px 0; }
+.pbar-fill.warn { background: var(--warning); border-radius: 0 4px 4px 0; }
 .pbar-fill.neg { background: var(--neg); border-radius: 4px 0 0 4px; }
 .pbar-value { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .pbar-value.pos { color: var(--text-primary); }
@@ -294,7 +299,9 @@ tbody tr.clickable { cursor: pointer; }
 
 .muted { color: var(--text-secondary); }
 .small { font-size: 12px; }
-.tone-pos { color: var(--series-1); }
+/* 오름 초록 · 내림 빨강(위 .pbar-fill 주석). 예전에는 이 규칙이 세 곳에 있었고 첫 줄은 파랑이었다 —
+   뒤의 것이 이겨서 초록으로 보였을 뿐이다. 한 곳에만 둔다. */
+.tone-pos { color: var(--good); }
 .tone-neg { color: var(--neg); }
 .tile .value.sm { font-size: 17px; }
 .tiles.compact { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; }
@@ -519,8 +526,6 @@ tr.is-current { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 /* 적정가 진단 실거래 표에서 '같은 동' 거래를 강조 */
 tr.is-same-dong td { background: color-mix(in srgb, var(--series-1) 9%, transparent); }
 tr.is-same-dong td:first-child { box-shadow: inset 2px 0 0 var(--series-1); }
-.tone-pos { color: var(--good); }
-.tone-neg { color: var(--neg); }
 /* 값에 붙는 주석 — 호버/포커스에서만 펼친다 */
 .hint { position: relative; display: inline-block; margin-left: 4px; outline: none; }
 .hint-dot {
@@ -603,8 +608,6 @@ td[data-tone='bad'] { color: var(--critical); font-weight: 600; }
    클래스 이름에 `fh-` 를 붙인 이유: 전역 `.is-thin` 은 향 카드가 '표본 부족'
    을 흐리게 칠하는 데 이미 쓰고 있어서, 겹치면 정반대로 보인다. */
 .fh-foot.fh-thin { color: var(--warning); font-weight: 600; }
-.tone-pos { color: var(--good); }
-.tone-neg { color: var(--neg); }
 tr.is-deleting td { opacity: 0.4; }
 /* ── 매크로 ───────────────────────────────────────────────────────────────
    시군구 17개를 한 축에 그린다. KB 가 5개까지만 그려 주던 것을 전부 펼치는 것이
@@ -659,9 +662,33 @@ tr.is-deleting td { opacity: 0.4; }
   background: color-mix(in srgb, var(--heat-c) var(--heat-mix), var(--surface-1));
   border-left: 4px solid color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--border));
 }
-.heat-pct { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
+/* 거시 분석의 '카드가 다른 탭에 있는 요인' — 그림 없이 위치 색만 띤 한 줄. 카드와 같은
+   변수(--heat-*)로 칠한다. */
+.rg-shared { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.rg-shared-row {
+  --heat-c: var(--heat-hi); --heat-mix: 0%; --heat-edge: 0%;
+  display: grid; grid-template-columns: 120px 1fr auto 14px; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 11px; text-align: left; cursor: pointer; font: inherit; color: inherit;
+  background: color-mix(in srgb, var(--heat-c) var(--heat-mix), var(--surface-1));
+  border: 1px solid var(--border);
+  border-left: 4px solid color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--border));
+}
+.rg-shared-row:hover { border-color: var(--accent); }
+/* 왼쪽 막대만 **방향**으로 — 바탕은 위치(heat), 막대는 오름 초록 · 내림 빨강. `data-edge` 가 없으면
+   막대도 위치 색 그대로다. 호버의 border-color 가 막대까지 덮지 않게 border-left-color 를 따로 둔다. */
+.macro-card.is-heat[data-edge='up'], .rg-shared-row[data-edge='up'] { border-left-color: var(--good); }
+.macro-card.is-heat[data-edge='down'], .rg-shared-row[data-edge='down'] { border-left-color: var(--neg); }
+.macro-card.is-heat[data-edge='none'], .rg-shared-row[data-edge='none'] { border-left-color: var(--border); }
+@media (max-width: 640px) {
+  .rg-shared-row { grid-template-columns: 1fr 14px; row-gap: 2px; }
+  .rg-shared-row > .muted { grid-column: 1; }
+}
+.heat-pos { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
 /* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */
 .heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+/* 양 끝 이름('역대 최저')은 쪼개지 않는다. 설명이 길면 그 설명만 줄을 바꾼다 —
+   과거 국면 표의 범례에서 '역대 최 / 저' 로 갈렸다. */
+.heat-legend > span:not(.muted) { white-space: nowrap; flex: none; }
 .heat-legend-bar {
   width: 160px; height: 8px; border-radius: 4px;
   background: linear-gradient(90deg, var(--heat-lo), var(--surface-1) 50%, var(--heat-hi));
@@ -879,9 +906,11 @@ tr.is-deleting td { opacity: 0.4; }
 .mbar-track { position: relative; height: 16px; }
 .mbar-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--axis); }
 .mbar-fill { position: absolute; top: 3px; height: 10px; min-width: 2px; }
-.mbar-fill.pos { background: var(--series-1); border-radius: 0 3px 3px 0; }
+.mbar-fill.pos { background: var(--good); border-radius: 0 3px 3px 0; }
+.mbar-fill.plain { background: var(--series-1); border-radius: 0 3px 3px 0; }
 .mbar-fill.neg { background: var(--neg); border-radius: 3px 0 0 3px; }
-.mbar-row.marked .mbar-fill.pos { background: var(--neg); }
+/* 얇은 표본 표시는 부호가 아니라 주의라서 빨강(내림)이 아니라 경고색이다. */
+.mbar-row.marked .mbar-fill { background: var(--warning); }
 .mbar-value {
   font-size: 12.5px; font-weight: 600; text-align: right;
   font-variant-numeric: tabular-nums; color: var(--text-primary);
@@ -931,6 +960,24 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-dir.is-up { color: var(--good); }
 .rg-dir.is-down { color: var(--neg); }
 .rg-dir.is-none { color: var(--text-muted); }
+/* 합산 모델의 줄다리기 — 양쪽 힘의 비율 막대와 양쪽 요인 목록. 색은 방향 화살표(.rg-dir)와 같다. */
+.rg-verdict { margin: 4px 0 8px; }
+.rg-tug { display: flex; height: 26px; border-radius: var(--radius); overflow: hidden; font-size: 12px; font-weight: 600; }
+/* 폭은 flex-grow 비율로 — 한쪽이 아주 작아도 글자가 잘리지 않게 글자 폭만큼은 남긴다. */
+.rg-tug-side { display: flex; align-items: center; white-space: nowrap; padding: 0 8px; flex: 0 1 0; min-width: max-content; }
+.rg-tug-side.is-down { background: color-mix(in srgb, var(--neg) 18%, transparent); color: var(--neg); }
+.rg-tug-side.is-up { justify-content: flex-end; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.rg-tug-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 8px; }
+.rg-tug-col h4 { margin: 0 0 6px; font-size: 13.5px; }
+.rg-tug-col.is-up h4 { color: var(--good); }
+.rg-tug-col.is-down h4 { color: var(--neg); }
+.rg-tug-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rg-tug-col li { padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-1); }
+.rg-tug-name { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.rg-push { flex: none; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.rg-tug-col.is-up .rg-push { color: var(--good); }
+.rg-tug-col.is-down .rg-push { color: var(--neg); }
+@media (max-width: 640px) { .rg-tug-cols { grid-template-columns: 1fr; } }
 .rg-name { font-weight: 600; }
 .rg-label { color: var(--text-secondary); }
 .rg-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -959,10 +1006,15 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-kind.is-supply { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
 
 .rg-hist td, .rg-hist th { white-space: nowrap; }
-.rg-state { font-size: 11.5px; padding: 1px 6px; border-radius: 4px; }
-.rg-state.is-hi { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
-.rg-state.is-lo { background: color-mix(in srgb, var(--series-1) 14%, transparent); color: var(--series-1); }
-.rg-state.is-mid { color: var(--text-muted); }
+/* 과거 국면 표의 칸. 색은 백분위 그대로(`heatVars` 가 넘기는 --heat-*), 글자는 다섯 단계다.
+   예전에는 높음·보통·낮음 세 색이라 자기 역사 71% 와 99% 가 같은 칸으로 보였다. */
+.rg-state {
+  --heat-c: var(--heat-hi); --heat-mix: 0%; --heat-edge: 0%;
+  display: inline-block; min-width: 4.6em; text-align: center;
+  font-size: 11.5px; padding: 2px 6px; border-radius: 4px;
+  background: color-mix(in srgb, var(--heat-c) calc(var(--heat-mix) * 1.6), transparent);
+  color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary));
+}
 
 @media (max-width: 720px) {
   /* 좁은 화면에서는 근거 줄을 아래로 내린다. 한 줄에 네 칸은 각 30px 가 된다 */
@@ -980,3 +1032,33 @@ tr.is-deleting td { opacity: 0.4; }
 /* 미분양처럼 자릿수가 다른 지역은 한 축에 겹치지 않고 나란히 둔다 */
 .topic-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 16px; margin-bottom: 8px; }
 .topic-multiple-title { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+
+/* ── 분해 모델 수식 (components/ModelFormula) ─────────────────────────────
+   식의 각 항이 버튼이다. 기호 아래 작은 이름을 둬 기호를 몰라도 읽히게 한다.
+   한 줄에 안 들면 항 단위로 줄을 바꾼다 — 휴대폰에서 가로로 넘치지 않게. */
+.mf-line { margin-top: 14px; }
+.mf-stage { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.mf-eq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; }
+.mf-cell { display: inline-flex; align-items: center; gap: 4px; }
+.mf-op { color: var(--text-muted); font-size: 15px; padding: 0 2px; }
+.mf-term {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 9px; cursor: pointer; font: inherit; color: inherit;
+  background: var(--surface-1); border: 1px solid var(--border);
+}
+.mf-term:hover { border-color: var(--accent); }
+.mf-term.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); }
+.mf-term.is-linked { border-style: dashed; border-color: var(--accent); }
+.mf-term.is-lhs .mf-sym { font-weight: 700; }
+.mf-sym { font-family: 'Times New Roman', Georgia, serif; font-size: 17px; font-style: italic; line-height: 1.2; }
+.mf-sym sub { font-family: Pretendard, system-ui, sans-serif; font-style: normal; font-size: 10px; }
+.mf-name { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.mf-foot { margin-top: 12px; }
+.mf-all .mf-name { font-size: 12px; color: var(--text-secondary); }
+.mf-detail { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); }
+.mf-detail h3 { margin: 0 0 6px; font-size: 14px; }
+.mf-detail p { max-width: 90ch; }
+.mf-hint { margin-top: 12px; }
+/* 상세 안의 표는 줄바꿈하지 않고 가로로 넘긴다. 휴대폰 폭에서 칸이 좁아지면
+   '역까지 도보' 가 한 글자씩 세로로 쪼개졌다. */
+.mf-detail .coef td, .mf-detail .coef th { white-space: nowrap; }

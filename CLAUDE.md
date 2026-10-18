@@ -1,29 +1,45 @@
 # CLAUDE.md
 
 이 저장소에서 작업할 때의 규칙. 무엇을 만드는지는 [README](README.md), 자세한 배경은
-[docs/](docs/) 에 있다.
+[docs/](docs) 에 있다.
 
 ## 문서를 먼저 고른다
 
 문서를 목적별로 나눠 둔 이유는 **필요 없는 것까지 읽지 않기 위해서**다. 전부 읽지 말고
 하려는 일에 맞는 것만 연다.
 
-| 하려는 일 | 읽을 것 |
-|---|---|
-| 화면·기능 동작을 바꾼다 | [docs/design.md](docs/design.md) |
-| 호가를 읽거나 줄 세우는 것을 바꾼다 | [docs/quotes.md](docs/quotes.md) |
-| 그 화면이 왜 그렇게 됐는지 찾는다 | [docs/ui-log.md](docs/ui-log.md) |
-| 모델에 요인을 더하거나 뺀다 | [docs/factors.md](docs/factors.md) |
-| 추정 방법·수식을 건드린다 | [docs/model.md](docs/model.md) |
-| 데이터를 채우거나 지역을 넓힌다 | [docs/data.md](docs/data.md) |
-| 공표 통계(한국부동산원)를 건드린다 | [docs/reb.md](docs/reb.md) |
-| 공급량 분석을 건드린다 | [docs/supply.md](docs/supply.md) |
-| 거시 요인(수요·통화·금리·정책)을 건드린다 | [docs/macro.md](docs/macro.md) |
-| 코드 위치를 찾는다 | [docs/architecture.md](docs/architecture.md) |
-| 느려진 것을 고친다 | [docs/performance.md](docs/performance.md) |
-| 정적 사이트를 내보내거나 배포한다 | [docs/deploy.md](docs/deploy.md) |
+| 묶음 | 하려는 일 | 읽을 것 |
+|---|---|---|
+| `screens/` 화면 | 화면·기능 동작을 바꾼다 | [screens/design.md](docs/screens/design.md) |
+| | 호가를 읽거나 줄 세우는 것을 바꾼다 | [screens/quotes.md](docs/screens/quotes.md) |
+| | 그 화면이 왜 그렇게 됐는지 찾는다 | [screens/ui-log.md](docs/screens/ui-log.md) |
+| `model/` 추정 | 모델에 요인을 더하거나 뺀다 | [model/factors.md](docs/model/factors.md) |
+| | 추정 방법·수식을 건드린다 | [model/method.md](docs/model/method.md) |
+| `data/` 출처 | 데이터를 채우거나 지역을 넓힌다 | [data/pipeline.md](docs/data/pipeline.md) |
+| | 공표 통계(한국부동산원)를 건드린다 | [data/reb.md](docs/data/reb.md) |
+| `analysis/` 공급·거시 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
+| | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
+| `engineering/` 코드 다루기 | 코드 위치를 찾는다 | [engineering/architecture.md](docs/engineering/architecture.md) |
+| | 느려진 것을 고친다 | [engineering/performance.md](docs/engineering/performance.md) |
+| | 정적 사이트를 내보내거나 배포한다 | [engineering/deploy.md](docs/engineering/deploy.md) |
 
 새로 알아낸 사실은 그 주제의 문서에 적는다. README 로 돌려보내지 말 것 — 다시 뚱뚱해진다.
+
+### docs 는 계층으로 둔다
+
+문서는 **`docs/<묶음>/<문서>.md` 한 단계**로 둔다. 묶음은 '그 문서가 무엇에 답하나'
+로 정한다 — 화면이 어떻게 생겼나(screens), 값을 어떻게 추정하나(model), 데이터가
+어디서 오나(data), 공급·거시 탭이 무엇을 재나(analysis), 코드를 어떻게 다루나
+(engineering). 열두 문서가 `docs/` 에 평평하게 놓여 있을 때는 공급·거시·공표 통계처럼
+비슷한 문서가 이름순으로 흩어졌다.
+
+- **새 문서는 맞는 묶음에 넣고 표의 그 묶음 아래에 행을 더한다.** `docs/` 바로 아래에
+  두거나 폴더를 두 단계로 파면 `verify_docs` 가 실패한다.
+- **맞는 묶음이 없으면 폴더를 옆으로 더한다.** 억지로 아무 데나 넣으면 묶음이 다시
+  '이것저것' 이 된다. 문서가 하나뿐인 묶음도 괜찮다.
+- **옮길 때는 링크를 손으로 고치지 않는다.** 옛 자리에서 가리키던 파일을 새 자리
+  기준으로 다시 계산해 바꾸고, 코드 주석의 `docs/…` 경로까지 같이 바꾼 뒤 `verify_docs`
+  로 확인한다. 처음 묶을 때 링크 43개, 코드·스크립트 경로 13개 파일이 바뀌었다.
 
 **한 문서가 두 가지 일을 하기 시작하면 나눈다.** 세 번 그랬다. `design.md` 는 '지금의
 설계' 와 '그렇게 된 경위' 가 붙어 1,420줄이 됐고, `model.md` 는 '추정 방법' 과 '무슨
@@ -75,7 +91,7 @@
 - `scripts/verify_listing_parse.py` — 파서 주석의 '실제로 겪은' 사례를 입력으로, 주석이
   말하는 값을 기대값으로. 지금 출력을 얼리지 않는다 — 그러면 지금의 버그가 정답이 된다
 - `scripts/verify_payloads.py` — 적합 페이로드가 정말 JSON 이 되는지
-- `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지
+- `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다
 
 새로 최적화할 때도 같은 것을 만든다. "눈으로 보니 같다" 는 근거가 아니다.

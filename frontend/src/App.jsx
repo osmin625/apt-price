@@ -21,7 +21,7 @@ import SupplyView from './views/SupplyView'
  *
  * 지도는 데이터가 아니라 **키 때문에** 조건부다. 응답은 늘 내보내지만, 카카오 JS
  * 키가 공개 번들에 들어가야 하므로 켜는 것을 의도적인 행위로 만들었다
- * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/deploy.md.
+ * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/engineering/deploy.md.
  *
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
  */
@@ -42,7 +42,9 @@ const TABS = [
   // 거기서는 '얼마나 모자라나', 여기서는 '그래서 어느 쪽인가' 를 묻는다.
   { id: 'regime', label: '거시 분석', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
-  { id: 'model', label: '분해 모델' },
+  // 정적 사이트에도 싣는다. 적합 결과(`/model/fit`)는 이미 내보내고 있었고, 묶어 보기
+  // (`/model/groups`)만 더하면 됐다. 맨 위 수식(`ModelFormula`)이 탭의 입구다.
+  { id: 'model', label: '분해 모델', static: true },
   // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
   // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
   // 둘은 짝이다 — 한쪽에 붙여넣고 다른 쪽에서 본다. 이름도 짝으로 맞췄다.

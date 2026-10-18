@@ -4,9 +4,10 @@ import { api } from '../api'
 import { fmt } from '../components/Charts'
 import Modal from '../components/Modal'
 import TimeLines from '../components/TimeLines'
-import { heatVars, rangePos } from '../components/heat'
+import { heatVars, histZ, zText } from '../components/heat'
 import { FactorDetail } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
+import { PRICE_METRIC } from './registry'
 import { PipeTable, UnsoldTable } from './SupplyTables'
 
 /**
@@ -28,10 +29,14 @@ export default function TopicModal({ topic, onClose, hidden, onToggle }) {
   return (
     <Modal title={title || '불러오는 중'} onClose={onClose} wide>
       {topic.supply && <SupplySection topic={topic} />}
-      {topic.metric && (
-        <MetricSection topic={topic} hidden={hidden} onToggle={onToggle}
-                       onLabel={(l) => !topic.title && setTitle(l)} />
-      )}
+      {/* 가격 분석 절은 **모든 주제 창**에 둔다. 주제에 지표가 없으면 매매가격지수다
+          (`PRICE_METRIC`) — 공급·요인을 보다가 '그래서 구마다 값은 어떻게 갔나' 를
+          보려고 가격 분석 탭으로 건너가지 않게 한다. */}
+      <MetricSection topic={topic.metric ? topic : { ...topic, metric: PRICE_METRIC }}
+                     fallback={!topic.metric}
+                     hidden={topic.metric ? hidden : undefined}
+                     onToggle={topic.metric ? onToggle : undefined}
+                     onLabel={(l) => topic.metric && !topic.title && setTitle(l)} />
       {topic.factor && (
         <FactorSection topic={topic} onLabel={(l) => !topic.title && !topic.metric && setTitle(l)} />
       )}
@@ -77,7 +82,7 @@ const SINCE = [
   ['201201', '전체(2012~)'],
 ]
 
-function MetricSection({ topic, hidden: hiddenProp, onToggle, onLabel }) {
+function MetricSection({ topic, fallback = false, hidden: hiddenProp, onToggle, onLabel }) {
   const [since, setSince] = useState(topic.since || '202001')
   const [own, setOwn] = useState(() => new Set())
   const hidden = hiddenProp || own
@@ -98,7 +103,7 @@ function MetricSection({ topic, hidden: hiddenProp, onToggle, onLabel }) {
 
   return (
     <section className="topic-section">
-      <SectionHead title="시군구별 추이" from="가격 분석" />
+      <SectionHead title={fallback ? '시군구별 매매가격지수' : '시군구별 추이'} from="가격 분석" />
       <div className="field topic-since">
         <label htmlFor={`ts-${topic.id}`}>기간</label>
         <select id={`ts-${topic.id}`} value={since} onChange={(e) => setSince(e.target.value)}>
@@ -140,6 +145,11 @@ function FactorSection({ topic, onLabel }) {
     if (f) onLabel(f.label)
   }, [f])
 
+  // x 축은 **요인의 기간**으로 자른다. 가격은 더 길게(2003~) 있지만, 요인이 없는 해까지
+  // 그리면 견줄 것이 없는 구간이 그림의 절반을 차지한다.
+  const months = f ? f.series.map((p) => p.ym) : null
+  const price = data?.price
+
   return (
     <section className="topic-section">
       <SectionHead title="그 뒤 가격과의 관계" from="거시 분석" />
@@ -148,19 +158,43 @@ function FactorSection({ topic, onLabel }) {
       {data && !f && <p className="empty">이 요인의 값이 없습니다</p>}
       {f && (
         <>
+          {/* 이 절이 무엇을 무엇과 견주는지. 위 절과 단위·지역이 달라 말해 두지 않으면
+              같은 데이터를 다르게 그린 것처럼 보인다. 숫자는 넣지 않는다 — 모든 요인이
+              같은 문장을 쓴다. */}
+          <p className="sub">
+            {/* 이름 뒤에 조사를 붙이지 않는다 — 요인마다 받침이 달라('소비심리과') 틀린다. */}
+            선 둘을 겹쳤습니다. <b>왼쪽 축</b> — {f.label}({f.region}), {f.transform_label}.{' '}
+            <b>오른쪽 축</b> — 그 달부터 12개월 동안 {price.region} 매매가격지수 변화(%). 한 달을
+            짚으면 그 달의 값과 그 뒤 1년의 결과가 같이 나옵니다. 단위가 달라 축을 둘로 두었으니
+            두 선의 높이를 서로 견주지 말고 <b>같이 오르내리는지</b>를 보세요.
+            {f.transform !== 'level' && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
+            가격 선의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
+          </p>
+          {/* 한 그림에 겹친다. 위아래 두 장으로 나눴더니 같은 달을 눈으로 오가야 해서
+              '같이 움직였나' 가 한 번에 안 보였다(ui-log). 단위가 요인마다 달라(%·%p·
+              지수) 축은 둘이다. 가격 값은 백엔드가 상관을 잴 때 쓴 그 `_fwd12` 다 —
+              그림과 표가 다른 계산을 하지 않는다. */}
           <TimeLines
-            series={[{ key: f.key, label: f.label, color: 'var(--series-1)',
-                       points: f.series.map((p) => ({ ym: p.ym, value: p.v })) }]}
+            series={[
+              { key: f.key, label: f.label, color: 'var(--series-1)',
+                points: f.series.map((p) => ({ ym: p.ym, value: p.v })) },
+              { key: 'fwd12', label: '그 뒤 12개월 가격 변화', color: 'var(--series-2)', axis: 'right',
+                points: (price.fwd12 || []).map((p) => ({ ym: p.ym, value: p.v })) },
+            ]}
             unit={f.unit}
             // 금리 차(%p)는 0.25 단위로 움직여 소수 둘째 자리까지 봐야 한다.
             decimals={f.unit === '%p' ? 2 : 1}
             // 증감률·차이는 0 이 기준이다. 수준값(심리지수·전세가율)은 0 을 넣으면
-            // 선이 위쪽에 납작하게 붙는다.
+            // 선이 위쪽에 납작하게 붙는다. 그때는 0 선도 맞추지 않는다.
             zero={f.transform !== 'level'}
             // 심리지수는 100 이 '사겠다 = 팔겠다' 인 중립선이다(up_means 참조).
             refLine={f.key === 'sentiment' ? 100 : null}
-            height={220}
-            ariaLabel={`${f.label} 추이 (${f.region})`}
+            rightUnit="%"
+            rightDecimals={1}
+            rightZero
+            height={260}
+            months={months}
+            ariaLabel={`${f.label}(${f.region})과 그 뒤 12개월 ${price.region} 매매가격 변화`}
           />
           <FactorDetail f={f} />
         </>
@@ -223,8 +257,8 @@ const REGION_LABEL = { 서울: '서울', 경기: '경기 전체' }
  * 파이프라인을 크게. 카드 축소판은 세 선의 모양만 보여 주고 숫자가 없었다.
  *
  * 숫자 타일은 계열마다 **지금 12개월 누적 · 1년 전 대비 · 역대 범위 안 위치** 셋이다.
- * 위치는 공급 분석 미분양 카드와 같은 자(역대 최저 ~ 최고, `heat.js`)다 — 준공이
- * 역대 범위의 어디쯤인지가 '지금 공급이 많은가' 에 대한 가장 짧은 답이다.
+ * 위치는 탭 공통의 자(자기 평균 기준 z, `heat.js` 의 `histZ`)다 — 준공이 자기
+ * 역사의 어디쯤인지가 '지금 공급이 많은가' 에 대한 가장 짧은 답이다.
  */
 function PipelineDetail({ regions, initial }) {
   const pick = regions.find((r) => r.sgg_cd === initial) || regions.find((r) => r.sgg_cd === '41') || regions[0]
@@ -252,7 +286,7 @@ function PipelineDetail({ regions, initial }) {
           const yoy = prev?.value ? (last.value / prev.value - 1) * 100 : null
           const vals = pts.map((p) => p.value)
           const peak = pts.reduce((a, b) => (b.value > a.value ? b : a))
-          const pos = rangePos(vals, last.value)
+          const pos = histZ(vals, last.value)
           return (
             <div className="tile" key={k} style={heatVars(pos)}>
               <div className="label">{label} · 12개월 누적</div>
@@ -267,7 +301,7 @@ function PipelineDetail({ regions, initial }) {
               <div className="note">
                 역대 최고 {fmt(peak.value)}호({fmtYm(peak.ym)})
                 {pos != null && (
-                  <> · 최저~최고의 <span className="heat-pct">{Math.round(pos * 100)}%</span></>
+                  <> · <span className="heat-pos">{zText(pos)}</span></>
                 )}
               </div>
             </div>

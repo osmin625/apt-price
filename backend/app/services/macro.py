@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
 from ..models import RebStat
+from .regime import hist_z
 
 PYEONG_M2 = 3.305785
 
@@ -82,6 +83,9 @@ METRICS: list[dict] = [
     },
     {
         "key": "avg_sale_price",
+        # 카드를 두지 않는다. 평당가와 거의 같은 추이이고, 평균이 중위와 얼마나 벌어지는지는
+        # '구 안의 가격 편차' 카드가 이 둘로 직접 잰다 — 카드 셋이 같은 말을 했다.
+        "card": False,
         "label": "평균 매매가격",
         "unit": "만원",
         "what": "아파트 한 채의 평균 거래가격.",
@@ -105,6 +109,7 @@ METRICS: list[dict] = [
     },
     {
         "key": "med_sale_price",
+        "card": False,  # avg_sale_price 와 같은 까닭
         "label": "중위 매매가격",
         "unit": "만원",
         "what": "값 순서로 가운데에 있는 아파트의 가격.",
@@ -253,13 +258,11 @@ def cycle_phase(db: Session) -> dict:
         after = vals[pi:]
         ti = pi + min(range(len(after)), key=lambda i: after[i])
         cur = vals[-1]
-        # 역대 최저(0) ~ 역대 최고(1) 사이 지금 위치. 화면의 점 색이 된다(heat.js).
+        # 지금 지수가 그 구의 자기 역사 평균에서 표준편차 몇 배인가. 화면의 점 색이 된다(heat.js).
         # 처음에는 '고점 뒤 저점 ~ 고점' 의 회복 비율로 칠했는데, 과천처럼 고점에서
         # -1.3% 빠진 바로 그 달이 고점 뒤 저점이면 회복 0% 라 **가장 진한 파랑**이
-        # 됐다. 고점 바로 아래인 곳이 바닥처럼 보인다. 공급 탭 미분양 카드와 같은
-        # 자(역대 최저 ~ 최고)로 맞춘다.
-        li = min(range(len(vals)), key=lambda i: vals[i])
-        rng = vals[pi] - vals[li]
+        # 됐다. 고점 바로 아래인 곳이 바닥처럼 보인다. 그다음 '역대 최저~최고 사이' 로
+        # 칠했고, 백분위로 맞췄다가, 지금은 탭 공통의 자인 평균 기준 z(`regime.hist_z`)다.
         m3 = _pct(vals[-4], cur) if len(vals) > 4 else None
         prev3 = _pct(vals[-7], vals[-4]) if len(vals) > 7 else None
         items.append({
@@ -269,8 +272,7 @@ def cycle_phase(db: Session) -> dict:
             "peak_ym": yms[pi],
             "from_trough": round(_pct(vals[ti], cur) or 0, 2),
             "trough_ym": yms[ti],
-            "low_ym": yms[li],
-            "range_pos": round((cur - vals[li]) / rng, 3) if rng > 0 else None,
+            "hist_z": round(hist_z(vals, cur), 2),
             "m3": round(m3, 2) if m3 is not None else None,
             "m12": round(_pct(vals[-13], cur), 2) if len(vals) > 13 else None,
             "accel": round(m3 - prev3, 2) if (m3 is not None and prev3 is not None) else None,

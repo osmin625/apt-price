@@ -44,7 +44,7 @@ backend/
     services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
     services/regime.py      요인별 압력(상관·시차)·과거 국면·비슷했던 달
     services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
-                            (docs/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
+                            (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
 
     clients/molit.py        국토교통부 실거래가 API
     clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
@@ -60,7 +60,7 @@ backend/
     cv_model.py             Stage 2 교차검증 — 요인을 넣을지 정하는 자
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
-    verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지
+    verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층
     verify_absorb.py        고정효과 흡수 vs 더미 회귀
     verify_payloads.py      적합 페이로드가 정말 JSON 이 되는지
     verify_spline.py        벡터화한 스플라인 기저 vs pricing.rcs_basis
@@ -91,6 +91,7 @@ frontend/
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
+  src/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가

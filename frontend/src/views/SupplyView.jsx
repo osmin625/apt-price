@@ -5,7 +5,7 @@ import { fmt, useMeasure, useTooltip } from '../components/Charts'
 import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
-import { heatVars, rangePos } from '../components/heat'
+import { heatVars, histZ, zText } from '../components/heat'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
 
@@ -180,8 +180,8 @@ export default function SupplyView() {
           경기 남부를 따로 낼 수 있습니다. 지역마다 자릿수가 달라 한 축에 겹치지 않고
           카드를 나눴습니다.
         </p>
-        <HeatLegend lo="역대 최저" hi="역대 최고">
-          카드 색은 지금 미분양이 그 지역의 최저와 최고 사이 어디인지입니다. 좋고 나쁨이 아닙니다
+        <HeatLegend>
+          카드 색은 지금 미분양이 그 지역의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다
         </HeatLegend>
         <div className="macro-grid">
           {data.unsold.regions.map((u) => (
@@ -374,7 +374,7 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img"
            aria-label="적정 공급과 준공 비교">
         {bands.map((b) => (
-          <path key={b.key} d={b.d} fill={b.short ? 'var(--neg)' : 'var(--series-1)'}
+          <path key={b.key} d={b.d} fill={b.short ? 'var(--neg)' : 'var(--good)'}
                 opacity="0.14" />
         ))}
         {c2 && (
@@ -489,6 +489,10 @@ function GapLines({ rows, height = 128, smooth = false, axis = false, cumFrom })
           <span className="swatch" style={{ background: 'var(--neg)', opacity: 0.3 }} />
           덜 지은 해
         </span>
+        <span className="key">
+          <span className="swatch" style={{ background: 'var(--good)', opacity: 0.3 }} />
+          더 지은 해
+        </span>
         {c2 && (
           <span className="key">
             <span className="swatch dash" style={{ background: 'var(--text-secondary)' }} />
@@ -576,7 +580,7 @@ function AgeBars({ bands }) {
           <div className="pbar-label">{b.band}</div>
           <div className="pbar-track">
             <div
-              className={`pbar-fill ${b.band.startsWith('3') || b.band.startsWith('4') ? 'neg' : 'pos'}`}
+              className={`pbar-fill ${b.band.startsWith('3') || b.band.startsWith('4') ? 'warn' : 'plain'}`}
               style={{ left: 0, width: `${(b.pct / max) * 100}%` }}
             />
           </div>
@@ -632,7 +636,7 @@ function SouthBars({ d }) {
             <div className="pbar-label">{y.year.slice(2)}</div>
             <div className="pbar-track">
               <div
-                className="pbar-fill pos"
+                className="pbar-fill plain"
                 style={{
                   left: 0,
                   width: `${(y.households / max) * 100}%`,
@@ -704,17 +708,15 @@ function SouthTable({ d }) {
 }
 
 /**
- * 지금 미분양이 이 지역의 역대 최저~최고 사이 어디인가(0~1). 카드 색이 된다.
+ * 지금 미분양(호)이 이 지역의 자기 평균에서 표준편차 몇 배인가(z). 카드 색이 된다.
  *
- * 표의 '최고 대비' 는 최근 ÷ 최고라 0 이 '미분양 0호' 다. 색은 **최저를 0, 최고를 1**
- * 로 놓는다 — 가격 분석의 국면 그림(`range_pos`)과 같은 자다.
- * 미분양은 최저가 최고의 1~3% 라 둘이 거의 같다(2026-10 재 봄: 서울 21%/20%,
- * 경기 51%/50%, 경기 남부 7%/6%). 그래도 자를 하나로 둬야 탭을 건너도 같은 색이
- * 같은 뜻이다.
+ * 탭 공통의 자(`heat.js` 의 `histZ`)다. 예전에는 '역대 최저~최고 사이', 그다음 백분위로
+ * 칠했다 — 자가 탭마다 다르면 같은 경기 미분양이 두 숫자로 나온다. 표의 '최고 대비' 는
+ * 최근 ÷ 최고라 0 이 '미분양 0호' 인 다른 값이다.
  */
 function unsoldPos(u) {
   const vs = (u.series || []).map((d) => d.value)
-  return vs.length ? rangePos(vs, u.latest.value) : null
+  return vs.length ? histZ(vs, u.latest.value) : null
 }
 
 function unsoldSub(u) {
@@ -724,7 +726,7 @@ function unsoldSub(u) {
     <>
       {fmtYm(u.latest.ym)} {fmt(u.latest.value)}호{y}
       {pos != null && (
-        <> · 최저~최고의 <span className="heat-pct">{Math.round(pos * 100)}%</span> 지점</>
+        <> · <span className="heat-pos">{zText(pos)}</span></>
       )}
     </>
   )
@@ -748,7 +750,7 @@ function UnsoldLine({ u }) {
            aria-label={`${u.region} 미분양 추이`}>
         <path d={`${d} L${x(s.length - 1)},${H} L0,${H} Z`} fill="var(--series-1)" opacity="0.1" />
         <path d={d} fill="none" stroke="var(--series-1)" strokeWidth="1.8" />
-        {pi >= 0 && <circle cx={x(pi)} cy={y(u.peak.value)} r="3" fill="var(--neg)" />}
+        {pi >= 0 && <circle cx={x(pi)} cy={y(u.peak.value)} r="3" fill="var(--text-primary)" />}
         <circle cx={x(s.length - 1)} cy={y(s[s.length - 1].value)} r="3" fill="var(--series-1)" />
       </svg>
       <div className="muted small">

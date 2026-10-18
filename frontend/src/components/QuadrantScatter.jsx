@@ -127,7 +127,7 @@ export default function QuadrantScatter({
         {hasOx && hasOy && (
           <>
             <rect x={ox} y={PAD.t} width={Math.max(W - PAD.r - ox, 0)} height={Math.max(oy - PAD.t, 0)}
-                  fill="var(--series-1)" opacity="0.045" />
+                  fill="var(--good)" opacity="0.045" />
             <rect x={ox} y={oy} width={Math.max(W - PAD.r - ox, 0)} height={Math.max(PAD.t + g.ih - oy, 0)}
                   fill="var(--neg)" opacity="0.045" />
           </>
