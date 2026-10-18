@@ -24,7 +24,7 @@
 | [docs/data/south-supply.md](docs/data/south-supply.md) | 공표 통계가 없는 경기 남부 공급·멸실을 직접 세기 (K-apt·건축물대장 전수, 해마다 스냅샷) | 경기 남부 공급·멸실 자료를 건드릴 때 |
 | [docs/analysis/supply.md](docs/analysis/supply.md) | 적정 공급량·파이프라인·노후 압력 (공급 분석 탭) | 공급을 건드릴 때 |
 | [docs/analysis/macro.md](docs/analysis/macro.md) | 요인의 지금 상태와 과거 비슷했던 때 그 뒤 (거시 분석 탭) | 요인을 더하거나 사례 분석을 바꿀 때 |
-| [docs/analysis/macro-model.md](docs/analysis/macro-model.md) | 요인을 합친 그 뒤 12개월 예측 — 걷은 경위와 검증 기록 | 예측 모델을 다시 세우려 할 때 |
+| [docs/analysis/macro-model.md](docs/analysis/macro-model.md) | 요인을 합친 모델 — 반영 분해(방향 고정)와 걷은 예측 기록 | 반영 분해를 바꾸거나 예측을 다시 세우려 할 때 |
 | [docs/engineering/architecture.md](docs/engineering/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
 | [docs/engineering/performance.md](docs/engineering/performance.md) | 느린 곳을 찾아 고친 기록 | 다시 느려졌을 때 |
 | [docs/engineering/deploy.md](docs/engineering/deploy.md) | 결과를 정적 사이트로 내보내 올리는 방법 | 로컬 밖에서 보게 할 때 |

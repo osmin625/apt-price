@@ -684,6 +684,22 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-tile-val b { font-size: 16px; font-variant-numeric: tabular-nums; }
 .rg-tile-val .heat-pos { font-variant-numeric: tabular-nums; }
 .rg-tile .rg-then { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
+
+/* 거시 분석 '요인별로 나누면' — 가운데 0 에서 좌우로 뻗는 막대(오름 초록 · 내림 빨강, 화면 공통 규칙).
+   가는 선은 흔들림 폭(부트스트랩 10~90%). 합계 줄(평균·맞춘 값·실제)은 굵게, 위에 선. */
+.rf { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+.rf-row { display: grid; grid-template-columns: 190px 1fr 92px; align-items: center; gap: 10px; font-size: 12.5px; }
+.rf-row > b { text-align: right; font-variant-numeric: tabular-nums; }
+.rf-row.is-total { font-weight: 600; border-top: 1px solid var(--grid); padding-top: 3px; }
+.rf-row.is-zero > span:first-child { color: var(--text-secondary); }
+.rf-track { position: relative; height: 14px; }
+.rf-zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--axis); }
+.rf-bar { position: absolute; top: 2px; bottom: 2px; }
+.rf-bar.pos { background: var(--good); }
+.rf-bar.neg { background: var(--neg); }
+.rf-track.is-rest .rf-bar { opacity: 0.45; }
+.rf-whisker { position: absolute; top: 6px; height: 2px; background: var(--text-secondary); opacity: 0.7; }
+@media (max-width: 640px) { .rf-row { grid-template-columns: 1fr 1fr 70px; } }
 .heat-pos { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
 /* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */
 .heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }

@@ -92,6 +92,8 @@ export default function RegimeView() {
         </div>
       </section>
 
+      {data.reflect?.available && <Reflect r={data.reflect} />}
+
       <section className="card">
         <h2>
           요인과 매매지수 — 한 그림에
@@ -374,5 +376,97 @@ function Overlay({ factors, price }) {
         ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림"
       />
     </>
+  )
+}
+
+const pp = (v) => (Math.abs(v) < 0.005 ? '0' : `${v > 0 ? '+' : '−'}${fmt(Math.abs(v), 1)}`)
+
+/**
+ * 매매지수 1년 변화를 요인별로 나눈다 — **방향은 이론, 크기는 데이터**(`regime.reflect`).
+ *
+ * 평균일 때 → 요인별 %p(흔들림 폭) → 맞춘 값 → 실제 → 설명 안 된 몫. 예측이 아니라 지금 변화에
+ * 무엇이 얼마나 실려 있나다. 크기가 0 인 요인은 '이론 방향으로는 반영이 안 보임' 이다 — 상관이
+ * 약하다고 빼던 예전 방식과 달리 빼지 않고 0 으로 보인다(2026-10-19 요청).
+ */
+function Reflect({ r }) {
+  const rows = [...r.factors].sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib) || b.b - a.b)
+  const all = [r.base, r.fitted, r.actual, r.residual, ...rows.flatMap((f) => [f.lo, f.hi, f.contrib])]
+  const M = Math.max(1, ...all.map((v) => Math.abs(v)))
+  const pos = (v) => `${50 + (v / M) * 50}%`
+  const bar = (v, extra = '') => (
+    <div className={`rf-track ${extra}`}>
+      <span className="rf-zero" />
+      <span className={`rf-bar ${v >= 0 ? 'pos' : 'neg'}`}
+            style={{ left: v >= 0 ? '50%' : pos(v), width: `${(Math.abs(v) / M) * 50}%` }} />
+    </div>
+  )
+  const [h1, h2] = r.halves
+  return (
+    <section className="card">
+      <h2>
+        {r.target} — 요인별로 나누면
+        <Hint
+          wide
+          notes={[
+            '방향은 경제 이론으로 미리 정했습니다 — 평균보다 높을 때 누적 공급·미분양·금리는 가격을 내리는 쪽, 거래량·소비심리·전세가율·M2·가계대출은 올리는 쪽. 데이터가 정하는 것은 크기(평균에서 1σ 벗어날 때 몇 %p)뿐입니다.',
+            '늦게 닿는 요인은 이론으로 정한 시차를 둡니다 — 누적 공급 12개월, M2·대출·금리 6개월, 나머지는 같은 달.',
+            '데이터가 이론과 반대로 움직였으면 크기가 0 으로 나옵니다. 빼는 것이 아니라 그렇게 쟀다는 뜻입니다.',
+            `막대 옆 가는 선은 흔들림 폭입니다 — 12개월 덩어리로 ${r.boot.n}번 다시 뽑아 맞춘 값의 10~90%.`,
+            `시기를 나눠 맞추면 크기가 크게 달라집니다(설명력 ${h1.from.slice(0, 4)}~${h1.to.slice(0, 4)} ${h1.r2} · ${h2.from.slice(0, 4)}~${h2.to.slice(0, 4)} ${h2.r2}) — 서로 얽힌 요인(통화·대출·금리)끼리 몫을 주고받습니다. 각 요인의 ⓘ 에 시기별 크기가 있습니다.`,
+            '같이 움직인 크기이지 원인의 크기가 아닙니다. 설명 안 된 몫은 이 요인들 밖의 것(지역 사정·기대·정책 등)입니다.',
+          ]}
+        />
+      </h2>
+      <p className="muted small">
+        {ymText(r.now)} 실제 {pp(r.actual)}% · 요인으로 맞춘 값 {pp(r.fitted)}% · 설명 안 된 몫 {pp(r.residual)}%p
+        · 설명력 R² {r.r2} ({ymText(r.from)}~{ymText(r.to)}, {r.months}개월)
+      </p>
+      <div className="rf">
+        <div className="rf-row is-total">
+          <span>모든 요인이 평균일 때</span>{bar(r.base)}<b>{pp(r.base)}%</b>
+        </div>
+        {rows.map((f) => {
+          const zero = f.b < 1e-9
+          return (
+            <div key={f.key} className={`rf-row${zero ? ' is-zero' : ''}`}>
+              <span>
+                {f.label}
+                <span className="muted small">{f.lag ? ` · ${f.lag}개월 전` : ''}</span>
+                <Hint
+                  notes={[
+                    `평균보다 높으면 가격을 ${f.sign > 0 ? '올리는' : '내리는'} 쪽(이론)${f.lag ? ` · ${f.lag}개월 전 값` : ''}`,
+                    `그때 위치: ${zText(f.z)}`,
+                    `크기 ${fmt(f.b, 2)}%p / 1σ (흔들림 ${fmt(f.b_lo, 2)}~${fmt(f.b_hi, 2)} · 다시 뽑은 것 중 ${f.zero_pct}% 가 0)`,
+                    `시기별 크기: ${h1.from.slice(0, 4)}~${h1.to.slice(0, 4)} ${fmt(h1.b[f.key], 2)} · ${h2.from.slice(0, 4)}~${h2.to.slice(0, 4)} ${fmt(h2.b[f.key], 2)}`,
+                    zero ? '이 기간 데이터는 이론 방향으로 반영된 것이 보이지 않았습니다(크기 0).' : null,
+                  ]}
+                />
+              </span>
+              <div className="rf-track">
+                <span className="rf-zero" />
+                {!zero && (
+                  <span className={`rf-bar ${f.contrib >= 0 ? 'pos' : 'neg'}`}
+                        style={{ left: f.contrib >= 0 ? '50%' : pos(f.contrib),
+                                 width: `${(Math.abs(f.contrib) / M) * 50}%` }} />
+                )}
+                {(f.hi - f.lo) > 0.005 && (
+                  <span className="rf-whisker" style={{ left: pos(f.lo), width: `${((f.hi - f.lo) / M) * 50}%` }} />
+                )}
+              </div>
+              <b className={zero ? 'muted' : ''}>{zero ? '반영 안 보임' : `${pp(f.contrib)}%p`}</b>
+            </div>
+          )
+        })}
+        <div className="rf-row is-total">
+          <span>요인으로 맞춘 값</span>{bar(r.fitted)}<b>{pp(r.fitted)}%</b>
+        </div>
+        <div className="rf-row is-total">
+          <span>실제 {ymText(r.now)}</span>{bar(r.actual)}<b>{pp(r.actual)}%</b>
+        </div>
+        <div className="rf-row">
+          <span>설명 안 된 몫</span>{bar(r.residual, 'is-rest')}<b>{pp(r.residual)}%p</b>
+        </div>
+      </div>
+    </section>
   )
 }

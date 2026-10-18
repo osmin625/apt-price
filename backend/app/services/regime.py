@@ -74,6 +74,12 @@ class Factor:
     transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log | vs_adequate | cum_adequate
     unit: str
     up_means: str   # 이 값이 커지면 어떤 뜻인가(화면 설명)
+    # 이론 방향 — 평균보다 높으면 가격을 올리는 쪽(+1)인가 내리는 쪽(−1)인가. **데이터로 고르지
+    # 않는다**(2026-10-19 요청 — 상관이 약하다고 빼던 방식을 버렸다). 반영 분해(`reflect`)가 쓴다.
+    sign: int = 0
+    # 이론 시차(개월) — 그 요인이 가격에 닿기까지. 이것도 **측정 전에** 정했다. 수급 재고(누적 공급)
+    # 12, 금융 여건(M2·대출·금리) 6, 시장 동행 지표(거래량·심리·전세가율·미분양) 0.
+    lag: int = 0
 
 
 # 지역·변환을 한 곳에 모은다. 화면과 측정이 **같은 정의**를 봐야 한다.
@@ -89,23 +95,23 @@ FACTORS: tuple[Factor, ...] = (
     #   누적 공급 — 그동안 쌓인 과부족. 요청. (12개월 비율은 `_vs_adequate` 로 남아
     #     scripts/cv_macro.py 의 기록 재현에 쓴다.)
     Factor("supply", "공급", "누적 공급", "done", "41", "경기", "cum_adequate", "호",
-           "적정보다 더 지은 것이 쌓였다(0 이면 그동안 적정만큼)"),
+           "적정보다 더 지은 것이 쌓였다(0 이면 그동안 적정만큼)", sign=-1, lag=12),
     Factor("unsold", "공급", "미분양", "unsold", "41", "경기", "log12", "",
-           "안 팔린 집이 늘었다"),
+           "안 팔린 집이 늘었다", sign=-1),
     Factor("trade", "수요", "거래량", "trade_volume", "", "경기 남부", "roll12_log", "",
-           "사려는 사람이 늘었다"),
+           "사려는 사람이 늘었다", sign=+1),
     Factor("sentiment", "수요", "주택시장 소비심리", "sentiment", "41", "경기", "level", "지수",
-           "사겠다는 쪽이 늘었다(100 이 중립)"),
+           "사겠다는 쪽이 늘었다(100 이 중립)", sign=+1),
     Factor("jeonse_ratio", "수요", "전세가율", "jeonse_ratio", "", "경기 남부", "level", "%",
-           "전세가 매매에 가까워졌다"),
+           "전세가 매매에 가까워졌다", sign=+1),
     Factor("m2", "통화량", "M2(광의통화)", "m2", "00", "전국", "yoy", "%",
-           "시중에 도는 돈이 빨리 늘었다"),
+           "시중에 도는 돈이 빨리 늘었다", sign=+1, lag=6),
     Factor("loan_balance", "통화량", "가계대출 잔액", "loan_balance", "00", "전국", "yoy", "%",
-           "가계가 빚을 빨리 늘렸다"),
+           "가계가 빚을 빨리 늘렸다", sign=+1, lag=6),
     Factor("base_rate", "금리", "한국은행 기준금리", "base_rate", "00", "전국", "diff12", "%p",
-           "1년 전보다 금리가 올랐다"),
+           "1년 전보다 금리가 올랐다", sign=-1, lag=6),
     Factor("loan_rate", "금리", "가계대출 금리", "loan_rate", "00", "전국", "diff12", "%p",
-           "실제로 무는 금리가 올랐다"),
+           "실제로 무는 금리가 올랐다", sign=-1, lag=6),
 )
 
 GROUP_ORDER = ("공급", "수요", "통화량", "금리", "정책", "세금")
@@ -538,6 +544,178 @@ def factor_then(s: dict[str, float], price: dict[str, float]) -> dict:
 
 
 # ──────────────────────────────────────────────────────────
+# 반영 분해 — 방향은 이론, 크기는 데이터
+# ──────────────────────────────────────────────────────────
+# 매매지수 1년 변화(%)를 요인들로 나눈다. 예측이 아니라 '지금 변화에 무엇이 얼마나 실려 있나'.
+#
+#     yoy(t) = a + Σ_j b_j · s_j · z_j(t − lag_j),    b_j ≥ 0
+#
+# s_j·lag_j 는 `Factor.sign`·`lag` — 이론으로 정했다. 데이터가 정하는 것은 크기 b_j(%p / 1σ) 뿐이고,
+# 데이터가 이론과 반대로 움직였으면 b_j 는 0 이 된다(그것도 측정 결과로 보인다). 예전에는 상관의
+# 부호로 방향을 정하고 |r| < 0.15 면 뺐다(2026-10-19 요청으로 버렸다).
+#
+# numpy 를 쓰지 않는다 — hedonic 만 쓰는 규칙(CLAUDE.md '순수 모듈을 지킨다' 옆 규칙). 부호 제약
+# 최소제곱은 활성 집합법(Lawson–Hanson)으로 푼다. scipy 의 nnls 와 같은 답인지 scripts/verify_reflect.py 가 대조한다.
+REFLECT_BOOT = 400        # 12개월 블록 부트스트랩 횟수 — 흔들림 폭(10~90%)
+REFLECT_BLOCK = 12        # 겹치는 12개월 창의 자기상관을 덩어리째 지킨다
+REFLECT_SEED = 20261019   # 화면 숫자가 열 때마다 바뀌지 않게
+
+
+def _shift(s: dict[str, float], months: int) -> dict[str, float]:
+    """s'(t) = s(t − months). 그 달에 이미 알려진 과거 값만 쓴다."""
+    out = {}
+    for ym, v in s.items():
+        n = int(ym[:4]) * 12 + int(ym[4:]) - 1 + months
+        out[f"{n // 12}{n % 12 + 1:02d}"] = v
+    return out
+
+
+def _solve(A: list[list[float]], v: list[float]) -> list[float]:
+    """작은 선형계 A x = v — 부분 피벗 가우스 소거."""
+    n = len(v)
+    M = [row[:] + [v[i]] for i, row in enumerate(A)]
+    for c in range(n):
+        piv = max(range(c, n), key=lambda r: abs(M[r][c]))
+        M[c], M[piv] = M[piv], M[c]
+        if abs(M[c][c]) < 1e-300:
+            continue
+        for r in range(c + 1, n):
+            f = M[r][c] / M[c][c]
+            for k in range(c, n + 1):
+                M[r][k] -= f * M[c][k]
+    x = [0.0] * n
+    for r in range(n - 1, -1, -1):
+        if abs(M[r][r]) < 1e-300:
+            continue
+        x[r] = (M[r][n] - sum(M[r][k] * x[k] for k in range(r + 1, n))) / M[r][r]
+    return x
+
+
+def nnls_cd(X: list[list[float]], y: list[float], iters: int = 500) -> tuple[float, list[float]]:
+    """절편 + 부호 제약(b ≥ 0) 최소제곱. 중심화한 뒤 **Lawson–Hanson 활성 집합법**, 절편은 중심에서 복원.
+
+    처음에는 좌표 하강이었다. 실데이터에서는 scipy 와 1e-12 까지 같았는데, 거의 같은 열 둘(금리 둘처럼,
+    상관 0.999)이 섞인 문제에서 수렴이 느려 최대 0.004 어긋났다(scripts/verify_reflect.py 가 잡았다).
+    활성 집합법은 유한 번에 정확한 해에 닿는다. 그람 행렬(p×p)만 쓰므로 순수 파이썬으로 충분하다.
+    `iters` 는 바깥 반복의 상한이다 — 시험이 '덜 푼 풀이' 를 만들 때 쓴다.
+    """
+    n, p = len(X), len(X[0])
+    xm = [sum(r[j] for r in X) / n for j in range(p)]
+    ym = sum(y) / n
+    Xc = [[r[j] - xm[j] for j in range(p)] for r in X]
+    yc = [v - ym for v in y]
+    G = [[sum(Xc[i][a] * Xc[i][c] for i in range(n)) for c in range(p)] for a in range(p)]
+    g = [sum(Xc[i][a] * yc[i] for i in range(n)) for a in range(p)]
+    tol = 1e-10 * max(1.0, max(abs(v) for v in g))
+    b = [0.0] * p
+    P: list[int] = []
+
+    def grad() -> list[float]:
+        return [g[j] - sum(G[j][k] * b[k] for k in range(p)) for j in range(p)]
+
+    for _ in range(iters):
+        w = grad()
+        free = [j for j in range(p) if j not in P and w[j] > tol]
+        if not free:
+            break
+        P.append(max(free, key=lambda j: w[j]))
+        while True:
+            sP = _solve([[G[a][c] for c in P] for a in P], [g[a] for a in P])
+            if all(v > 0 for v in sP):
+                for j, v in zip(P, sP):
+                    b[j] = v
+                break
+            # 경계까지만 간다 — 0 아래로 내려가는 변수를 활성 집합에서 뺀다.
+            alpha = min(b[j] / (b[j] - v) for j, v in zip(P, sP) if v <= 0)
+            for j, v in zip(P, sP):
+                b[j] += alpha * (v - b[j])
+            P = [j for j in P if b[j] > tol]
+            for j in range(p):
+                if j not in P:
+                    b[j] = 0.0
+    a = ym - sum(xm[j] * b[j] for j in range(p))
+    return a, b
+
+
+def _reflect_frame(db: Session, factors=FACTORS) -> tuple[list, list[str], list, list, dict]:
+    price = price_series(db)
+    yoy = _yoy(price)
+    zs = []
+    for f in factors:
+        s = series_of(db, f)
+        vals = list(s.values())
+        zs.append(_shift({ym: hist_z(vals, v) for ym, v in s.items()}, f.lag))
+    common = sorted(set.intersection(*[set(z) for z in zs]) & set(yoy))
+    X = [[f.sign * z[ym] for f, z in zip(factors, zs)] for ym in common]
+    y = [yoy[ym] for ym in common]
+    return list(factors), common, X, y, yoy
+
+
+def _r2(a: float, b: list[float], X: list[list[float]], y: list[float]) -> float:
+    ym = sum(y) / len(y)
+    ss = sum((v - ym) ** 2 for v in y)
+    res = sum((v - a - sum(bj * xj for bj, xj in zip(b, r))) ** 2 for v, r in zip(y, X))
+    return 1 - res / ss if ss else 0.0
+
+
+def _pct(vs: list[float], q: float) -> float:
+    vs = sorted(vs)
+    k = (len(vs) - 1) * q
+    lo, hi = math.floor(k), math.ceil(k)
+    return vs[lo] + (vs[hi] - vs[lo]) * (k - lo)
+
+
+def reflect(db: Session, factors=FACTORS, boot: int = REFLECT_BOOT) -> dict:
+    """매매지수 1년 변화를 '평균일 때 + 요인별 %p + 설명 안 된 몫' 으로 나눈다(위 머리 주석)."""
+    import random
+
+    fs, common, X, y, yoy = _reflect_frame(db, factors)
+    if len(common) < 60:
+        return {"available": False, "note": "요인이 모두 갖춰진 달이 모자라 나누지 않습니다."}
+    a, b = nnls_cd(X, y)
+    n = len(common)
+    rng = random.Random(REFLECT_SEED)
+    B = []
+    for _ in range(boot):
+        idx: list[int] = []
+        while len(idx) < n:
+            st = rng.randrange(0, n - REFLECT_BLOCK + 1)
+            idx.extend(range(st, st + REFLECT_BLOCK))
+        idx = idx[:n]
+        B.append(nnls_cd([X[i] for i in idx], [y[i] for i in idx])[1])
+    half = n // 2
+    halves = []
+    for sl in (slice(0, half), slice(half, None)):
+        ah, bh = nnls_cd(X[sl], y[sl])
+        halves.append({"from": common[sl][0], "to": common[sl][-1],
+                       "r2": round(_r2(ah, bh, X[sl], y[sl]), 2),
+                       "b": {f.key: round(v, 2) for f, v in zip(fs, bh)}})
+    now = common[-1]
+    x_now = X[-1]
+    fitted = a + sum(bj * xj for bj, xj in zip(b, x_now))
+    rows = []
+    for j, f in enumerate(fs):
+        bs = [bb[j] for bb in B]
+        lo, hi = _pct(bs, 0.1), _pct(bs, 0.9)
+        c = b[j] * x_now[j]
+        c_lo, c_hi = sorted((lo * x_now[j], hi * x_now[j]))
+        rows.append({"key": f.key, "label": f.label, "group": f.group, "sign": f.sign, "lag": f.lag,
+                     "b": round(b[j], 2), "b_lo": round(lo, 2), "b_hi": round(hi, 2),
+                     "zero_pct": round(sum(1 for v in bs if v < 1e-9) / len(bs) * 100),
+                     # 그 요인의 위치(z) — 시차를 둔 달의 값이다. 화면은 방향을 곱하기 전 값을 보인다.
+                     "z": round(f.sign * x_now[j], 2) if f.sign else 0.0,
+                     "contrib": round(c, 2), "lo": round(c_lo, 2), "hi": round(c_hi, 2)})
+    return {
+        "available": True, "now": now, "from": common[0], "to": now, "months": n,
+        "target": "매매지수 1년 변화",
+        "base": round(a, 2), "fitted": round(fitted, 2), "actual": round(yoy[now], 2),
+        "residual": round(yoy[now] - fitted, 2), "r2": round(_r2(a, b, X, y), 2),
+        "factors": rows, "halves": halves,
+        "boot": {"n": boot, "block": REFLECT_BLOCK},
+    }
+
+
+# ──────────────────────────────────────────────────────────
 # 정책·세금 — 재는 것이 아니라 적어 두는 것
 # ──────────────────────────────────────────────────────────
 def policy_rows(db: Session) -> list[dict]:
@@ -611,6 +789,7 @@ def overview(db: Session) -> dict:
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
         "history": history(db),
+        "reflect": reflect(db),
         # '가장 센 것도 0.50 이라 어느 요인도 혼자서는 설명하지 못한다' 를 적었었다.
         # 값은 그 자리에서 쟀지만 **판정('못한다')은 그날의 값에 묶여** 있어, 센 요인이
         # 생기면 숫자만 바뀌고 문장은 틀린다. 판정은 빼고 방법과 지역만 남긴다.
