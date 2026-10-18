@@ -125,6 +125,13 @@ def model_section(rows, months: int) -> list[str]:
         out += ["", f"  직거래 {dt['pct']:+.2f}% (SE {dt['se'] * 100:.2f}%p, "
                     f"p={dt['p']}) · {dt['n_direct']:,}건 ({dt['share_pct']}%)"]
 
+    # Stage 1 의 동 도보편차 δ. docs/model/method.md 에 한 번 박혀 있다가 옮겨 왔다 —
+    # 수식 문서에 '추정값은 …' 을 적으면 적합을 다시 돌릴 때마다 어긋난다.
+    ww = f.get("within_walk")
+    if ww:
+        out.append(f"  동 도보편차 1분 {ww['pct']:+.3f}% (t={ww['t']}, "
+                   f"p={ww['p']}) · 거래 {ww['n_trades']:,}건")
+
     out += ["", "  요인별 유의성 (전체가 0 인가)", ]
     lin = f.get("linearity") or {}
     for var in f.get("spline_terms", {}):

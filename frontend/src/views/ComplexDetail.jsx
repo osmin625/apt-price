@@ -197,7 +197,7 @@ function FragmentRow({ type, open, onToggle }) {
  *
  * 민간임대 동은 분양 물건과 성격이 달라 같은 단지·같은 평형이어도 시세가 다른데,
  * 국토부 실거래가에는 그 구분이 없다. 한 번 눌러 두면 매물 순위의 비고에 자동으로
- * 따라붙는다(파생이라 끄면 같이 사라진다 — docs/screens/design.md 참조).
+ * 따라붙는다(파생이라 끄면 같이 사라진다 — docs/screens/ui-log.md 의 민간임대 항목 참조).
  */
 function DongPanel({ complexId, data, onChange }) {
   const [busy, setBusy] = useState(null)

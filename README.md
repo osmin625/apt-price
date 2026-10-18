@@ -12,14 +12,16 @@
 
 | 문서 | 무엇이 있나 | 언제 보나 |
 |---|---|---|
-| [docs/screens/design.md](docs/screens/design.md) | 화면·기능이 지금 어떻게 되어 있고 왜 그런가 | 동작을 바꾸기 전에 |
+| [docs/screens/design.md](docs/screens/design.md) | 탭·기능이 지금 어떻게 되어 있고 왜 그런가 | 동작을 바꾸기 전에 |
+| [docs/screens/conventions.md](docs/screens/conventions.md) | 탭을 건너 지키는 규칙 — 색·창·로딩·카드를 어느 탭에 두나 | 새 카드·그림·창을 만들 때 |
 | [docs/screens/quotes.md](docs/screens/quotes.md) | 호가 하나가 읽히고 값이 매겨지고 줄 서기까지 | 호가 입력·호가 분석을 건드릴 때 |
 | [docs/screens/ui-log.md](docs/screens/ui-log.md) | 화면을 바꾸며 무엇을 시도하고 버렸나 | 같은 자리를 또 건드리기 전에 |
 | [docs/model/method.md](docs/model/method.md) | 2단계 헤도닉 회귀와 비교표본 방식의 수식 | 숫자가 어떻게 나오는지 알아야 할 때 |
 | [docs/model/factors.md](docs/model/factors.md) | 모델에 어떤 요인이 왜 들어 있나 | 요인을 더하거나 뺄 때 |
 | [docs/data/pipeline.md](docs/data/pipeline.md) | 공공 API 적재와 그 함정, 대상 지역 넓히기 | 데이터를 채우거나 지역을 늘릴 때 |
 | [docs/data/listings.md](docs/data/listings.md) | 붙여넣은 매물을 단지·평형에 맞추기, 중개사 메모 | 매물이 엉뚱한 단지에 붙거나 안 붙을 때 |
-| [docs/data/reb.md](docs/data/reb.md) | 한국부동산원 공표 통계 (가격 분석 탭) | 공표 통계를 건드릴 때 |
+| [docs/data/reb.md](docs/data/reb.md) | 한국부동산원·한국은행 공표 통계 (가격 분석 탭, 거시 요인) | 공표 통계를 건드릴 때 |
+| [docs/data/south-supply.md](docs/data/south-supply.md) | 공표 통계가 없는 경기 남부 공급·멸실을 직접 세기 (K-apt·건축물대장 전수, 해마다 스냅샷) | 경기 남부 공급·멸실 자료를 건드릴 때 |
 | [docs/analysis/supply.md](docs/analysis/supply.md) | 적정 공급량·파이프라인·노후 압력 (공급 분석 탭) | 공급을 건드릴 때 |
 | [docs/analysis/macro.md](docs/analysis/macro.md) | 여섯 요인의 압력과 과거 국면 (거시 분석 탭) | 요인을 더하거나 방향을 바꿀 때 |
 | [docs/engineering/architecture.md](docs/engineering/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
@@ -186,7 +188,7 @@ cloudflared tunnel --url http://localhost:5173
 
 - **매물 호가는 수동 입력**이다. 네이버부동산 등 호가 데이터는 공식 API가 없고 스크래핑은
   이용약관 위반 소지가 있어 PoC에서 제외했다. 대신 사용자가 **텍스트를 붙여넣으면**
-  단지·면적·층·호가를 뽑아 채워 준다([설계 결정](docs/screens/design.md) 참조).
+  단지·면적·층·호가를 뽑아 채워 준다([호가 다루기](docs/screens/quotes.md) 참조).
   링크는 지원하지 않는다 —
   긁어오지 않겠다는 결정이기도 하고, 애초에 링크에 매물 정보가 들어 있지 않다.
 - 단지 최고층이 실제 최고층이 아니라 관측 최고 거래층이므로, 거래가 적은 단지에서는

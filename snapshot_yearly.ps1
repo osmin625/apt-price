@@ -18,7 +18,7 @@
       .\snapshot_yearly.ps1 -Only kapt 하나만
       .\snapshot_yearly.ps1 -Quiet     스케줄러용
 
-    등록 명령은 맨 아래 주석에 있다(docs/analysis/supply.md 에도 적어 두었다).
+    등록 명령은 맨 아래 주석에 있다(왜 해마다 뜨는지는 docs/data/south-supply.md).
     UTF-8 with BOM 으로 저장해야 한다 — sync_static.ps1 과 같은 이유.
 #>
 [CmdletBinding()]

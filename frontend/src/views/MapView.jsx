@@ -76,7 +76,7 @@ export default function MapView({ months, onSelect }) {
       const t = normalize(item[METRIC], meta)
       if (meta?.scale === 'diverging') {
         // 파랑 = 저평가, 빨강 = 고평가. 부호 색(오름 초록 · 내림 빨강)이 아니라 위치 색이다 —
-        // 국면 heat 처럼 '어디쯤인가' 를 연속으로 칠한다(docs/screens/design.md).
+        // 국면 heat 처럼 '어디쯤인가' 를 연속으로 칠한다(docs/screens/conventions.md).
         return t < 0.5
           ? `color-mix(in srgb, var(--series-1) ${(1 - t * 2) * 85 + 15}%, var(--surface-1))`
           : `color-mix(in srgb, var(--neg) ${((t - 0.5) * 2) * 85 + 15}%, var(--surface-1))`
