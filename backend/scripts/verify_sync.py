@@ -730,6 +730,234 @@ def check_dead_components(r: Result) -> None:
               f"나오지 않습니다. 지우거나 DEAD_OK 에 이유를 적으세요")
 
 
+# ──────────────────────────────────────────────────────────
+# 6. 문서가 적은 실행법·이름이 아직 실물과 맞나
+# ──────────────────────────────────────────────────────────
+# 에이전트도 사람도 **문서를 먼저 읽고 그대로 따라 한다.** 그래서 문서에 남은 옛
+# 명령·옛 이름은 틀린 지시가 된다. 이름을 바꾼 쪽에서는 아무것도 깨지지 않으므로
+# 아무도 모른다 — 문서가 썩는 가장 흔한 길이다.
+
+# 그때 이름이 맞는 기록이라 지금 이름과 대조하지 않는 문서.
+HISTORY_DOCS = {"ui-log.md"}
+
+# 문서가 부르지만 **우리 코드에 없는 것이 정상인** 이름. 이유를 적어야 통과한다.
+NAME_OK = {
+    "A_2024_00156": "reb.md '살펴보고 버린 표' 의 R-ONE 표 코드 — 안 쓰기로 한 표다",
+    "A_2024_00549": "reb.md '살펴보고 버린 표' 의 R-ONE 표 코드 — 안 쓰기로 한 표다",
+    "ConsoleHost": "deploy.md 스케줄러 충돌 조사에 나온 윈도우 모듈 이름",
+    "formId": "south-supply.md 의 국토교통 통계누리 주소 인자 — 남의 사이트다",
+}
+
+# 이름을 찾을 곳. 키가 든 `backend/.env` 와 `*.local` 은 **읽지 않는다.**
+_NAME_SOURCES = [
+    ROOT / "backend" / ".env.example", ROOT / "frontend" / ".env.example",
+    ROOT / "frontend" / ".env.static", ROOT / "frontend" / "package.json",
+    ROOT / "frontend" / "vite.config.js", ROOT / "frontend" / "index.html",
+]
+_CODE_EXT = (".py", ".js", ".jsx", ".css", ".ps1")
+_PATH_EXT = (*_CODE_EXT, ".md", ".json", ".tsv", ".csv")
+_FILE_SUFFIX = {"dll", "exe", "log", "db", "env", "txt", "html", "local", "static", "sh",
+                "bat", "md", "json", "py", "js", "jsx", "css", "ps1", "tsv", "csv", "pyc"}
+
+
+def _doc_files() -> list[Path]:
+    return [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md")),
+            BACKEND / "data" / "manual" / "README.md"]
+
+
+def _code_files() -> list[Path]:
+    return [p for p in [*(BACKEND / "app").rglob("*.py"), *(BACKEND / "scripts").glob("*.py"),
+                        *FRONT.rglob("*.js"), *FRONT.rglob("*.jsx"), *FRONT.rglob("*.css"),
+                        *ROOT.glob("*.ps1"), *(ROOT / "tools").glob("*.js"),
+                        *(ROOT / "tools").glob("*.py")]
+            if "__pycache__" not in p.parts]
+
+
+def _ps1_params(src: str) -> set[str]:
+    return {m.lower() for m in re.findall(
+        r"\[(?:switch|string|int|double|bool|datetime)(?:\[\])?\]\s*\$(\w+)", src, flags=re.I)}
+
+
+# `--months 24 --refetch-all` 처럼 값이 붙어도 다음 플래그를 값으로 삼키지 않게 한다.
+_CMD_PY = re.compile(
+    r"python -m scripts\.(\w+)((?:[ \t]+--[\w-]+(?:[ \t=](?!-)[^\s`'\"#|)]+)?)*)")
+_CMD_NPM = re.compile(r"npm run ([\w:-]+)")
+_CMD_PS = re.compile(r"\.\\(\w+)\.ps1((?:[ \t]+-\w+)*)")
+
+
+def check_commands(r: Result) -> None:
+    """문서·주석이 적은 실행법이 실제로 돌아가나 — 모듈·플래그·npm 스크립트·ps1 인자.
+
+    `scripts.<이름> --플래그` 의 플래그는 그 스크립트 소스에 따옴표째로 있어야 한다
+    (argparse 의 `"--flag"`). 플래그 이름을 바꾸면 그 스크립트는 멀쩡히 돌고 **문서만
+    옛 이름을 가르친다** — 따라 친 사람만 `unrecognized arguments` 를 본다.
+    """
+    header("명령 — 문서·주석이 적은 실행법이 실물과 맞나")
+    pkg = __import__("json").loads((ROOT / "frontend" / "package.json")
+                                   .read_text(encoding="utf-8")).get("scripts", {})
+    srcs: dict[Path, str] = {}
+
+    def src_of(p: Path) -> str:
+        if p not in srcs:
+            srcs[p] = p.read_text(encoding="utf-8", errors="replace")
+        return srcs[p]
+
+    n = bad = 0
+    for d in [*_doc_files(), *_code_files()]:
+        text = src_of(d)
+        rel = d.relative_to(ROOT).as_posix()
+        for m in _CMD_PY.finditer(text):
+            n += 1
+            mod = BACKEND / "scripts" / f"{m.group(1)}.py"
+            if not mod.exists():
+                bad += 1
+                r.bad(f"{rel} 가 `python -m scripts.{m.group(1)}` 를 적는데 그 스크립트가 없습니다")
+                continue
+            for fl in re.findall(r"(?<![\w-])--[\w-]+", m.group(2)):
+                if f'"{fl}"' not in src_of(mod) and f"'{fl}'" not in src_of(mod):
+                    bad += 1
+                    r.bad(f"{rel} 가 `scripts.{m.group(1)} {fl}` 를 적는데 그 플래그가 없습니다")
+        for m in _CMD_NPM.finditer(text):
+            n += 1
+            if m.group(1) not in pkg:
+                bad += 1
+                r.bad(f"{rel} 가 `npm run {m.group(1)}` 를 적는데 package.json 에 없습니다")
+        for m in _CMD_PS.finditer(text):
+            n += 1
+            ps = ROOT / f"{m.group(1)}.ps1"
+            if not ps.exists():
+                bad += 1
+                r.bad(f"{rel} 가 `{m.group(1)}.ps1` 를 적는데 그 스크립트가 없습니다")
+                continue
+            params = _ps1_params(src_of(ps))
+            for fl in re.findall(r"-(\w+)", m.group(2)):
+                if fl.lower() not in params:
+                    bad += 1
+                    r.bad(f"{rel} 가 `{m.group(1)}.ps1 -{fl}` 를 적는데 그 인자가 없습니다")
+    print(f"  명령 {n}개 · 어긋남 {bad}")
+
+
+def _looks_like_code(tok: str) -> bool:
+    """백틱 안의 낱말 중 **코드 이름처럼 생긴 것**만 본다. `_` 가 들었거나, `()` 가
+    붙었거나, 낙타 표기다. 그냥 영단어(`sample`, `basis`)까지 보면 거짓 양성이 쏟아진다."""
+    name = tok[:-2] if tok.endswith("()") else tok
+    return bool(re.fullmatch(r"[A-Za-z_]\w*", name)) and (
+        "_" in name or tok.endswith("()") or re.search(r"[a-z][A-Z]", name) is not None)
+
+
+def check_doc_names(r: Result) -> None:
+    """문서가 백틱으로 부르는 코드 이름·파일 경로가 아직 있나.
+
+    `_undo_ytd()`·`HH_SCALE`·`regime.hist_z`·`components/Modal.jsx` 같은 것이다. 함수나
+    파일 이름을 바꾸면 코드는 전부 따라가는데 문서는 따라가지 않는다 — 그리고 다음에
+    그 문서를 읽은 사람(에이전트)은 없는 이름을 찾아 헤매거나, 더 나쁘면 **옛 이름으로
+    새것을 만든다.** 2026-10-18 에 재 보니 걸린 것 다섯이 전부 거짓 양성이었다
+    (`NAME_OK` 셋, 설정 파일에만 있는 환경 변수 둘). 지금 깨끗할 때 막아 둔다.
+    """
+    header("이름 — 문서가 부르는 코드 이름·경로가 아직 있나")
+    # verify_sync_guard 는 **없는 이름을 일부러 적은** 시험 파일이라 뺀다. 넣으면 그
+    # 시험이 넣은 가짜 이름이 '코드에 있다' 로 통과해 검사가 안 걸린다(실제로 그랬다).
+    corpus = "\n".join(p.read_text(encoding="utf-8", errors="replace")
+                       for p in [*_code_files(), *(s for s in _NAME_SOURCES if s.exists())]
+                       if p.name != "verify_sync_guard.py")
+    have = {p.name for p in _code_files()}
+    bases = [ROOT, BACKEND, BACKEND / "app", FRONT, ROOT / "frontend"]
+
+    def exists(word: str) -> bool:
+        # 환경 변수는 문서에 `DATABASE_URL`, 코드(pydantic Settings)에 `database_url` 로 있다.
+        return any(re.search(r"(?<![\w])" + re.escape(w) + r"(?![\w])", corpus)
+                   for w in {word, word.lower()} if w)
+
+    n = 0
+    hits: list[str] = []
+    for d in _doc_files():
+        if d.name in HISTORY_DOCS:
+            continue
+        rel = d.relative_to(ROOT).as_posix()
+        for tok in sorted(set(re.findall(r"`([^`\n]{2,80})`", d.read_text(encoding="utf-8")))):
+            tok = tok.strip()
+            if tok in NAME_OK:
+                continue
+            # 경로: `components/Modal.jsx`, `backend/scripts/ingest_supply.py`
+            if "/" in tok and tok.endswith(_PATH_EXT) and not re.search(r"[*<>{}$ ]", tok):
+                n += 1
+                if not any((b / tok).exists() for b in [*bases, d.parent]):
+                    hits.append(f"{rel} 의 경로 `{tok}` 가 없습니다")
+                continue
+            # 파일 이름만: `pricing.py` — 어딘가에 그 이름의 코드 파일이 있어야 한다
+            if re.fullmatch(r"[\w-]+\.(py|jsx?|css|ps1)", tok):
+                n += 1
+                if tok not in have:
+                    hits.append(f"{rel} 의 파일 `{tok}` 가 없습니다")
+                continue
+            # `regime.hist_z`, `Complex.lat`, `pricing.rcs_basis()` — 점 뒤 이름을 본다
+            m = re.fullmatch(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)(\(\))?", tok)
+            if m and m.group(2).lower() in _FILE_SUFFIX:
+                continue  # `clr.dll`·`sync_static.log` — 파일 이름이지 '모듈.이름' 이 아니다
+            if m:
+                n += 1
+                if not exists(m.group(2)):
+                    hits.append(f"{rel} 의 `{tok}` — `{m.group(2)}` 가 코드에 없습니다")
+                continue
+            if _looks_like_code(tok):
+                n += 1
+                name = tok[:-2] if tok.endswith("()") else tok
+                if not exists(name):
+                    hits.append(f"{rel} 의 `{tok}` 가 코드에 없습니다")
+    for h in hits:
+        r.bad(h + " — 이름을 바꿨으면 문서도 따라 고치세요(일부러면 NAME_OK 에 이유를)")
+    print(f"  문서가 부르는 이름·경로 {n}개 · 없는 것 {len(hits)}")
+
+
+def check_exemptions(r: Result) -> None:
+    """예외 목록이 **아직 있는 것**을 가리키나.
+
+    예외는 '이것은 일부러다' 라는 기록이다. 가리키던 것이 사라지면 기록만 남아 다음
+    사람이 '이 엔드포인트는 일부러 남겼다' 를 믿고 찾아 헤맨다. 그리고 같은 이름이 다시
+    생기면 **검사 없이 통과한다** — 예외가 엉뚱한 것을 덮는다.
+    """
+    header("예외 — 예외 목록이 아직 있는 것을 가리키나")
+    stale: list[str] = []
+    routers = "\n".join(p.read_text(encoding="utf-8")
+                        for p in (BACKEND / "app" / "routers").glob("*.py"))
+    for key in DEAD_OK:
+        if key.startswith("/api/"):
+            tail = key[len("/api"):]
+            # `/api/quotes` 처럼 prefix 만인 엔드포인트도 있다 — 경로 끝 조각으로 찾는다
+            last = "/" + tail.rsplit("/", 1)[-1]
+            if last not in routers:
+                stale.append(f"DEAD_OK 의 `{key}` — 그런 엔드포인트가 없습니다")
+        elif not (FRONT / key).exists():
+            stale.append(f"DEAD_OK 의 `{key}` — 그런 컴포넌트가 없습니다")
+    for name in ARCH_SKIP:
+        if not any((BACKEND / sub / name).exists() for sub in ("scripts", "app")):
+            stale.append(f"ARCH_SKIP 의 `{name}` — 그런 파일이 없습니다")
+    docs = {p.name for p in (ROOT / "docs").rglob("*.md")}
+    for name in {*LABEL_EXEMPT, *HISTORY_DOCS}:
+        if name not in docs:
+            stale.append(f"`{name}` 를 예외로 두는데 그런 문서가 없습니다")
+    for key in FROZEN_OK:
+        f, _, val = key.partition(":")
+        p = ROOT / f
+        if not p.exists() or val not in p.read_text(encoding="utf-8"):
+            stale.append(f"FROZEN_OK 의 `{key}` — 그 파일이나 값이 없습니다")
+    doc_text = "\n".join(p.read_text(encoding="utf-8") for p in _doc_files())
+    for name in NAME_OK:
+        if f"`{name}`" not in doc_text:
+            stale.append(f"NAME_OK 의 `{name}` — 이제 어느 문서도 부르지 않습니다")
+    # checkup 의 DOC_LONG_OK — 다른 파일에 있으므로 소스에서 키를 읽는다
+    ck = (BACKEND / "scripts" / "checkup.py").read_text(encoding="utf-8")
+    m = re.search(r"DOC_LONG_OK = \{(.*?)\n\}", ck, flags=re.S)
+    for name in re.findall(r'^\s+"([\w.-]+\.md)":', m.group(1) if m else "", flags=re.M):
+        if name not in docs:
+            stale.append(f"checkup.DOC_LONG_OK 의 `{name}` — 그런 문서가 없습니다")
+    n = (len(DEAD_OK) + len(ARCH_SKIP) + len(LABEL_EXEMPT) + len(FROZEN_OK)
+         + len(NAME_OK))
+    print(f"  예외 {n}개 · 사라진 것을 가리킴 {len(stale)}")
+    for s in stale:
+        r.bad(s + " — 예외를 지우세요")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="경계를 넘는 싱크 검사")
     ap.add_argument("--months", type=int, default=12)
@@ -745,6 +973,9 @@ def main() -> int:
     check_markdown(r)
     check_frozen_numbers(r)
     check_css(r)
+    check_commands(r)
+    check_doc_names(r)
+    check_exemptions(r)
     check_data(r)
     if args.no_model:
         header("계약 — 프론트가 읽는 키를 백엔드가 보내나")
