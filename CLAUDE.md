@@ -22,7 +22,7 @@
 | | 붙여넣은 매물을 단지·평형에 맞추거나 메모를 읽는 규칙을 바꾼다 | [data/listings.md](docs/data/listings.md) |
 | `analysis/` 공급·거시 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
 | | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
-| | 거시 요인을 합친 예측 모델을 다시 세우려 한다(걷은 경위·검증 기록) | [analysis/macro-model.md](docs/analysis/macro-model.md) |
+| | 거시 요인을 합친 모델 — 반영 분해(방향 고정)를 바꾸거나, 걷은 예측을 다시 세우려 한다 | [analysis/macro-model.md](docs/analysis/macro-model.md) |
 | `engineering/` 코드 다루기 | 코드 위치를 찾는다 | [engineering/architecture.md](docs/engineering/architecture.md) |
 | | 느려진 것을 고친다 | [engineering/performance.md](docs/engineering/performance.md) |
 | | 정적 사이트를 내보내거나 배포한다 | [engineering/deploy.md](docs/engineering/deploy.md) |
@@ -96,6 +96,7 @@
   말하는 값을 기대값으로. 지금 출력을 얼리지 않는다 — 그러면 지금의 버그가 정답이 된다
 - `scripts/verify_payloads.py` — 적합 페이로드가 정말 JSON 이 되는지
 - `scripts/verify_supply_cum.py` — 거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별), 12월 값 대조
+- `scripts/verify_reflect.py` — 반영 분해의 부호 제약 최소제곱(순수 파이썬) vs scipy `nnls` (1e-12)
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지,
   코드 주석이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다

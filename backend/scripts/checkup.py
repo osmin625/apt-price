@@ -135,6 +135,7 @@ SUITE_META = {
     "verify_name_match": ("단지명 매칭 전수 대조", True),
     "verify_payloads": ("페이로드가 JSON 이 되는지", True),
     "verify_supply_cum": ("누적 공급 — 공급 분석과 같은 값", False),
+    "verify_reflect": ("반영 분해 — scipy nnls 와 같은 답", False),
     "verify_fit_orphan": ("부모가 죽으면 적합 워커도", False),
 }
 
