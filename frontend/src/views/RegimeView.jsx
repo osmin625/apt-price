@@ -68,6 +68,11 @@ export default function RegimeView() {
   }
 
   const p = data.price
+  // 요인 카드 왼쪽 막대의 방향. 맨 위 합산 모델의 판정을 쓴다 — 요인별 `pressure` 는 '보통'(30~70%)·
+  // 약한 상관에서 방향을 비워 두어, 같은 화면에서 합산 카드는 '내림' 인데 막대는 회색인 요인이
+  // 생겼다(미분양·전세가율·M2). 막대가 맨 위 카드와 다른 말을 하면 막대가 없는 것보다 나쁘다.
+  const modelDir = Object.fromEntries((data.model?.used || []).map((u) => [u.key, u.dir]))
+  const edgeOf = (f) => modelDir[f.key] || f.pressure.dir
   return (
     <>
       {/* 합쳐 본 결론이 맨 위다. 요인별 방향·카드는 그 근거라 아래로 둔다. */}
@@ -101,6 +106,11 @@ export default function RegimeView() {
           것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.
         </p>
         <HeatLegend>카드 색은 자기 역사에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
+        <div className="legend">
+          <span className="key"><span className="swatch" style={{ background: 'var(--good)' }} />왼쪽 막대 — 가격을 올리는 쪽</span>
+          <span className="key"><span className="swatch" style={{ background: 'var(--neg)' }} />내리는 쪽</span>
+          <span className="key muted">맨 위 '요인을 합치면' 의 판정과 같습니다</span>
+        </div>
         {/* **데이터 하나에 카드 하나.** 준공·미분양·거래량·전세가율은 공급·가격 분석에
             카드가 있어, 여기서 같은 선을 또 그리면 같은 데이터가 두 탭에 카드로 선다.
             그런 요인은 그림 없이 위치만 한 줄로 두고, 누르면 같은 주제 창을 연다.
@@ -112,6 +122,7 @@ export default function RegimeView() {
               title={f.label}
               sub={factorSub(f)}
               heat={heatVars(f.percentile)}
+              edge={edgeOf(f)}
               onOpen={() => setOpen({ kind: 'factor', f })}
             >
               <Spark f={f} />
@@ -124,6 +135,7 @@ export default function RegimeView() {
             <div className="rg-shared">
               {data.factors.filter((f) => homeOf(topicFor('factor', f.key))).map((f) => (
                 <button key={f.key} className="rg-shared-row" style={heatVars(f.percentile)}
+                        data-edge={edgeOf(f)}
                         onClick={() => setOpen({ kind: 'factor', f })} aria-haspopup="dialog">
                   <strong>{f.label}</strong>
                   {/* 무엇의 백분위인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
