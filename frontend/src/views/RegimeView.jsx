@@ -111,7 +111,7 @@ export default function RegimeView() {
                   {/* 값을 같이 둔다. 위치(몇 배)만 있으면 '적정의 몇 % 를 지었나' 같은 값
                       자체를 보려고 창을 열어야 했다. */}
                   <b className="rg-shared-val">
-                    {fmt(f.latest.value, 1)}{f.unit}
+                    {fmt(f.latest.value, f.unit === '호' ? 0 : 1)}{f.unit}
                     <span className="muted small"> {ymText(f.latest.ym)}</span>
                   </b>
                   {/* 무엇의 위치인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
