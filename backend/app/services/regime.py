@@ -507,55 +507,6 @@ def policy_summary(rows: list[dict]) -> list[dict]:
     return out
 
 
-def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
-    """그룹 한 줄로 접는다 — '한 눈에' 가 이 탭의 목적이다.
-
-    방향은 **세기로 가중한 합**이다. 한 그룹 안에서 요인들이 엇갈리면(금리는
-    기준금리와 대출금리가 같이 가지만 공급은 준공과 미분양이 엇갈릴 수 있다)
-    합이 0 쪽으로 가고 '엇갈림' 으로 적는다.
-
-    정책·세금은 **방향을 내지 않는다.** 사건 수가 열몇 개뿐이고 내생적이다 —
-    오르니까 규제가 나온다. 최근 조치와 측정된 사후 변화만 보여 준다.
-    """
-    out = []
-    for g in GROUP_ORDER:
-        mine = [f for f in factors if f["group"] == g]
-        if mine:
-            score = sum((1 if f["pressure"]["dir"] == "up" else
-                         -1 if f["pressure"]["dir"] == "down" else 0)
-                        * abs(f["measured"]["r"] or 0) for f in mine)
-            named = [f for f in mine if f["pressure"]["dir"] != "none"]
-            if not named:
-                dirn, label = "none", "방향 없음"
-            elif abs(score) < 0.05:
-                dirn, label = "none", "엇갈림"
-            else:
-                dirn = "up" if score > 0 else "down"
-                label = "상승 쪽" if score > 0 else "하락 쪽"
-            out.append({
-                "group": g, "kind": "measured", "dir": dirn, "label": label,
-                "score": round(score, 3),
-                "members": [{"label": f["label"], "dir": f["pressure"]["dir"],
-                             "strength": f["pressure"]["strength"],
-                             "r": f["measured"]["r"],
-                             "z": f["z"]} for f in mine],
-            })
-            continue
-
-        # 정책·세금
-        want = ("세제강화", "세제완화") if g == "세금" else ("규제강화", "규제완화", "공급확대")
-        mine_p = [p for p in policy if p["kind"] in want]
-        latest = mine_p[0] if mine_p else None
-        out.append({
-            "group": g, "kind": "policy", "dir": "none", "label": "방향을 내지 않음",
-            "latest": latest,
-            "aftermath": [a for a in policy_summary(policy) if a["kind"] in want],
-            "why": ("사건이 적고 내생적입니다 — 오르니까 규제가 나옵니다. "
-                    "방향 대신 최근 조치와 그 뒤 실제 변화를 적습니다."),
-        })
-    return out
-
-
 # ──────────────────────────────────────────────────────────
 # 요인을 합친 모델 — 그 뒤 12개월 가격 변화
 # ──────────────────────────────────────────────────────────
@@ -790,7 +741,6 @@ def overview(db: Session) -> dict:
         },
         "groups": list(GROUP_ORDER),
         "factors": factors,
-        "groups_detail": group_rows(factors, policy),
         "policy": policy,
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
