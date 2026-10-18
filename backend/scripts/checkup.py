@@ -134,6 +134,7 @@ SUITE_META = {
     "verify_listing_parse": ("매물 파서가 주석의 사례대로", False),
     "verify_name_match": ("단지명 매칭 전수 대조", True),
     "verify_payloads": ("페이로드가 JSON 이 되는지", True),
+    "verify_fit_orphan": ("부모가 죽으면 적합 워커도", False),
 }
 
 # 일부러 안 돌리는 검사. **이유를 적어야** 여기 넣는다(DEAD_OK 와 같은 생각).

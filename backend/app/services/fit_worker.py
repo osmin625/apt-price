@@ -20,6 +20,8 @@
   import 하는 데 몇 초 걸린다. 풀을 살려 두면 그 비용은 첫 적합 한 번뿐이다.
 - **실패하면 인프로세스로 떨어진다.** 프로세스 생성이 막힌 환경에서도 앱은 돌아야
   한다. 느려질 뿐 기능이 죽지는 않는다.
+- **부모가 죽으면 워커도 끝난다.** 강제 종료된 앱의 워커가 고아로 남아 쌓였다
+  (`_watch_parent` 참조).
 """
 
 from __future__ import annotations
@@ -45,9 +47,48 @@ _inflight: dict[tuple, Future] = {}
 _IS_WORKER = False
 
 
-def _mark_worker() -> None:
+def _init_worker() -> None:
+    """워커가 뜰 때 한 번 돈다(풀의 initializer)."""
     global _IS_WORKER
     _IS_WORKER = True
+    _watch_parent()
+
+
+def _watch_parent() -> None:
+    """부모가 사라지면 워커도 끝낸다.
+
+    ## 왜
+
+    워커는 부모가 죽어도 **스스로 끝나지 않는다.** 부모가 `shutdown()` 을 부르고 정상
+    종료하면 풀이 워커를 거두지만, 강제 종료(세션 종료·작업 관리자·TerminateProcess)되면
+    그 기회가 없다. 그러면 워커는 다음 작업을 기다리는 자리에서 영영 멈춘다.
+
+    실제로 쌓였다. 2026-10-18 에 부모 pid 가 없는 워커 python.exe 8개가 잡혔고,
+    10-16~10-18 에 하나씩 생긴 것이 `.claude/wt-*/backend` 여덟 곳과 생성 시각이 맞았다.
+    작업 세트는 0MB 라 자원은 거의 안 썼지만 각자 그 폴더를 작업 디렉터리로 쥐고 있어
+    워크트리를 지울 수 없었다. 재현도 된다 — 부모를 강제 종료하고 5초를 봐도 그대로
+    살아 있다(`scripts/verify_fit_orphan.py`).
+
+    ## 어떻게
+
+    `parent_process().join()` 은 부모의 **센티널**을 기다린다 — 윈도우는 spawn 때 연
+    부모 프로세스 핸들, 그 밖에는 부모가 쓰기 끝을 쥔 파이프다. 둘 다 부모가 어떻게
+    죽든(강제 종료 포함) 바로 풀린다. 그래서 주기적으로 pid 를 살피지 않고 데몬
+    스레드 하나가 그 자리에서 블록한다. pid 를 살피는 방식은 pid 재사용에 속을 수 있고
+    주기만큼 늦다.
+
+    끝낼 때는 `os._exit` 다. 적합 중일 수 있고, 결과를 받을 부모가 없으니 정리할 것도
+    없다. `sys.exit` 는 데몬 스레드에서 부르면 그 스레드만 끝난다.
+    """
+    parent = multiprocessing.parent_process()
+    if parent is None:
+        return
+
+    def wait() -> None:
+        parent.join()
+        os._exit(0)
+
+    threading.Thread(target=wait, name="fit-parent-watch", daemon=True).start()
 
 
 def is_worker() -> bool:
@@ -100,7 +141,7 @@ def _pool_unlocked() -> ProcessPoolExecutor:
         _pool = ProcessPoolExecutor(
             max_workers=1,
             mp_context=multiprocessing.get_context("spawn"),
-            initializer=_mark_worker,
+            initializer=_init_worker,
         )
     return _pool
 
