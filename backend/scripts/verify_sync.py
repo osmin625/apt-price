@@ -794,6 +794,8 @@ NAME_OK = {
     "A_2024_00549": "reb.md '살펴보고 버린 표' 의 R-ONE 표 코드 — 안 쓰기로 한 표다",
     "ConsoleHost": "deploy.md 스케줄러 충돌 조사에 나온 윈도우 모듈 이름",
     "formId": "south-supply.md 의 국토교통 통계누리 주소 인자 — 남의 사이트다",
+    "regime.macro_model": "macro-model.md 가 걷은 합산 모델(2026-10-18)의 옛 자리를 적은 것 — "
+                   "그 방식은 scripts/cv_macro.py 에만 남아 있다",
 }
 
 # 이름을 찾을 곳. 키가 든 `backend/.env` 와 `*.local` 은 **읽지 않는다.**

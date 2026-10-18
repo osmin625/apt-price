@@ -53,14 +53,12 @@ from ..clients.molit import DISTRICTS
 from ..models import RebStat
 from .policy import COVERS_FROM, POLICY
 
-# 방향을 말할 수 있는 최소 세기. 이보다 약하면 '거의 없음' 으로 적고 화살표를
-# 띄우지 않는다. 0.15 는 재 본 값들의 분포에서 정했다 — 기준금리(-0.09)와
-# M2(-0.07) 가 아래로, 거래량(+0.25)·미분양(-0.31)이 위로 떨어진다.
-MIN_R = 0.15
-
 # 평균에서 얼마나 벗어나야 '높다/낮다' 인가(z). 0.5 안쪽은 '보통', 1.5 바깥은 '매우'.
-# 합산 모델의 세기 말(조금 · 꽤 · 크게, `STRENGTH`)과 같은 선이다 — 같은 요인을 한 카드는
-# '보통', 다른 카드는 '꽤' 라고 하면 자가 둘이다.
+# '그때는' 의 '지금과 비슷한 자리'(±0.5, `SIMILAR_BAND`)도 같은 선이다 — 같은 요인을 한 곳은
+# '보통', 다른 곳은 '비슷하지 않다' 라고 하면 자가 둘이다.
+#
+# 예전에는 여기에 방향을 말하는 최소 상관(`MIN_R` 0.15)과 방향 판정(`_pressure`)이 있었다.
+# 이 탭이 예측을 그만두며(2026-10-18) 걷었다. 실험 틀은 scripts/cv_macro.py 가 자기 값으로 지닌다.
 Z_MID, Z_FAR = 0.5, 1.5
 
 # 상관을 잴 때 필요한 최소 관측. 겹치는 창이라 실제 독립 표본은 이보다 훨씬 적다.
@@ -178,7 +176,7 @@ def _vs_adequate(db: Session, sgg_cd: str) -> dict[str, float]:
     12−m개월이라, 적정도 그 비율로 두 해를 섞는다.
 
     적정은 준공보다 **늦게** 공표된다(가구수·멸실이 한 해쯤 늦다). 그 뒤 달에는 마지막으로
-    공표된 해의 적정을 이어 쓴다 — 빼면 이 요인이 한 해 넘게 멈춰 합산 모델의 '지금' 까지
+    공표된 해의 적정을 이어 쓴다 — 빼면 이 요인이 한 해 넘게 멈춰 비슷했던 시기의 '지금' 까지
     끌고 내려간다. 이어 쓴 달은 `adequate_carried` 로 알려 화면이 그렇게 적는다.
     """
     from . import supply as sp
@@ -257,7 +255,7 @@ def _corr(a: list[float], b: list[float]) -> float:
 def hist_z(values: list[float], v: float) -> float:
     """`v` 가 자기 역사(`values`) **평균에서 표준편차 몇 배** 떨어져 있나 — **탭 공통의 자**.
 
-    + 면 평균보다 높고 − 면 낮다. 거시 분석의 요인 카드·방향 판정·과거 국면 표·비슷했던 달,
+    + 면 평균보다 높고 − 면 낮다. 거시 분석의 요인 카드·그때는·과거 국면 표·비슷했던 시기,
     가격 분석의 국면 점, 공급 분석의 미분양 카드가 모두 이 값으로 칠하고 판정한다. 화면의
     `heat.js` 의 `histZ` 가 같은 공식이다.
 
@@ -344,33 +342,6 @@ def nonoverlap(x: dict[str, float], price: dict[str, float]) -> tuple[float | No
     return round(_corr([p[0] for p in pairs], [p[1] for p in pairs]), 3), len(pairs)
 
 
-def _pressure(r: float | None, z: float, agree: bool) -> dict:
-    """방향은 **측정된 부호 × 지금 위치**다.
-
-    상관이 양(+)인 요인이 지금 자기 평균보다 높은 쪽이면 상승 압력으로 읽는다.
-    둘 중 하나라도 약하면 방향을 말하지 않는다 — 없는 확신을 파느니 비워 둔다.
-    """
-    if r is None or abs(r) < MIN_R:
-        return {"dir": "none", "strength": "거의 없음",
-                "why": f"가격과의 상관이 {'측정 불가' if r is None else f'{r:+.2f}'} 라 "
-                       f"방향을 말할 수 없습니다"}
-    if abs(z) < Z_MID:
-        return {"dir": "none", "strength": "중립",
-                "why": "지금 값이 자기 평균 가까이라 어느 쪽도 아닙니다"}
-    high = z > 0
-    up = (r > 0) == high
-    strength = "약함" if abs(r) < 0.30 else "중간"
-    if not agree:
-        strength = "약함"
-    return {
-        "dir": "up" if up else "down",
-        "strength": strength,
-        "why": (f"이 요인은 가격과 {r:+.2f} 로 움직였고, 지금 값이 자기 평균보다 "
-                f"{'높습니다' if high else '낮습니다'}(평소 폭의 {abs(z):.1f}배)"
-                + ("" if agree else " (겹치지 않는 표본에서는 부호가 달라 약하게 봅니다)")),
-    }
-
-
 # 요인 값이 무엇을 바꾼 것인지 사람이 읽는 이름. 같은 준공이라도 공급 탭은 '호'
 # 단위 12개월 누적이고 여기는 그 누적의 전년비라, 말해 주지 않으면 두 그림의
 # 숫자가 서로 다른 데이터처럼 보인다.
@@ -427,11 +398,12 @@ def factor_rows(db: Session) -> list[dict]:
             "level_like": f.transform in LEVEL_LIKE,
             "ref_line": REF_LINE.get(f.key),
             "caveat": _caveat(db, f, last),
+            # 그 요인이 지금과 비슷한 자리였던 시기와 그 뒤, 그리고 기저율.
+            "then": factor_then(s, price),
             "latest": {"ym": last, "value": round(s[last], 2)},
             "z": round(z, 2),
             "measured": {"r": r0, "n": prof[0]["n"], "nonoverlap_r": nr,
                          "nonoverlap_n": nn, "agree": agree, "profile": prof},
-            "pressure": _pressure(r0, z, agree),
             "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(s.items())],
         })
     return out
@@ -440,7 +412,7 @@ def factor_rows(db: Session) -> list[dict]:
 # ──────────────────────────────────────────────────────────
 # 과거 추적 — 그때 각 요인은 어땠고, 집값은 어떻게 됐나
 # ──────────────────────────────────────────────────────────
-# 과거 국면 표의 다섯 단계 — 평균에서 몇 표준편차인가(z). 가운데 경계(±0.5)는 방향 판정의
+# 과거 국면 표의 다섯 단계 — 평균에서 몇 표준편차인가(z). 가운데 경계(±0.5)는 '그때는' 의
 # `Z_MID` 와 같고, 끝의 두 단계(±1.5)는 그 바깥을 한 번 더 가른다. 세 단계일 때는 역대급인 칸과
 # 그냥 높은 칸이 구분되지 않았다. 칸 색은 이 단계가 아니라 z 그대로(연속)다 — 글자는 읽기 쉽게,
 # 색은 끊지 않게. 예전 경계는 백분위 10·30·70·90% 였다(`hist_z` 주석).
@@ -497,45 +469,159 @@ def history(db: Session, step: int = 6) -> dict:
                      f"있고 표본은 {len(yms) // 12}년치뿐입니다.")}
 
 
-def similar_months(db: Session, top: int = 12) -> dict:
-    """지금과 요인 상태가 비슷했던 과거 달을 찾아 **그 뒤 무슨 일이 있었나** 본다.
+# ──────────────────────────────────────────────────────────
+# 과거 사례 — 지금과 비슷했던 때 그 뒤에 무슨 일이 있었나
+# ──────────────────────────────────────────────────────────
+# 이 탭은 예측하지 않는다(2026-10-18 요청 — 합산 모델을 걷었다, docs/analysis/macro-model.md).
+# 대신 '지금과 비슷했던 때' 를 찾아 그 뒤를 **사례로** 보인다. 세 가지를 지킨다.
+#
+# 1. **달이 아니라 시기로 센다.** 이웃한 달은 거의 같은 상황이다. 예전 '비슷했던 달 12개' 는
+#    재 보니 두 시기(2013-12~2014-06, 2024-05~2025-06)였다 — 12번이 아니라 2번 본 것이다.
+# 2. **기저율과 나란히 둔다.** 아무 달이나 골라도 그 뒤 1년이 오른 달이 71%(2013년 이후 85%)다.
+#    '비슷했던 때 다 올랐다' 는 기저율과 견주기 전에는 아무것도 말하지 않는다.
+# 3. **지금과 이어진 최근은 뺀다.** 요인은 천천히 움직여 지난 1~2년이 늘 가장 비슷하게 나온다.
+#    그것은 다른 시기가 아니라 '지금' 의 연장이다.
+#
+# z 는 **전체 기간** 평균·표준편차로 낸다(카드·과거 국면 표와 같은 자). 예측이 아니라 서술이라
+# 미래 값이 자에 섞여도 된다 — '그때 높았다' 와 '지금 높다' 를 같은 자로 견주는 것이 목적이다.
+SIMILAR_BAND = Z_MID          # 요인 하나가 '지금과 비슷한 자리' — 카드의 '보통' 경계와 같은 선
+EPISODE_GAP = 12              # 이만큼 안에 이어지는 달은 한 시기다(12개월 창이 11개월을 겹친다)
+RECENT_EXCLUDE = 24           # 지금과 이어진 최근은 뺀다
+HORIZONS = (6, 12, 24)        # 그 뒤 몇 개월
+NEAR_MONTHS = 36              # 비슷했던 시기 — 가까운 달을 이만큼 고른 뒤 시기로 묶는다
+MAX_EPISODES = 5
+PATH_SPAN = (-12, 24)         # 가격 경로를 그 시기 기준 달 앞뒤로 이만큼
 
-    거리는 z(평균에서 표준편차 몇 배) 차의 제곱합이다. 요인 수가 적고 단위가 제각각이라
-    z 로 맞춘 뒤 비교한다. 예전에는 백분위였는데, 표본 밖 성적을 재 보니 z 쪽이 덜
-    빗나갔다(RMSE 12.0 → 10.7, `macro_model` 성적표의 '비슷했던 달').
+
+def _gap(a: str, b: str) -> int:
+    return (int(b[:4]) - int(a[:4])) * 12 + int(b[4:]) - int(a[4:])
+
+
+def _episodes(yms: list[str]) -> list[list[str]]:
+    """`EPISODE_GAP` 안에 이어지는 달을 한 시기로 묶는다."""
+    eps: list[list[str]] = []
+    for ym in sorted(yms):
+        if eps and _gap(eps[-1][-1], ym) <= EPISODE_GAP:
+            eps[-1].append(ym)
+        else:
+            eps.append([ym])
+    return eps
+
+
+def _fwd(price: dict[str, float], yms: list[str], i: int, k: int) -> float | None:
+    return None if i + k >= len(yms) else (price[yms[i + k]] / price[yms[i]] - 1) * 100
+
+
+def _median(vs: list[float]) -> float | None:
+    if not vs:
+        return None
+    vs = sorted(vs)
+    n = len(vs)
+    return vs[n // 2] if n % 2 else (vs[n // 2 - 1] + vs[n // 2]) / 2
+
+
+def base_rate(price: dict[str, float], months: list[str]) -> dict:
+    """그 달들 **전부**의 그 뒤 12개월 — 조건 없이 골랐을 때의 기준선."""
+    yms = sorted(price)
+    idx = {y: i for i, y in enumerate(yms)}
+    vs = [v for v in (_fwd(price, yms, idx[m], 12) for m in months if m in idx) if v is not None]
+    if not vs:
+        return {"months": 0, "median": None, "up_pct": None}
+    return {"months": len(vs), "median": round(_median(vs), 2),
+            "up_pct": round(sum(1 for v in vs if v > 0) / len(vs) * 100),
+            "from": min(months), "to": max(months)}
+
+
+def _eligible(s: dict[str, float], price: dict[str, float], last: str) -> list[str]:
+    """그 뒤 12개월이 알려지고, 지금과 이어진 최근이 아닌 달."""
+    yms = sorted(price)
+    idx = {y: i for i, y in enumerate(yms)}
+    return [ym for ym in sorted(s) if ym in idx and _gap(ym, last) >= RECENT_EXCLUDE
+            and _fwd(price, yms, idx[ym], 12) is not None]
+
+
+def _episode_row(eps: list[str], price: dict[str, float], z: dict[str, float]) -> dict:
+    yms = sorted(price)
+    idx = {y: i for i, y in enumerate(yms)}
+    fwd = {k: _median([v for v in (_fwd(price, yms, idx[m], k) for m in eps) if v is not None])
+           for k in HORIZONS}
+    return {"from": eps[0], "to": eps[-1], "months": len(eps),
+            "z": round(_median([z[m] for m in eps]), 2),
+            "fwd": {str(k): (round(v, 2) if v is not None else None) for k, v in fwd.items()}}
+
+
+def factor_then(s: dict[str, float], price: dict[str, float]) -> dict:
+    """그 요인이 **지금과 비슷한 자리**(z ±`SIMILAR_BAND`)였던 시기와 그 뒤.
+
+    요인 하나만 맞춘 것이라 다른 요인은 그때 전혀 달랐을 수 있다 — 시기마다 무엇이 겹쳤는지는
+    '비슷했던 시기' 가 요인 전부로 본다.
+    """
+    last = max(s)
+    vals = list(s.values())
+    z = {ym: hist_z(vals, v) for ym, v in s.items()}
+    pool = _eligible(s, price, last)
+    near = [ym for ym in pool if abs(z[ym] - z[last]) <= SIMILAR_BAND]
+    eps = [_episode_row(e, price, z) for e in _episodes(near)]
+    up = sum(1 for e in eps if (e["fwd"]["12"] or 0) > 0)
+    return {"z_now": round(z[last], 2), "band": SIMILAR_BAND,
+            "episodes": sorted(eps, key=lambda e: e["from"], reverse=True),
+            "summary": {"episodes": len(eps), "up": up, "months": len(near),
+                        "median12": (round(_median([e["fwd"]["12"] for e in eps
+                                                     if e["fwd"]["12"] is not None]), 2)
+                                     if eps else None)},
+            "base": base_rate(price, pool)}
+
+
+def similar_periods(db: Session) -> dict:
+    """요인 **전부**가 지금과 가까웠던 시기를 찾아 그 뒤를 보인다.
+
+    거리는 요인마다 z 차의 제곱합이다(단위가 제각각이라 z 로 맞춘다). 가까운 달을
+    `NEAR_MONTHS` 개 고른 뒤 시기로 묶고, 시기마다 가장 가까운 달을 기준 달로 삼는다.
     """
     price = price_series(db)
     yms = sorted(price)
     idx = {y: i for i, y in enumerate(yms)}
     cols = [(f, series_of(db, f)) for f in FACTORS]
     common = sorted(set.intersection(*[set(s) for _, s in cols]) & set(price))
-    if len(common) < 24:
+    if len(common) < 48:
         return {"available": False,
-                "note": "요인이 모두 갖춰진 달이 24개월이 안 돼 비교할 수 없습니다."}
-
-    pcts = {ym: {f.key: _z(s, ym) for f, s in cols} for ym in common}
+                "note": "요인이 모두 갖춰진 달이 모자라 비교할 수 없습니다."}
+    zs = {f.key: {ym: hist_z(list(s.values()), v) for ym, v in s.items()} for f, s in cols}
     now = common[-1]
-    scored = []
-    for ym in common[:-13]:  # 뒤 12개월 결과가 있어야 쓸모가 있다
-        d = math.sqrt(sum((pcts[ym][k] - pcts[now][k]) ** 2 for k in pcts[now]))
-        f12 = _fwd12(price, yms, idx[ym])
-        if f12 is not None:
-            scored.append({"ym": ym, "distance": round(d, 3), "fwd12": round(f12, 2)})
-    scored.sort(key=lambda r: r["distance"])
-    picked = scored[:top]
-    vals = sorted(r["fwd12"] for r in picked)
-    mid = (vals[len(vals) // 2] if len(vals) % 2
-           else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2) if vals else None
+    zn = {k: z[now] for k, z in zs.items()}
+    pool = [ym for ym in common if _gap(ym, now) >= RECENT_EXCLUDE
+            and _fwd(price, yms, idx[ym], 12) is not None]
+    dist = {ym: math.sqrt(sum((zs[k][ym] - zn[k]) ** 2 for k in zn)) for ym in pool}
+    near = sorted(pool, key=dist.get)[:NEAR_MONTHS]
+    eps = []
+    for e in _episodes(near):
+        pick = min(e, key=dist.get)
+        i = idx[pick]
+        path = []
+        for k in range(PATH_SPAN[0], PATH_SPAN[1] + 1):
+            if 0 <= i + k < len(yms):
+                path.append({"k": k, "v": round((price[yms[i + k]] / price[pick] - 1) * 100, 2)})
+        fwd = {str(k): (round(v, 2) if (v := _fwd(price, yms, i, k)) is not None else None)
+               for k in HORIZONS}
+        eps.append({"from": e[0], "to": e[-1], "months": len(e), "pick": pick,
+                    "distance": round(dist[pick], 2),
+                    "z": {k: round(zs[k][pick], 2) for k in zn},
+                    "fwd": fwd, "path": path})
+    eps.sort(key=lambda e: e["distance"])
+    eps = eps[:MAX_EPISODES]
     return {
         "available": True,
         "now": now,
-        "months": picked,
-        "fwd12": {"median": round(mid, 2) if mid is not None else None,
-                  "min": vals[0] if vals else None, "max": vals[-1] if vals else None,
-                  "up": sum(1 for v in vals if v > 0), "n": len(vals)},
-        "note": ("요인 상태가 지금과 가장 가까웠던 달들입니다. 그 뒤 12개월에 "
-                 "무슨 일이 있었는지만 보여 줍니다 — 표본이 작고 서로 이웃한 달이 "
-                 "섞여 있어 예측이 아닙니다."),
+        "now_z": {k: round(v, 2) for k, v in zn.items()},
+        "episodes": eps,
+        "summary": {"episodes": len(eps),
+                    "up": sum(1 for e in eps if (e["fwd"]["12"] or 0) > 0)},
+        "base": base_rate(price, pool),
+        "params": {"near_months": NEAR_MONTHS, "max_episodes": MAX_EPISODES,
+                   "exclude_recent": RECENT_EXCLUDE, "episode_gap": EPISODE_GAP},
+        "note": ("요인 상태가 지금과 가장 가까웠던 시기들입니다. 이웃한 달은 한 시기로 묶었고, "
+                 "지금과 이어진 최근은 뺐습니다. 그 뒤에 무슨 일이 있었는지 보여 줄 뿐 "
+                 "예측이 아닙니다 — 시기 수가 작고, 같은 요인 상태라도 다른 사정이 겹쳐 있었습니다."),
     }
 
 
@@ -586,217 +672,6 @@ def policy_summary(rows: list[dict]) -> list[dict]:
     return out
 
 
-# ──────────────────────────────────────────────────────────
-# 요인을 합친 모델 — 그 뒤 12개월 가격 변화
-# ──────────────────────────────────────────────────────────
-# 학습 표본이 이보다 적은 시점은 예측하지 않는다(백테스트 시작점). 5년치다.
-MODEL_MIN_TRAIN = 60
-
-
-def _score_model(train: list[dict], ref: tuple[list[float], list[float]]) -> dict:
-    """요인 방향 합산 점수 → 그 뒤 12개월. **계수는 하나뿐**이다.
-
-    요인마다 (훈련 표본에서 잰 상관의 부호) × (z 점수)를 내고, |상관| 이 `MIN_R` 이상인
-    요인만 평균해 점수 하나로 만든 뒤, 그 점수에 직선 하나를 맞춘다.
-
-    ## 왜 요인마다 계수를 따로 맞추지 않나 — 재 봤다
-
-    2026-10-18 실 DB 사본으로 시점마다 그때까지 알려진 자료로만 맞추고 다음 1년을 예측해
-    봤다(표본 밖 87개월). 과거 평균만 쓰는 예측의 오차(RMSE)가 11.3 일 때 —
-      능형회귀, λ 를 GCV 로      18.7 (λ 가 작게 골라져 과적합 — 겹치는 창이 표본을 부풀린다)
-      능형회귀, λ 를 시간순 CV 로 14.6
-      백분위를 넣은 능형회귀       11.6
-      **방향 합산 점수**           **10.1** — 앞(2018~21)·뒤(2022~25) 두 시기 모두 평균보다 작았다
-    독립 표본이 해마다 하나 남짓이라, 계수 아홉 개를 따로 맞추면 우연에 맞춘다. 거시 탭의
-    방향 판정(부호 × 지금 위치)과 같은 생각을 점수 하나로 줄인 것만 평균을 이겼다.
-    """
-    p = len(train[0]["x"])
-    n = len(train)
-    ys = [r["y"] for r in train]
-    # 평소(평균·표준편차)는 학습 행이 아니라 `ref` — 그 시점까지 **그 요인의 자기 역사 전체**다.
-    # 예전에는 학습 행(요인 아홉이 다 있는 2012년 이후, 그것도 결과가 알려진 1년 전까지)으로
-    # 표준화해서, 같은 화면의 요인 카드와 '평균' 이 달랐다 — 준공 물량이 이 카드에서는 평소의
-    # 3.8배 아래, 카드 쪽 자로는 2.4배 아래였다. 자가 둘이면 같은 요인이 두 말을 한다.
-    mu, sd = ref
-    rs = [_corr([r["x"][j] for r in train], ys) for j in range(p)]
-    use = [j for j in range(p) if abs(rs[j]) >= MIN_R]
-
-    def parts(x):
-        k = max(len(use), 1)
-        return {j: (1 if rs[j] > 0 else -1) * (x[j] - mu[j]) / sd[j] / k for j in use}
-
-    sc = [sum(parts(r["x"]).values()) for r in train]
-    ms, my = sum(sc) / n, sum(ys) / n
-    var = sum((v - ms) ** 2 for v in sc)
-    b = sum((v - ms) * (y - my) for v, y in zip(sc, ys)) / var if var else 0.0
-    return {"parts": parts, "b": b, "ms": ms, "my": my, "use": use, "rs": rs, "mu": mu, "sd": sd}
-
-
-def _predict(m: dict, x: list[float]) -> float:
-    return m["my"] + m["b"] * (sum(m["parts"](x).values()) - m["ms"])
-
-
-# 평소에서 얼마나 벗어났나(|z|). 칸을 셋만 둔다 — 그 이상 잘게 나누면 다시 몫처럼 읽힌다.
-STRENGTH = ((Z_FAR, 3, "크게"), (Z_MID, 2, "꽤"), (0.0, 1, "조금"))
-
-
-def _plain(f: Factor, z: float, x: float, r: float) -> dict:
-    """요인 하나를 **말로** — 지금 어떤가, 과거에 그런 때 그 뒤 가격은 어땠나.
-
-    처음에는 '과거 관계: 반대로 · 지금: 평균 아래 · 방향: 올림' 처럼 칸을 나눠 적었다.
-    맞는 말이지만 방향을 읽는 사람이 머릿속에서 곱해야 했다. 그래서 두 문장으로 푼다 —
-    "평소보다 크게 줄었다" · "빨리 늘수록 그 뒤 가격은 내렸다". 둘을 이으면 화살표가 나온다.
-
-    요인마다 %p 몫은 내지 않는다. 몫은 점수를 산술로 쪼갠 것인데 '기준금리 때문에 +1.2%p'
-    처럼 원인으로 읽혔다. 요인은 얽혀 함께 움직이고(기준금리–대출금리 0.78), 요인마다 계수를
-    따로 맞추면 앞뒤 시기에 아홉 중 넷의 부호가 뒤집혔다 — 몫을 나눌 근거가 없다.
-    세기는 몫이 아니라 '그 요인이 지금 평소에서 얼마나 벗어났나' 다. 요인 자신에 대한 사실이다.
-
-    변환마다 말이 다르다. 수준(심리·전세가율)은 높다/낮다, 증감(건수·통화량)은 늘었다/줄었다,
-    금리의 1년 차이는 올랐다/내렸다. 평균이 +라면 평균 아래라도 '줄었다' 가 아니라 '덜 늘었다'
-    일 수 있어 값의 부호까지 본다.
-    """
-    deg, level = next((lv, w) for t, lv, w in STRENGTH if abs(z) >= t)
-    if f.transform in LEVEL_LIKE:
-        now = f"평소보다 {level} {'높다' if z > 0 else '낮다'}"
-        high = "높을"
-    else:
-        rate = f.transform == "diff12"
-        up, down = ("올랐다", "내렸다") if rate else ("늘었다", "줄었다")
-        if z > 0:
-            verb = f"{'많이' if rate else '빨리'} {up}" if x > 0 else f"덜 {down}"
-        else:
-            verb = f"덜 {up}" if x > 0 else down
-        now = f"평소보다 {level} {verb}"
-        high = "많이 오를" if rate else "빨리 늘"
-    rule = f"{high}수록 그 뒤 가격{'도 올랐다' if r > 0 else '은 내렸다'}"
-    return {"strength": deg, "now_text": now, "rule_text": rule}
-
-
-def macro_model(db: Session) -> dict:
-    """요인을 합쳐 그 뒤 12개월 가격 변화를 낸다 — **표본 밖 성적표와 같이.**
-
-    지금 값만 내면 믿을 근거가 없다. 그래서 과거 매달을 '그때 알려진 자료로만' 다시 맞춰
-    예측해 본 성적(백테스트)을 같이 싣고, 단순한 기준 셋과 견준다 — 과거 평균, 지난 1년
-    변화가 이어진다고 보기, 비슷했던 달(`similar_months` 와 같은 방식). 학습 표본은 결과가
-    알려진 달만이다(그 달 + 12개월 ≤ 예측 시점) — 그래야 미래가 섞이지 않는다.
-    """
-    price = price_series(db)
-    yms = sorted(price)
-    idx = {y: i for i, y in enumerate(yms)}
-    cols = [(f, series_of(db, f)) for f in FACTORS]
-    common = sorted(set.intersection(*[set(s) for _, s in cols]) & set(price))
-    rows = [{"ym": ym, "x": [s[ym] for _, s in cols], "y": _fwd12(price, yms, idx[ym]),
-             "mom": ((price[ym] / price[yms[idx[ym] - 12]] - 1) * 100) if idx[ym] >= 12 else None}
-            for ym in common]
-    lab = [r for r in rows if r["y"] is not None]
-    if len(lab) < MODEL_MIN_TRAIN + 12:
-        return {"available": False, "note": "요인이 모두 갖춰지고 결과까지 알려진 달이 모자라 모델을 세우지 않습니다."}
-
-    def known(t: dict) -> list[dict]:
-        return [q for q in lab if idx[q["ym"]] + 12 <= idx[t["ym"]]]
-
-    # 그 시점까지의 자기 역사 평균·표준편차. 미래 값이 섞이면 백테스트가 거짓이 된다.
-    hist = [sorted(sv.items()) for _, sv in cols]
-
-    def ref_at(ym: str) -> tuple[list[float], list[float]]:
-        mus, sds = [], []
-        for h in hist:
-            vs = [v for k, v in h if k <= ym]
-            mu = sum(vs) / len(vs)
-            mus.append(mu)
-            sds.append(math.sqrt(sum((v - mu) ** 2 for v in vs) / len(vs)) or 1.0)
-        return mus, sds
-
-    def similar(t: dict, train: list[dict], ref) -> float:
-        # `similar_months` 와 같은 거리 — 평균에서 몇 표준편차인가(z)의 차. 자는 그 시점까지의
-        # 자기 역사다.
-        mu, sd = ref
-
-        def z(j, v):
-            return (v - mu[j]) / sd[j]
-        now = [z(j, t["x"][j]) for j in range(len(t["x"]))]
-        near = sorted(train, key=lambda q: sum((z(j, q["x"][j]) - now[j]) ** 2
-                                               for j in range(len(now))))[:12]
-        vs = sorted(q["y"] for q in near)
-        return (vs[len(vs) // 2] + vs[(len(vs) - 1) // 2]) / 2
-
-    back, preds = [], {"model": [], "mean": [], "mom": [], "similar": []}
-    for t in lab:
-        train = known(t)
-        if len(train) < MODEL_MIN_TRAIN:
-            continue
-        ref = ref_at(t["ym"])
-        m = _score_model(train, ref)
-        yhat = _predict(m, t["x"])
-        mean = sum(q["y"] for q in train) / len(train)
-        back.append({"ym": t["ym"], "pred": round(yhat, 2), "actual": round(t["y"], 2)})
-        preds["model"].append((t["ym"], yhat, t["y"]))
-        preds["mean"].append((t["ym"], mean, t["y"]))
-        if t["mom"] is not None:
-            preds["mom"].append((t["ym"], t["mom"], t["y"]))
-        preds["similar"].append((t["ym"], similar(t, train, ref), t["y"]))
-
-    def score(ps: list) -> dict:
-        e = [p - a for _, p, a in ps]
-        n = len(e)
-        dec = [(p, a) for ym, p, a in ps if ym.endswith("12")]
-        return {"n": n, "rmse": round(math.sqrt(sum(v * v for v in e) / n), 2),
-                "mae": round(sum(abs(v) for v in e) / n, 2),
-                "hit_pct": round(sum(1 for _, p, a in ps if (p > 0) == (a > 0)) / n * 100),
-                "n_dec": len(dec),
-                "rmse_dec": round(math.sqrt(sum((p - a) ** 2 for p, a in dec) / len(dec)), 2) if dec else None}
-    base = score(preds["mean"])["rmse"]
-    names = {"model": "요인 합산 모델", "mean": "과거 평균", "mom": "지난 1년이 이어진다",
-             "similar": "비슷했던 달(중위)"}
-    table = []
-    for k in ("model", "mean", "mom", "similar"):
-        sc = score(preds[k])
-        sc["r2_vs_mean"] = round(1 - (sc["rmse"] / base) ** 2, 2) if base else None
-        table.append({"key": k, "label": names[k], **sc})
-
-    # 지금 — 결과가 알려진 달 전부로 맞추고 가장 최근 달에 적용한다.
-    now = rows[-1]
-    m = _score_model(known(now) or lab, ref_at(now["ym"]))
-    yhat = _predict(m, now["x"])
-    parts = m["parts"](now["x"])
-    errs = sorted(p - a for _, p, a in preds["model"])
-    lo = errs[int(len(errs) * 0.1)]
-    hi = errs[int(len(errs) * 0.9) - 1]
-    keys = [f for f, _ in cols]
-    used = []
-    for j in sorted(parts):
-        z = (now["x"][j] - m["mu"][j]) / m["sd"][j]
-        # 미는 힘 = 방향 × 세기. 점수는 이것의 평균이고 예상은 그 점수에 놓은 직선이다.
-        push = (1 if m["b"] >= 0 else -1) * (1 if m["rs"][j] > 0 else -1) * z
-        used.append({"key": keys[j].key, "label": keys[j].label, "region": keys[j].region,
-                     "r": round(m["rs"][j], 3), "z": round(z, 2), "push": round(push, 2),
-                     "dir": "up" if push > 0 else "down" if push < 0 else "none",
-                     **_plain(keys[j], z, now["x"][j], m["rs"][j])})
-    return {
-        "available": True,
-        "now": now["ym"],
-        "pred": round(yhat, 2),
-        # 과거 예측이 실제보다 높게 나간 만큼을 빼고 낮게 나간 만큼을 더한 범위(10~90%).
-        "band": [round(yhat - hi, 2), round(yhat - lo, 2)],
-        "base": round(m["my"], 2),
-        # 요인마다 %p 몫은 내지 않는다(`_plain` 주석). 대신 줄다리기로 보여 준다 — 어느 쪽으로
-        # 미는지(방향)와 지금 평소에서 얼마나 벗어나 있는지(세기). 점수가 실제로 쓰는 정보가
-        # 이 둘뿐이라 지어낸 것이 없다.
-        "used": sorted(used, key=lambda u: -abs(u["push"])),
-        "pull": {"up": round(sum(u["push"] for u in used if u["push"] > 0), 2),
-                 "down": round(-sum(u["push"] for u in used if u["push"] < 0), 2)},
-        "excluded": [keys[j].label for j in range(len(keys)) if j not in m["use"]],
-        "backtest": back,
-        "table": table,
-        "train_n": len(known(now) or lab),
-        "min_train": MODEL_MIN_TRAIN,
-        "note": ("계산은 단순합니다 — 요인마다 미는 방향과 세기를 평균해 점수 하나로 만들고, "
-                 "과거에 그 점수가 높던 때 그 뒤 가격이 얼마나 더 올랐는지로 옮깁니다. 단순하게 "
-                 "묶은 만큼 과거에 덜 맞추는 대신 우연에도 덜 휘둘립니다."),
-    }
-
-
 def overview(db: Session) -> dict:
     factors = factor_rows(db)
     policy = policy_rows(db)
@@ -824,12 +699,10 @@ def overview(db: Session) -> dict:
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
         "history": history(db),
-        "model": macro_model(db),
-        "similar": similar_months(db),
+        "similar": similar_periods(db),
         # '가장 센 것도 0.50 이라 어느 요인도 혼자서는 설명하지 못한다' 를 적었었다.
         # 값은 그 자리에서 쟀지만 **판정('못한다')은 그날의 값에 묶여** 있어, 센 요인이
         # 생기면 숫자만 바뀌고 문장은 틀린다. 판정은 빼고 방법과 지역만 남긴다.
-        "note": ("요인마다 가격과의 상관을 재서 방향을 정합니다. "
-                 "가격은 경기 남부 구들의 평균이지만 미분양·심리는 경기 전체, "
+        "note": ("가격은 경기 남부 구들의 평균이지만 미분양·심리는 경기 전체, "
                  "통화량·금리는 전국 값입니다."),
     }

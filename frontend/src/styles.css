@@ -675,11 +675,6 @@ tr.is-deleting td { opacity: 0.4; }
 }
 .rg-shared-row:hover { border-color: var(--accent); }
 .rg-shared-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* 왼쪽 막대만 **방향**으로 — 바탕은 위치(heat), 막대는 오름 초록 · 내림 빨강. `data-edge` 가 없으면
-   막대도 위치 색 그대로다. 호버의 border-color 가 막대까지 덮지 않게 border-left-color 를 따로 둔다. */
-.macro-card.is-heat[data-edge='up'], .rg-shared-row[data-edge='up'] { border-left-color: var(--good); }
-.macro-card.is-heat[data-edge='down'], .rg-shared-row[data-edge='down'] { border-left-color: var(--neg); }
-.macro-card.is-heat[data-edge='none'], .rg-shared-row[data-edge='none'] { border-left-color: var(--border); }
 @media (max-width: 640px) {
   .rg-shared-row { grid-template-columns: 1fr auto 14px; row-gap: 2px; }
   .rg-shared-row > .muted { grid-column: 1 / -1; }
@@ -946,34 +941,7 @@ tr.is-deleting td { opacity: 0.4; }
   .guide-quad b { display: block; min-width: 0; margin-bottom: 1px; }
 }
 
-/* 거시 분석 — 요인 합산 줄다리기와 과거 국면 */
-/* 합산 모델의 줄다리기 — 양쪽 힘의 비율 막대와 양쪽 요인 목록. 오름 초록 · 내림 빨강(화면 공통 규칙). */
-.rg-verdict { margin: 4px 0 8px; }
-.rg-tug { display: flex; height: 26px; border-radius: var(--radius); overflow: hidden; font-size: 12px; font-weight: 600; }
-/* 폭은 flex-grow 비율로 — 한쪽이 아주 작아도 글자가 잘리지 않게 글자 폭만큼은 남긴다. */
-.rg-tug-side { display: flex; align-items: center; white-space: nowrap; padding: 0 8px; flex: 0 1 0; min-width: max-content; }
-.rg-tug-side.is-down { background: color-mix(in srgb, var(--neg) 18%, transparent); color: var(--neg); }
-.rg-tug-side.is-up { justify-content: flex-end; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
-.rg-tug-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 8px; }
-.rg-tug-col h4 { margin: 0 0 6px; font-size: 13.5px; }
-.rg-tug-col.is-up h4 { color: var(--good); }
-.rg-tug-col.is-down h4 { color: var(--neg); }
-/* 요인 하나 = 이름과 배율만 있는 작은 카드. 설명은 호버 툴팁으로(RegimeView `TugList`).
-   방향은 바탕·테두리 색이 말한다 — 위 막대와 같은 색이다. */
-.rg-tug-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.rg-tug-col li {
-  --tug-c: var(--good);
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 3px 8px; font-size: 12.5px; cursor: default;
-  border: 1px solid color-mix(in srgb, var(--tug-c) 40%, var(--border));
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--tug-c) 12%, transparent);
-}
-.rg-tug-col.is-down li { --tug-c: var(--neg); }
-.rg-tug-col li:hover, .rg-tug-col li:focus-visible { border-color: var(--tug-c); outline: none; }
-.rg-push { flex: none; font-variant-numeric: tabular-nums; color: var(--tug-c); }
-@media (max-width: 640px) { .rg-tug-cols { grid-template-columns: 1fr; } }
-
+/* 거시 분석 — 정책 사후·비슷했던 시기·과거 국면 */
 .rg-after { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 14px; }
 .rg-after-cell {
   flex: 1 1 120px; padding: 8px 10px; border: 1px solid var(--border);
@@ -981,12 +949,9 @@ tr.is-deleting td { opacity: 0.4; }
 }
 .rg-after-cell strong { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
 
-.rg-similar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.rg-sim {
-  min-width: 72px; padding: 6px 9px; border: 1px solid var(--border);
-  border-radius: var(--radius); background: var(--surface-1); text-align: center;
-}
-.rg-sim strong { font-variant-numeric: tabular-nums; }
+/* 요인 카드의 '그때는' 한 줄 — 비슷했던 시기 수 · 그 뒤 1년 오른 시기 · 기저율. */
+.rg-then { display: block; margin-top: 2px; }
+.rg-hist tr.is-current td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 
 .rg-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .rg-timeline li { padding-left: 12px; border-left: 2px solid var(--border); }

@@ -12,11 +12,11 @@
  * 고점 빨강). 안 넘기면 칠하지 않은 카드다. 카드 하나가 **계열 하나의 지금 위치**를
  * 말할 때만 칠한다(거시 요인, 미분양). 17곳을 한 그림에 담은 카드는 점을 칠한다.
  */
-// `edge` 는 왼쪽 막대의 색이다(up | down | none). 주면 막대는 위치가 아니라 **방향**을 말한다 —
-// 카드 바탕은 위치(heat), 막대는 방향. 안 주면 막대도 위치 색이다(공급 분석 미분양 카드).
-export default function PanelCard({ title, sub, onOpen, ready = true, heat, edge, children }) {
+// 왼쪽 막대를 '방향'(가격을 올리는 쪽 · 내리는 쪽)으로 칠하던 `edge` 가 있었다. 거시 분석이 예측을
+// 그만두며(2026-10-18) 그 판정도 걷었다 — 막대는 바탕과 같은 위치 색이다.
+export default function PanelCard({ title, sub, onOpen, ready = true, heat, children }) {
   return (
-    <div className={`factor macro-card${heat ? ' is-heat' : ''}`} style={heat} data-edge={edge}>
+    <div className={`factor macro-card${heat ? ' is-heat' : ''}`} style={heat}>
       <div className="factor-head">
         <button
           className="linklike factor-open"

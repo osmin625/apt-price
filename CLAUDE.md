@@ -22,7 +22,7 @@
 | | 붙여넣은 매물을 단지·평형에 맞추거나 메모를 읽는 규칙을 바꾼다 | [data/listings.md](docs/data/listings.md) |
 | `analysis/` 공급·거시 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
 | | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
-| | 거시 요인을 합친 예측 모델(합치는 법·검증)을 건드린다 | [analysis/macro-model.md](docs/analysis/macro-model.md) |
+| | 거시 요인을 합친 예측 모델을 다시 세우려 한다(걷은 경위·검증 기록) | [analysis/macro-model.md](docs/analysis/macro-model.md) |
 | `engineering/` 코드 다루기 | 코드 위치를 찾는다 | [engineering/architecture.md](docs/engineering/architecture.md) |
 | | 느려진 것을 고친다 | [engineering/performance.md](docs/engineering/performance.md) |
 | | 정적 사이트를 내보내거나 배포한다 | [engineering/deploy.md](docs/engineering/deploy.md) |
@@ -98,7 +98,7 @@
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지,
   코드 주석이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다
-- `scripts/cv_macro.py` — 거시 합산 모델의 합치는 법을 같은 백테스트 + DM 검정으로 견준다
+- `scripts/cv_macro.py` — 거시 합산 모델(화면에서 걷음)의 합치는 법을 같은 백테스트 + DM 검정으로 견준다
 
 새로 최적화할 때도 같은 것을 만든다. "눈으로 보니 같다" 는 근거가 아니다.
 
