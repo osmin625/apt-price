@@ -667,21 +667,22 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-shared { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .rg-shared-row {
   --heat-c: var(--heat-hi); --heat-mix: 0%; --heat-edge: 0%;
-  display: grid; grid-template-columns: 120px 1fr auto 14px; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 120px 96px 1fr auto 14px; align-items: center; gap: 10px;
   width: 100%; padding: 8px 11px; text-align: left; cursor: pointer; font: inherit; color: inherit;
   background: color-mix(in srgb, var(--heat-c) var(--heat-mix), var(--surface-1));
   border: 1px solid var(--border);
   border-left: 4px solid color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--border));
 }
 .rg-shared-row:hover { border-color: var(--accent); }
+.rg-shared-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 왼쪽 막대만 **방향**으로 — 바탕은 위치(heat), 막대는 오름 초록 · 내림 빨강. `data-edge` 가 없으면
    막대도 위치 색 그대로다. 호버의 border-color 가 막대까지 덮지 않게 border-left-color 를 따로 둔다. */
 .macro-card.is-heat[data-edge='up'], .rg-shared-row[data-edge='up'] { border-left-color: var(--good); }
 .macro-card.is-heat[data-edge='down'], .rg-shared-row[data-edge='down'] { border-left-color: var(--neg); }
 .macro-card.is-heat[data-edge='none'], .rg-shared-row[data-edge='none'] { border-left-color: var(--border); }
 @media (max-width: 640px) {
-  .rg-shared-row { grid-template-columns: 1fr 14px; row-gap: 2px; }
-  .rg-shared-row > .muted { grid-column: 1; }
+  .rg-shared-row { grid-template-columns: 1fr auto 14px; row-gap: 2px; }
+  .rg-shared-row > .muted { grid-column: 1 / -1; }
 }
 .heat-pos { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
 /* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */

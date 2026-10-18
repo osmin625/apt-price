@@ -8,7 +8,7 @@ import { heatVars, histZ, zText } from '../components/heat'
 import { FactorDetail } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
 import { PRICE_METRIC } from './registry'
-import { PipeTable, UnsoldTable } from './SupplyTables'
+import { BalanceTable, PipeTable, UnsoldTable } from './SupplyTables'
 import Hint from '../components/Hint'
 
 /**
@@ -168,7 +168,7 @@ function FactorSection({ topic, onLabel }) {
             <b>오른쪽 축</b> — 그 달부터 12개월 동안 {price.region} 매매가격지수 변화(%). 한 달을
             짚으면 그 달의 값과 그 뒤 1년의 결과가 같이 나옵니다. 단위가 달라 축을 둘로 두었으니
             두 선의 높이를 서로 견주지 말고 <b>같이 오르내리는지</b>를 보세요.
-            {f.transform !== 'level' && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
+            {!f.level_like && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
             가격 선의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
           </Hint></p>
           {/* 한 그림에 겹친다. 위아래 두 장으로 나눴더니 같은 달을 눈으로 오가야 해서
@@ -185,11 +185,11 @@ function FactorSection({ topic, onLabel }) {
             unit={f.unit}
             // 금리 차(%p)는 0.25 단위로 움직여 소수 둘째 자리까지 봐야 한다.
             decimals={f.unit === '%p' ? 2 : 1}
-            // 증감률·차이는 0 이 기준이다. 수준값(심리지수·전세가율)은 0 을 넣으면
-            // 선이 위쪽에 납작하게 붙는다. 그때는 0 선도 맞추지 않는다.
-            zero={f.transform !== 'level'}
-            // 심리지수는 100 이 '사겠다 = 팔겠다' 인 중립선이다(up_means 참조).
-            refLine={f.key === 'sentiment' ? 100 : null}
+            // 증감률·차이는 0 이 기준이다. 수준값(심리지수·전세가율·적정 대비 공급)은 0 을
+            // 넣으면 선이 위쪽에 납작하게 붙는다. 그때는 0 선도 맞추지 않는다.
+            zero={!f.level_like}
+            // 기준선은 백엔드가 준다 — 심리지수 100 은 중립, 공급 100 은 적정만큼.
+            refLine={f.ref_line ?? null}
             rightUnit="%"
             rightDecimals={1}
             rightZero
@@ -210,7 +210,7 @@ function SupplySection({ topic }) {
   return (
     <section className="topic-section">
       <SectionHead
-        title={topic.supply === 'pipeline' ? '인허가 → 착공 → 준공' : '지역별 미분양'}
+        title={SUPPLY_TITLE[topic.supply] || topic.supply}
         from="공급 분석"
       />
       {error && <p className="empty">{error.message}</p>}
@@ -219,7 +219,38 @@ function SupplySection({ topic }) {
       {data && topic.supply === 'pipeline' && (
         <PipelineDetail regions={data.regions} initial={topic.region} />
       )}
+      {data && topic.supply === 'balance' && (
+        <BalanceDetail regions={data.regions} initial={topic.region} />
+      )}
     </section>
+  )
+}
+
+const SUPPLY_TITLE = {
+  pipeline: '인허가 → 착공 → 준공',
+  unsold: '지역별 미분양',
+  balance: '적정 공급 대비 준공',
+}
+
+/* 적정 대비 공급. 공급 분석의 카드와 거시 분석의 '공급' 요인이 같은 데이터라 창도 이것
+   하나다. 지역은 고를 수 있고, 거시 분석에서 열면 그 요인의 지역(경기)이 먼저 선다. */
+function BalanceDetail({ regions, initial }) {
+  const pick = regions.find((r) => r.sgg_cd === initial) || regions.find((r) => r.sgg_cd === '41') || regions[0]
+  const [cd, setCd] = useState(pick?.sgg_cd)
+  const r = regions.find((x) => x.sgg_cd === cd) || pick
+  if (!r) return <p className="empty">값이 없습니다</p>
+  return (
+    <>
+      <div className="seg topic-seg" role="tablist">
+        {regions.map((x) => (
+          <button key={x.sgg_cd} role="tab" aria-selected={x.sgg_cd === r.sgg_cd}
+                  onClick={() => setCd(x.sgg_cd)}>
+            {REGION_LABEL[x.region] || x.region}
+          </button>
+        ))}
+      </div>
+      <BalanceTable r={r} />
+    </>
   )
 }
 

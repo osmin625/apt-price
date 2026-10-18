@@ -25,9 +25,11 @@ export const TOPICS = [
   { id: 'jeonse_ratio', title: '전세가율', metric: 'jeonse_ratio', factor: 'jeonse_ratio' },
   { id: 'trade_volume', title: '매매 거래량', metric: 'trade_volume', factor: 'trade' },
   { id: 'unsold', title: '미분양', supply: 'unsold', factor: 'unsold' },
-  // 거시 분석의 '준공 물량' 은 경기 준공의 12개월 누적 전년비다. 같은 계열을 공급
-  // 분석은 인허가·착공과 나란히 수준으로 그린다.
-  { id: 'pipeline', title: '공급 파이프라인 — 인허가 · 착공 · 준공', supply: 'pipeline', factor: 'done' },
+  { id: 'pipeline', title: '공급 파이프라인 — 인허가 · 착공 · 준공', supply: 'pipeline' },
+  // 거시 분석의 '공급' 은 경기의 12개월 준공 ÷ 적정 공급이다. 공급 분석의 '적정보다 더
+  // 지었나' 카드와 같은 데이터라 창이 하나다. 예전에는 거시 분석에 '준공 물량'(준공 12개월
+  // 합의 로그 변화율)이 있었고 파이프라인 창에 묶여 있었다.
+  { id: 'balance', title: '적정 대비 공급', supply: 'balance', factor: 'supply' },
 ]
 
 /**

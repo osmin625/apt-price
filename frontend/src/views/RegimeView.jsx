@@ -131,10 +131,17 @@ export default function RegimeView() {
                         data-edge={edgeOf(f)}
                         onClick={() => setOpen({ kind: 'factor', f })} aria-haspopup="dialog">
                   <strong>{f.label}</strong>
+                  {/* 값을 같이 둔다. 위치(몇 배)만 있으면 '적정의 몇 % 를 지었나' 같은 값
+                      자체를 보려고 창을 열어야 했다. */}
+                  <b className="rg-shared-val">
+                    {fmt(f.latest.value, 1)}{f.unit}
+                    <span className="muted small"> {ymText(f.latest.ym)}</span>
+                  </b>
                   {/* 무엇의 위치인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
                       여기는 그 전년비의 위치라, 같은 자라도 숫자가 다를 수 있다. */}
                   <span className="muted small">
                     {f.transform_label} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
+                    {f.caveat && <Hint tone="warn" notes={[f.caveat]} />}
                   </span>
                   <span className="muted small">카드는 {homeOf(topicFor('factor', f.key))}</span>
                   <span className="factor-caret" aria-hidden="true">&#10530;</span>

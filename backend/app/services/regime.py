@@ -75,7 +75,7 @@ class Factor:
     metric: str
     sgg_cd: str
     region: str
-    transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log
+    transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log | vs_adequate
     unit: str
     up_means: str   # 이 값이 커지면 어떤 뜻인가(화면 설명)
 
@@ -85,8 +85,11 @@ FACTORS: tuple[Factor, ...] = (
     # 건수 계열(준공·미분양·거래량)은 로그 변화율이다(`_log12`). 전년비(%)는 1년 전
     # 값이 작으면 수천 %로 터져 그림과 상관을 그 몇 달이 덮었다. 단위는 비운다 —
     # 로그 변화율은 %가 아니다. 읽는 법은 `TRANSFORM_LABEL` 이 화면에 붙인다.
-    Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll12_log", "",
-           "새 아파트가 더 많이 입주했다"),
+    # '공급' 은 준공을 **적정 공급(가구 증가 + 멸실) 대비**로 잰다(`_vs_adequate`). 예전에는
+    # '준공 물량' — 준공 12개월 합의 로그 변화율 — 이었는데, 그것은 작년보다 더 지었나만
+    # 말하고 **필요한 만큼 지었나** 는 말하지 않는다. 공급 분석이 묻는 질문이 뒤의 것이다.
+    Factor("supply", "공급", "공급", "done", "41", "경기", "vs_adequate", "%",
+           "적정 공급보다 더 지었다(100 이 적정)"),
     Factor("unsold", "공급", "미분양", "unsold", "41", "경기", "log12", "",
            "안 팔린 집이 늘었다"),
     Factor("trade", "수요", "거래량", "trade_volume", "", "경기 남부", "roll12_log", "",
@@ -163,7 +166,60 @@ def _diff12(s: dict[str, float]) -> dict[str, float]:
     return {ks[i]: s[ks[i]] - s[ks[i - 12]] for i in range(12, len(ks))}
 
 
+def _vs_adequate(db: Session, sgg_cd: str) -> dict[str, float]:
+    """12개월 준공 ÷ 적정 공급 × 100. 100 이면 그 1년 동안 적정만큼 지었다.
+
+    적정 공급은 공급 분석과 **같은 값**을 쓴다(`supply.balance` 의 3년평균 기준
+    `adequate_smooth`) — 두 탭이 '적정' 을 다르게 셈하면 같은 해가 한쪽에서는 모자라고
+    다른 쪽에서는 넘친다. 3년평균인 까닭은 가구수 집계가 바뀐 해에 단년 증가가 튀기
+    때문이다(supply 모듈 주석).
+
+    적정은 **연** 값이고 준공 창은 달마다 민다. m월에 끝나는 12개월은 그 해 m개월과 앞 해
+    12−m개월이라, 적정도 그 비율로 두 해를 섞는다.
+
+    적정은 준공보다 **늦게** 공표된다(가구수·멸실이 한 해쯤 늦다). 그 뒤 달에는 마지막으로
+    공표된 해의 적정을 이어 쓴다 — 빼면 이 요인이 한 해 넘게 멈춰 합산 모델의 '지금' 까지
+    끌고 내려간다. 이어 쓴 달은 `adequate_carried` 로 알려 화면이 그렇게 적는다.
+    """
+    from . import supply as sp
+
+    need = {r["year"]: r["adequate_smooth"] for r in sp.balance(db, sgg_cd)["rows"]
+            if r.get("adequate_smooth")}
+    if not need:
+        return {}
+    last_year = max(need)
+    first_year = min(need)
+
+    def need_of(y: str) -> float | None:
+        if y in need:
+            return need[y]
+        return need[last_year] if y > last_year else None
+
+    done12 = _roll12(_raw(db, "done", sgg_cd))
+    out: dict[str, float] = {}
+    for ym, v in done12.items():
+        y, m = ym[:4], int(ym[4:6])
+        if y < first_year or (m < 12 and str(int(y) - 1) < first_year):
+            continue
+        cur, prev = need_of(y), need_of(str(int(y) - 1))
+        if cur is None or (m < 12 and prev is None):
+            continue
+        n = (m * cur + (12 - m) * (prev or 0)) / 12
+        if n > 0:
+            out[ym] = v / n * 100
+    return out
+
+
+def adequate_carried(db: Session, sgg_cd: str = "41") -> str | None:
+    """적정 공급이 공표된 마지막 해. 그 뒤 달의 '공급' 은 이 해 적정을 이어 쓴 값이다."""
+    from . import supply as sp
+
+    return sp.balance(db, sgg_cd).get("adequate_to")
+
+
 def series_of(db: Session, f: Factor) -> dict[str, float]:
+    if f.transform == "vs_adequate":
+        return _vs_adequate(db, f.sgg_cd)
     raw = _raw(db, f.metric, f.sgg_cd)
     if f.transform == "level":
         return raw
@@ -328,7 +384,26 @@ TRANSFORM_LABEL = {
     # 아니라 정의라서 데이터가 바뀌어도 틀리지 않는다.
     "log12": "1년 전 대비 로그 변화율(두 배면 +69)",
     "roll12_log": "12개월 합의 1년 전 대비 로그 변화율(두 배면 +69)",
+    "vs_adequate": "12개월 준공 ÷ 적정 공급(100 이 적정)",
 }
+
+# 높다·낮다로 읽는 변환. 증감(늘었다·줄었다)이 아니라 수준이다 — 문장과 그림의 0 선이 갈린다.
+LEVEL_LIKE = ("level", "vs_adequate")
+
+# 수준값 요인의 기준선. 심리지수는 100 이 '사겠다 = 팔겠다', 공급은 100 이 '적정만큼' 이다.
+# 화면이 요인 키로 짐작하지 않게 여기서 준다.
+REF_LINE = {"sentiment": 100, "supply": 100}
+
+
+def _caveat(db: Session, f: Factor, last: str) -> str | None:
+    """그 요인의 지금 값이 **추정을 낀** 것이면 그렇다고 말한다. 연도는 데이터에서 읽는다."""
+    if f.transform != "vs_adequate":
+        return None
+    to = adequate_carried(db, f.sgg_cd)
+    if to and last[:4] > to:
+        return (f"적정 공급은 {to}년까지 공표돼, 그 뒤 달은 {to}년 적정을 이어 써서 "
+                "나눈 값입니다(준공은 실적).")
+    return None
 
 
 def factor_rows(db: Session) -> list[dict]:
@@ -348,6 +423,10 @@ def factor_rows(db: Session) -> list[dict]:
             "key": f.key, "group": f.group, "label": f.label, "region": f.region,
             "unit": f.unit, "transform": f.transform, "up_means": f.up_means,
             "transform_label": TRANSFORM_LABEL[f.transform],
+            # 0 이 기준인 계열(증감·차이)인가. 수준값은 0 선을 맞추지 않는다.
+            "level_like": f.transform in LEVEL_LIKE,
+            "ref_line": REF_LINE.get(f.key),
+            "caveat": _caveat(db, f, last),
             "latest": {"ym": last, "value": round(s[last], 2)},
             "z": round(z, 2),
             "measured": {"r": r0, "n": prof[0]["n"], "nonoverlap_r": nr,
@@ -578,7 +657,7 @@ def _plain(f: Factor, z: float, x: float, r: float) -> dict:
     일 수 있어 값의 부호까지 본다.
     """
     deg, level = next((lv, w) for t, lv, w in STRENGTH if abs(z) >= t)
-    if f.transform == "level":
+    if f.transform in LEVEL_LIKE:
         now = f"평소보다 {level} {'높다' if z > 0 else '낮다'}"
         high = "높을"
     else:
