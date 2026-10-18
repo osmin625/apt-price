@@ -53,16 +53,14 @@ from ..clients.molit import DISTRICTS
 from ..models import RebStat
 from .policy import COVERS_FROM, POLICY
 
-# 평균에서 얼마나 벗어나야 '높다/낮다' 인가(z). 0.5 안쪽은 '보통', 1.5 바깥은 '매우'.
-# '그때는' 의 '지금과 비슷한 자리'(±0.5, `SIMILAR_BAND`)도 같은 선이다 — 같은 요인을 한 곳은
-# '보통', 다른 곳은 '비슷하지 않다' 라고 하면 자가 둘이다.
+# '그때는' 의 '지금과 비슷한 자리'(±0.5, `SIMILAR_BAND`). 예전에는 과거 국면 표의 다섯 단계
+# (보통 ±0.5 · 매우 ±1.5) 경계이기도 했는데, 그 표가 글자를 빼고 배수만 적게 되며(2026-10-19)
+# 이것 하나만 남았다.
 #
 # 예전에는 여기에 방향을 말하는 최소 상관(`MIN_R` 0.15)과 방향 판정(`_pressure`)이 있었다.
 # 이 탭이 예측을 그만두며(2026-10-18) 걷었다. 실험 틀은 scripts/cv_macro.py 가 자기 값으로 지닌다.
-Z_MID, Z_FAR = 0.5, 1.5
+Z_MID = 0.5
 
-# 상관을 잴 때 필요한 최소 관측. 겹치는 창이라 실제 독립 표본은 이보다 훨씬 적다.
-MIN_OBS = 60
 
 
 @dataclass(frozen=True)
@@ -180,7 +178,7 @@ def _vs_adequate(db: Session, sgg_cd: str) -> dict[str, float]:
     12−m개월이라, 적정도 그 비율로 두 해를 섞는다.
 
     적정은 준공보다 **늦게** 공표된다(가구수·멸실이 한 해쯤 늦다). 그 뒤 달에는 마지막으로
-    공표된 해의 적정을 이어 쓴다 — 빼면 이 요인이 한 해 넘게 멈춰 비슷했던 시기의 '지금' 까지
+    공표된 해의 적정을 이어 쓴다 — 빼면 이 요인이 한 해 넘게 멈춰 국면 표·한 그림의 '지금' 까지
     끌고 내려간다. 이어 쓴 달은 `adequate_carried` 로 알려 화면이 그렇게 적는다.
     """
     from . import supply as sp
@@ -297,7 +295,7 @@ def _corr(a: list[float], b: list[float]) -> float:
 def hist_z(values: list[float], v: float) -> float:
     """`v` 가 자기 역사(`values`) **평균에서 표준편차 몇 배** 떨어져 있나 — **탭 공통의 자**.
 
-    + 면 평균보다 높고 − 면 낮다. 거시 분석의 요인 카드·그때는·과거 국면 표·비슷했던 시기,
+    + 면 평균보다 높고 − 면 낮다. 거시 분석의 요인 카드·그때는·과거 국면 표·한 그림에,
     가격 분석의 국면 점, 공급 분석의 미분양 카드가 모두 이 값으로 칠하고 판정한다. 화면의
     `heat.js` 의 `histZ` 가 같은 공식이다.
 
@@ -324,64 +322,9 @@ def _fwd12(price: dict[str, float], yms: list[str], i: int) -> float | None:
     return None if i + 12 >= len(yms) else (price[yms[i + 12]] / price[yms[i]] - 1) * 100
 
 
-def fwd12_series(price: dict[str, float]) -> list[dict]:
-    """달마다 '그 달부터 12개월 동안 가격이 몇 % 변했나'. 상관을 잴 때 쓰는 그 값이다.
-
-    화면의 '그 뒤 가격과의 관계' 절이 이것을 요인 아래에 같은 시간축으로 그린다.
-    예전에는 요인 한 줄만 그리고 관계는 표에만 있어서, 제목이 말하는 '가격' 이 그림
-    어디에도 없었다. 프론트가 지수에서 다시 계산하지 않고 **같은 `_fwd12` 를 지난
-    값**을 받는다 — 그래야 그림과 표가 다른 계산을 하지 않는다. 마지막 12개월은
-    그 뒤 1년이 아직 오지 않아 없다.
-    """
-    yms = sorted(price)
-    out = []
-    for i, ym in enumerate(yms):
-        f = _fwd12(price, yms, i)
-        if f is not None:
-            out.append({"ym": ym, "v": round(f, 2)})
-    return out
-
-
-def lag_profile(x: dict[str, float], price: dict[str, float],
-                lags: tuple[int, ...] = (0, 6, 12, 18, 24)) -> list[dict]:
-    """시차별 상관. **argmax 하나만 고르지 않는다** — 25개 중 가장 센 것을 고르면
-    고른 값 자체가 우연을 탄다. 프로파일을 통째로 보여 주고 사람이 판단한다."""
-    yms = sorted(price)
-    idx = {y: i for i, y in enumerate(yms)}
-    out = []
-    for h in lags:
-        pairs = []
-        for ym, v in x.items():
-            i = idx.get(ym)
-            if i is None or i + h >= len(yms):
-                continue
-            f = _fwd12(price, yms, i + h)
-            if f is not None:
-                pairs.append((v, f))
-        out.append({
-            "lag": h,
-            "r": round(_corr([p[0] for p in pairs], [p[1] for p in pairs]), 3)
-            if len(pairs) >= MIN_OBS else None,
-            "n": len(pairs),
-        })
-    return out
-
-
-def nonoverlap(x: dict[str, float], price: dict[str, float]) -> tuple[float | None, int]:
-    """매년 12월만 쓴 상관. 겹치는 창의 거품을 걷어 낸다."""
-    yms = sorted(price)
-    idx = {y: i for i, y in enumerate(yms)}
-    pairs = []
-    for ym, v in x.items():
-        i = idx.get(ym)
-        if i is None or not ym.endswith("12"):
-            continue
-        f = _fwd12(price, yms, i)
-        if f is not None:
-            pairs.append((v, f))
-    if len(pairs) < 8:
-        return None, len(pairs)
-    return round(_corr([p[0] for p in pairs], [p[1] for p in pairs]), 3), len(pairs)
+# 요인 창의 '그 뒤 가격과의 관계'(요인 × 그 뒤 12개월 겹친 그림, 시차별 상관, 매년 12월만 쓴
+# 상관)를 2026-10-19 걷었다(요청). 상관을 재는 `lag_profile`·`nonoverlap`·`fwd12_series` 도
+# 같이 걷었다 — 처음 잰 표는 docs/analysis/macro.md '먼저 알아야 할 것' 에 기록으로 있다.
 
 
 # 요인 값이 무엇을 바꾼 것인지 사람이 읽는 이름. 같은 준공이라도 공급 탭은 '호'
@@ -428,11 +371,8 @@ def factor_rows(db: Session) -> list[dict]:
         if not s:
             continue
         last = max(s)
-        prof = lag_profile(s, price)
-        r0 = prof[0]["r"]
-        nr, nn = nonoverlap(s, price)
-        agree = r0 is not None and nr is not None and (r0 > 0) == (nr > 0)
-        z = _z(s, last)
+        vals = list(s.values())
+        z = hist_z(vals, s[last])
         out.append({
             "key": f.key, "group": f.group, "label": f.label, "region": f.region,
             "unit": f.unit, "transform": f.transform, "up_means": f.up_means,
@@ -447,9 +387,11 @@ def factor_rows(db: Session) -> list[dict]:
             "then": factor_then(s, price),
             "latest": {"ym": last, "value": round(s[last], 2)},
             "z": round(z, 2),
-            "measured": {"r": r0, "n": prof[0]["n"], "nonoverlap_r": nr,
-                         "nonoverlap_n": nn, "agree": agree, "profile": prof},
-            "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(s.items())],
+            # 값과 그 달의 z(전체 기간 평균에서 평소 폭의 몇 배). 겹친 그림이 z 로 그린다 —
+            # 단위가 호·%·%p·지수로 제각각이라 한 축에 놓으려면 자를 맞춰야 한다. 화면이
+            # 다시 계산하지 않게 여기서 준다(카드·국면 표와 같은 `hist_z`).
+            "series": [{"ym": k, "v": round(v, 2), "z": round(hist_z(vals, v), 2)}
+                       for k, v in sorted(s.items())],
         })
     return out
 
@@ -457,24 +399,12 @@ def factor_rows(db: Session) -> list[dict]:
 # ──────────────────────────────────────────────────────────
 # 과거 추적 — 그때 각 요인은 어땠고, 집값은 어떻게 됐나
 # ──────────────────────────────────────────────────────────
-# 과거 국면 표의 다섯 단계 — 평균에서 몇 표준편차인가(z). 가운데 경계(±0.5)는 '그때는' 의
-# `Z_MID` 와 같고, 끝의 두 단계(±1.5)는 그 바깥을 한 번 더 가른다. 세 단계일 때는 역대급인 칸과
-# 그냥 높은 칸이 구분되지 않았다. 칸 색은 이 단계가 아니라 z 그대로(연속)다 — 글자는 읽기 쉽게,
-# 색은 끊지 않게. 예전 경계는 백분위 10·30·70·90% 였다(`hist_z` 주석).
-def _state(z: float) -> str:
-    if z <= -Z_FAR:
-        return "매우 낮음"
-    if z <= -Z_MID:
-        return "낮음"
-    if z >= Z_FAR:
-        return "매우 높음"
-    if z >= Z_MID:
-        return "높음"
-    return "보통"
+def history(db: Session) -> dict:
+    """**달마다** 각 요인의 위치(z)와 **그 뒤 12개월 가격 변화**를 함께 적는다.
 
-
-def history(db: Session, step: int = 6) -> dict:
-    """반년마다 각 요인의 상태와 **그 뒤 12개월 가격 변화**를 함께 적는다.
+    예전에는 반년마다였고 칸에 '낮음·매우 낮음' 같은 글자를 적었다. 2026-10-19 요청으로 달마다
+    내고(화면이 분기·월을 고른다) 글자 없이 배수만 적는다 — 글자는 ±0.5·±1.5 에서 끊겨 0.49 와
+    0.51 이 다른 말이 됐다.
 
     인과를 말하지 않는다. "그때 이랬고 그 뒤 이랬다" 만 적는다 — 요인은 서로
     얽혀 있고(금리가 낮으면 대출이 늘고 심리가 산다) 표본은 스무 해뿐이다.
@@ -486,14 +416,12 @@ def history(db: Session, step: int = 6) -> dict:
     # 각 계열의 평균·표준편차는 **그 시점까지가 아니라 전체 기간** 기준이다. 보는 사람이
     # '지금 높음' 과 '그때 높음' 을 같은 자로 견주려면 자가 하나여야 한다.
     rows = []
-    for i in range(0, len(yms), step):
-        ym = yms[i]
+    for i, ym in enumerate(yms):
         states = {}
         for f, s in cols:
             if ym in s:
                 z = _z(s, ym)
-                states[f.key] = {"state": _state(z), "z": round(z, 2),
-                                 "v": round(s[ym], 2)}
+                states[f.key] = {"z": round(z, 2), "v": round(s[ym], 2)}
         if not states:
             continue
         rows.append({
@@ -502,12 +430,7 @@ def history(db: Session, step: int = 6) -> dict:
             "fwd12": (round(_fwd12(price, yms, i), 2)
                       if _fwd12(price, yms, i) is not None else None),
         })
-    return {"step_months": step, "rows": rows,
-            # 다섯 단계의 경계. 화면 범례가 이것을 읽는다 — 화면에 경계를 따로 적으면
-            # 여기와 어긋난다.
-            "levels": [{"label": "매우 낮음", "max": -Z_FAR}, {"label": "낮음", "max": -Z_MID},
-                       {"label": "보통"}, {"label": "높음", "min": Z_MID},
-                       {"label": "매우 높음", "min": Z_FAR}],
+    return {"rows": rows,
             # 표본 길이를 문구에 얼리지 않는다('스무 해') — 해마다 하나씩 는다.
             "note": ("그때의 요인 상태와 그 뒤 12개월 가격 변화를 나란히 둔 것입니다. "
                      "요인이 가격을 움직였다는 뜻이 아닙니다 — 요인들은 서로 얽혀 "
@@ -533,9 +456,6 @@ SIMILAR_BAND = Z_MID          # 요인 하나가 '지금과 비슷한 자리' �
 EPISODE_GAP = 12              # 이만큼 안에 이어지는 달은 한 시기다(12개월 창이 11개월을 겹친다)
 RECENT_EXCLUDE = 24           # 지금과 이어진 최근은 뺀다
 HORIZONS = (6, 12, 24)        # 그 뒤 몇 개월
-NEAR_MONTHS = 36              # 비슷했던 시기 — 가까운 달을 이만큼 고른 뒤 시기로 묶는다
-MAX_EPISODES = 5
-PATH_SPAN = (-12, 24)         # 가격 경로를 그 시기 기준 달 앞뒤로 이만큼
 
 
 def _gap(a: str, b: str) -> int:
@@ -599,7 +519,7 @@ def factor_then(s: dict[str, float], price: dict[str, float]) -> dict:
     """그 요인이 **지금과 비슷한 자리**(z ±`SIMILAR_BAND`)였던 시기와 그 뒤.
 
     요인 하나만 맞춘 것이라 다른 요인은 그때 전혀 달랐을 수 있다 — 시기마다 무엇이 겹쳤는지는
-    '비슷했던 시기' 가 요인 전부로 본다.
+    거시 분석의 '한 그림에' 와 과거 국면 표가 요인을 함께 보인다.
     """
     last = max(s)
     vals = list(s.values())
@@ -615,59 +535,6 @@ def factor_then(s: dict[str, float], price: dict[str, float]) -> dict:
                                                      if e["fwd"]["12"] is not None]), 2)
                                      if eps else None)},
             "base": base_rate(price, pool)}
-
-
-def similar_periods(db: Session) -> dict:
-    """요인 **전부**가 지금과 가까웠던 시기를 찾아 그 뒤를 보인다.
-
-    거리는 요인마다 z 차의 제곱합이다(단위가 제각각이라 z 로 맞춘다). 가까운 달을
-    `NEAR_MONTHS` 개 고른 뒤 시기로 묶고, 시기마다 가장 가까운 달을 기준 달로 삼는다.
-    """
-    price = price_series(db)
-    yms = sorted(price)
-    idx = {y: i for i, y in enumerate(yms)}
-    cols = [(f, series_of(db, f)) for f in FACTORS]
-    common = sorted(set.intersection(*[set(s) for _, s in cols]) & set(price))
-    if len(common) < 48:
-        return {"available": False,
-                "note": "요인이 모두 갖춰진 달이 모자라 비교할 수 없습니다."}
-    zs = {f.key: {ym: hist_z(list(s.values()), v) for ym, v in s.items()} for f, s in cols}
-    now = common[-1]
-    zn = {k: z[now] for k, z in zs.items()}
-    pool = [ym for ym in common if _gap(ym, now) >= RECENT_EXCLUDE
-            and _fwd(price, yms, idx[ym], 12) is not None]
-    dist = {ym: math.sqrt(sum((zs[k][ym] - zn[k]) ** 2 for k in zn)) for ym in pool}
-    near = sorted(pool, key=dist.get)[:NEAR_MONTHS]
-    eps = []
-    for e in _episodes(near):
-        pick = min(e, key=dist.get)
-        i = idx[pick]
-        path = []
-        for k in range(PATH_SPAN[0], PATH_SPAN[1] + 1):
-            if 0 <= i + k < len(yms):
-                path.append({"k": k, "v": round((price[yms[i + k]] / price[pick] - 1) * 100, 2)})
-        fwd = {str(k): (round(v, 2) if (v := _fwd(price, yms, i, k)) is not None else None)
-               for k in HORIZONS}
-        eps.append({"from": e[0], "to": e[-1], "months": len(e), "pick": pick,
-                    "distance": round(dist[pick], 2),
-                    "z": {k: round(zs[k][pick], 2) for k in zn},
-                    "fwd": fwd, "path": path})
-    eps.sort(key=lambda e: e["distance"])
-    eps = eps[:MAX_EPISODES]
-    return {
-        "available": True,
-        "now": now,
-        "now_z": {k: round(v, 2) for k, v in zn.items()},
-        "episodes": eps,
-        "summary": {"episodes": len(eps),
-                    "up": sum(1 for e in eps if (e["fwd"]["12"] or 0) > 0)},
-        "base": base_rate(price, pool),
-        "params": {"near_months": NEAR_MONTHS, "max_episodes": MAX_EPISODES,
-                   "exclude_recent": RECENT_EXCLUDE, "episode_gap": EPISODE_GAP},
-        "note": ("요인 상태가 지금과 가장 가까웠던 시기들입니다. 이웃한 달은 한 시기로 묶었고, "
-                 "지금과 이어진 최근은 뺐습니다. 그 뒤에 무슨 일이 있었는지 보여 줄 뿐 "
-                 "예측이 아닙니다 — 시기 수가 작고, 같은 요인 상태라도 다른 사정이 겹쳐 있었습니다."),
-    }
 
 
 # ──────────────────────────────────────────────────────────
@@ -724,19 +591,19 @@ def overview(db: Session) -> dict:
     yms = sorted(price)
     last = yms[-1]
     yoy = ((price[last] / price[yms[-13]] - 1) * 100) if len(yms) > 13 else None
-    # 가장 센 상관을 **그 자리에서** 잰다. 문구에 '0.42' 를 적어 두었더니 화면의
-    # 다른 곳은 0.45 라고 하고 있었다 — 데이터가 바뀌면 문구가 먼저 틀린다.
-    rs = [abs(f["measured"]["r"]) for f in factors if f["measured"]["r"] is not None]
-    max_r = round(max(rs), 2) if rs else None
+    # 매매지수는 **1년 변화율**로 겹친다. 지수 수준은 추세로만 올라 z 가 '요즘이 높다' 만
+    # 말한다 — 요인들(대개 증감)과 같은 결로 견주려면 변화율이다.
+    py = _yoy(price)
+    pv = list(py.values())
     return {
-        "max_abs_r": max_r,
         "price": {
             "region": f"경기 남부 {len(DISTRICTS)}개 시군구",
             "ym": last,
             "index": round(price[last], 2),
             "yoy": round(yoy, 2) if yoy is not None else None,
             "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(price.items())],
-            "fwd12": fwd12_series(price),
+            "yoy_series": [{"ym": k, "v": round(v, 2), "z": round(hist_z(pv, v), 2)}
+                           for k, v in sorted(py.items())],
         },
         "groups": list(GROUP_ORDER),
         "factors": factors,
@@ -744,7 +611,6 @@ def overview(db: Session) -> dict:
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
         "history": history(db),
-        "similar": similar_periods(db),
         # '가장 센 것도 0.50 이라 어느 요인도 혼자서는 설명하지 못한다' 를 적었었다.
         # 값은 그 자리에서 쟀지만 **판정('못한다')은 그날의 값에 묶여** 있어, 센 요인이
         # 생기면 숫자만 바뀌고 문장은 틀린다. 판정은 빼고 방법과 지역만 남긴다.

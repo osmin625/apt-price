@@ -5,7 +5,7 @@ import { fmt } from '../components/Charts'
 import Modal from '../components/Modal'
 import TimeLines from '../components/TimeLines'
 import { heatVars, histZ, zText } from '../components/heat'
-import { FactorDetail } from './FactorAnalysis'
+import { FactorThen } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
 import { PRICE_METRIC } from './registry'
 import { BalanceTable, PipeTable, UnsoldTable } from './SupplyTables'
@@ -138,7 +138,10 @@ function MetricSection({ topic, fallback = false, hidden: hiddenProp, onToggle, 
   )
 }
 
-/* ── 가격과의 관계 — 거시 분석 ───────────────────────────────────────── */
+/* ── 요인 — 거시 분석 ───────────────────────────────────────────────── */
+/* 요인 하나의 추이와, 지금과 비슷한 자리였던 때 그 뒤. '그 뒤 가격과의 관계'(요인 × 그 뒤 12개월
+   겹친 그림, 시차별 상관)가 있었는데 2026-10-19 걷었다 — 요인과 매매지수를 견주는 것은 거시
+   분석의 '한 그림에' 가 모든 요인을 한꺼번에 한다(ui-log). */
 function FactorSection({ topic, onLabel }) {
   const { data, error } = useLoad('regime', () => api.regimeOverview())
   const f = data?.factors?.find((x) => x.key === topic.factor)
@@ -146,58 +149,34 @@ function FactorSection({ topic, onLabel }) {
     if (f) onLabel(f.label)
   }, [f])
 
-  // x 축은 **요인의 기간**으로 자른다. 가격은 더 길게(2003~) 있지만, 요인이 없는 해까지
-  // 그리면 견줄 것이 없는 구간이 그림의 절반을 차지한다.
-  const months = f ? f.series.map((p) => p.ym) : null
-  const price = data?.price
-
   return (
     <section className="topic-section">
-      <SectionHead title="그 뒤 가격과의 관계" from="거시 분석" />
+      <SectionHead title="지금 위치와 비슷했던 때" from="거시 분석" />
       {error && <p className="empty">{error.message}</p>}
       {!data && !error && <p className="empty">불러오는 중</p>}
       {data && !f && <p className="empty">이 요인의 값이 없습니다</p>}
       {f && (
         <>
-          {/* 이 절이 무엇을 무엇과 견주는지. 위 절과 단위·지역이 달라 말해 두지 않으면
-              같은 데이터를 다르게 그린 것처럼 보인다. 숫자는 넣지 않는다 — 모든 요인이
-              같은 문장을 쓴다. */}
-          <p className="muted small"><Hint pill wide label="설명">
+          <p className="muted small">
             {/* 이름 뒤에 조사를 붙이지 않는다 — 요인마다 받침이 달라('소비심리과') 틀린다. */}
-            선 둘을 겹쳤습니다. <b>왼쪽 축</b> — {f.label}({f.region}), {f.transform_label}.{' '}
-            <b>오른쪽 축</b> — 그 달부터 12개월 동안 {price.region} 매매가격지수 변화(%). 한 달을
-            짚으면 그 달의 값과 그 뒤 1년의 결과가 같이 나옵니다. 단위가 달라 축을 둘로 두었으니
-            두 선의 높이를 서로 견주지 말고 <b>같이 오르내리는지</b>를 보세요.
-            {!f.level_like && ' 두 축의 0 선은 같은 높이입니다.'}{' '}
-            가격 선의 마지막 1년이 비어 있는 것은 그 뒤 1년이 아직 오지 않아서입니다.
-          </Hint></p>
-          {/* 한 그림에 겹친다. 위아래 두 장으로 나눴더니 같은 달을 눈으로 오가야 해서
-              '같이 움직였나' 가 한 번에 안 보였다(ui-log). 단위가 요인마다 달라(%·%p·
-              지수) 축은 둘이다. 가격 값은 백엔드가 상관을 잴 때 쓴 그 `_fwd12` 다 —
-              그림과 표가 다른 계산을 하지 않는다. */}
+            {f.label}({f.region}) · {f.transform_label} · {zText(f.z)}
+            {f.caveat && <Hint tone="warn" notes={[f.caveat]} />}
+          </p>
           <TimeLines
-            series={[
-              { key: f.key, label: f.label, color: 'var(--series-1)',
-                points: f.series.map((p) => ({ ym: p.ym, value: p.v })) },
-              { key: 'fwd12', label: '그 뒤 12개월 가격 변화', color: 'var(--series-2)', axis: 'right',
-                points: (price.fwd12 || []).map((p) => ({ ym: p.ym, value: p.v })) },
-            ]}
+            series={[{ key: f.key, label: f.label, color: 'var(--series-1)',
+                       points: f.series.map((p) => ({ ym: p.ym, value: p.v })) }]}
             unit={f.unit}
             // 금리 차(%p)는 0.25 단위로 움직여 소수 둘째 자리까지 봐야 한다.
-            decimals={f.unit === '%p' ? 2 : 1}
-            // 증감률·차이는 0 이 기준이다. 수준값(심리지수·전세가율·적정 대비 공급)은 0 을
-            // 넣으면 선이 위쪽에 납작하게 붙는다. 그때는 0 선도 맞추지 않는다.
+            decimals={f.unit === '%p' ? 2 : f.unit === '호' ? 0 : 1}
+            // 증감률·차이는 0 이 기준이고, 수준값(심리지수·전세가율·누적 공급)은 0 을 넣으면
+            // 선이 한쪽에 납작하게 붙는다.
             zero={!f.level_like}
-            // 기준선은 백엔드가 준다 — 심리지수 100 은 중립, 공급 100 은 적정만큼.
+            // 기준선은 백엔드가 준다 — 심리지수 100 은 중립, 누적 공급 0 은 그동안 적정만큼.
             refLine={f.ref_line ?? null}
-            rightUnit="%"
-            rightDecimals={1}
-            rightZero
-            height={260}
-            months={months}
-            ariaLabel={`${f.label}(${f.region})과 그 뒤 12개월 ${price.region} 매매가격 변화`}
+            height={220}
+            ariaLabel={`${f.label}(${f.region}) 추이`}
           />
-          <FactorDetail f={f} />
+          <FactorThen t={f.then} />
         </>
       )}
     </section>
