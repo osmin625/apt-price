@@ -148,6 +148,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/supply/overview", {}),
         # 거시 — 요인 상관을 서버에서 재서 담아 보낸다. 파라미터가 없다.
         Req("/api/regime/overview", {}),
+        # 매매·전세·월세 — 대출 비율은 화면이 바꿔 계산하므로 재료 한 벌이면 된다.
+        Req("/api/tenure/overview", {}),
     ]
 
     # 매크로 인사이트.
@@ -351,7 +353,7 @@ def main() -> int:
         "months": list(MONTHS),
         # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
         # 프론트의 탭 id 와 같아야 한다. 합쳤다가 다시 나누면서 market -> micro 가 됐다.
-        "tabs": (["micro", "macro", "supply", "regime", "map"]
+        "tabs": (["micro", "macro", "supply", "regime", "tenure", "map"]
                  + (["ranking"] if with_quotes else [])),
         "includes_quotes": with_quotes,
         "data": data_counts(),

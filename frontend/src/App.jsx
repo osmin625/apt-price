@@ -11,6 +11,7 @@ import CompareView from './views/CompareView'
 import RankingView from './views/RankingView'
 import RegimeView from './views/RegimeView'
 import SupplyView from './views/SupplyView'
+import TenureView from './views/TenureView'
 
 /**
  * `static: true` 인 탭만 정적 사이트에 실린다.
@@ -42,6 +43,9 @@ const TABS = [
   // 놓고 **어느 쪽으로 미는지**를 본다. 공급 탭과 겹치는 것은 준공·미분양뿐이고,
   // 거기서는 '얼마나 모자라나', 여기서는 '그래서 어느 쪽인가' 를 묻는다.
   { id: 'regime', label: '거시 분석', static: true },
+  // 거시 탭이 '가격을 어느 쪽으로 미나' 라면, 여기는 '수요가 어느 점유 형태로 옮겨 가나' 다.
+  // 같은 금리가 매매·전세·월세에 다르게 닿는 것을 보려면 세 가격이 한 화면에 있어야 한다.
+  { id: 'tenure', label: '매매·전세·월세', static: true },
   { id: 'map', label: '지도', static: STATIC_MAP },
   // 정적 사이트에도 싣는다. 적합 결과(`/model/fit`)는 이미 내보내고 있었고, 묶어 보기
   // (`/model/groups`)만 더하면 됐다. 맨 위 수식(`ModelFormula`)이 탭의 입구다.
@@ -183,6 +187,8 @@ export default function App() {
         <SupplyView />
       ) : tab === 'regime' ? (
         <RegimeView />
+      ) : tab === 'tenure' ? (
+        <TenureView />
       ) : tab === 'map' ? (
         <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
       ) : tab === 'model' ? (

@@ -214,6 +214,7 @@ export const api = {
   // 공급은 카드 네 장이 같은 적재를 본다. 따로 부르면 화면이 네 번 깜빡인다.
   supplyOverview: () => request('/supply/overview'),
   regimeOverview: () => request('/regime/overview'),
+  tenureOverview: () => request('/tenure/overview'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),

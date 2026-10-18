@@ -18,6 +18,7 @@ from .routers import (
     quotes,
     regime,
     supply,
+    tenure,
 )
 from .services import fit_worker, hedonic, model_view
 
@@ -47,6 +48,7 @@ app.include_router(quotes.router)
 app.include_router(macro.router)
 app.include_router(supply.router)
 app.include_router(regime.router)
+app.include_router(tenure.router)
 
 
 @app.on_event("startup")

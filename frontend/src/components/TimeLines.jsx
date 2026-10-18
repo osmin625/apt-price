@@ -26,6 +26,11 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  * 두 축이 다 0 을 넣으면(`zero` 와 `rightZero`) **0 선을 같은 높이에** 맞춘다. 증감률끼리
  * 견줄 때 읽는 것은 '둘 다 0 위인가 아래인가' 인데, 0 이 축마다 다른 높이에 있으면
  * 같이 움직이지 않는 두 선도 겹쳐 보인다.
+ *
+ * ## 띠
+ *
+ * `bands`: [{ from, to, label? }] — 그 기간을 옅게 칠한다(금리 인상기). 선과 다른 층이라
+ * 선 색을 가리지 않게 맨 아래에 깐다. 한 달짜리 띠도 보이도록 양쪽으로 반 달씩 넓힌다.
  */
 /* 축 범위 안의 눈금. 0 선을 맞추려고 범위를 늘리면 눈금 계산에서 -0 이 나와 축에
    '-0' 이 찍혔다(미분양 창 오른쪽 축) — 0 으로 바로잡는다. */
@@ -52,6 +57,7 @@ export default function TimeLines({
   rightUnit = '',
   rightDecimals = 0,
   rightZero = false,
+  bands = [],
 }) {
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState(null)
@@ -124,12 +130,24 @@ export default function TimeLines({
     const every = Math.ceil(years.length / Math.max(Math.floor(iw / 56), 1))
     const yearMarks = years.filter((_, i) => i % every === 0)
 
+    const step = iw / Math.max(months.length - 1, 1)
+    const shade = bands
+      .map((b) => {
+        const a = months.find((m) => m >= b.from)
+        const z = [...months].reverse().find((m) => m <= b.to)
+        if (!a || !z || a > z) return null
+        const x0 = Math.max(PAD.l, xOf(a) - step / 2)
+        const x1 = Math.min(PAD.l + iw, xOf(z) + step / 2)
+        return { key: `${b.from}-${b.to}`, x: x0, w: x1 - x0, label: b.label }
+      })
+      .filter(Boolean)
+
     return {
-      months, xOf, yL, yR, iw, ih, lookup, paths, yearMarks,
+      months, xOf, yL, yR, iw, ih, lookup, paths, yearMarks, shade,
       ticksL: L ? axisTicks(L) : [],
       ticksR: R ? axisTicks(R) : [],
     }
-  }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero])
+  }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero, bands])
 
   if (!g) return <p className="empty">값이 없습니다</p>
 
@@ -155,6 +173,9 @@ export default function TimeLines({
     <div className="macro-chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${height}`} role="img" aria-label={ariaLabel}
            onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        {g.shade.map((b) => (
+          <rect key={b.key} x={b.x} y={PAD.t} width={b.w} height={g.ih} fill="var(--band)" />
+        ))}
         {g.ticksL.map((t) => (
           <g key={`l${t}`}>
             <line x1={PAD.l} x2={W - PAD.r} y1={g.yL(t)} y2={g.yL(t)}
@@ -205,10 +226,12 @@ export default function TimeLines({
       </svg>
       {series.length > 1 && (
         <div className="legend">
+          {/* 점선 표식은 `.swatch.dash` 의 background-image 로 그린다. 예전에 `background: 'none'`
+              을 줬더니 그 무늬까지 지워져 점선 계열의 범례만 빈칸이었다 — 색만 빼려면 backgroundColor. */}
           {series.map((s) => (
             <span className="key" key={s.key}>
               <span className={`swatch${s.dash ? ' dash' : ''}`}
-                    style={s.dash ? { color: s.color, background: 'none' } : { background: s.color }} />
+                    style={s.dash ? { color: s.color, backgroundColor: 'transparent' } : { background: s.color }} />
               {s.label}
               {hasRight && <span className="muted"> ({s.axis === 'right' ? '오른쪽' : '왼쪽'} 축)</span>}
             </span>
