@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Tile, fmt } from './Charts'
 import Loading from './Loading'
 import ScatterFit from './ScatterFit'
+import Hint from './Hint'
 
 /**
  * 역까지 도보거리를 **깊게** 보는 화면. 시장 분석의 도보거리 카드에서 펼친다.
@@ -83,12 +84,12 @@ export default function WalkDetail({ months, onSelect }) {
       {fit.within_walk && (
         <>
           <h3>같은 단지 안에서 본 거리 효과</h3>
-          <p className="muted small">
+          <p className="muted small"><Hint pill wide label="설명">
             국토부가 공개하는 <b>동 정보</b>로 동별 좌표를 찾아, 같은 단지 안에서 역에 가까운
             동과 먼 동을 비교한 값입니다. 학군·브랜드·관리상태·연식·구 입지가 모두 같은
             단지이므로 <b>교란이 원천적으로 없습니다</b> — 이 데이터로 얻을 수 있는 가장
             깨끗한 비교입니다. 대신 단지 내 거리 편차가 좁아 넓은 범위로 외삽하면 안 됩니다.
-          </p>
+          </Hint></p>
           <div className="tiles compact">
             <Tile
               label="같은 단지 안 · 도보 1분당"
@@ -106,11 +107,11 @@ export default function WalkDetail({ months, onSelect }) {
               sub={`전체 ${fmt(fit.n_obs)}건 중`}
             />
           </div>
-          <p className="muted small">
+          <p className="muted small"><Hint pill wide label="설명">
             두 값이 비슷하면 단지 간 비교에 큰 교란이 없다는 뜻이고, 크게 다르면 단지 간
             추정치에 거리 외의 요인이 섞여 있다는 신호입니다. 어느 하나가 정답이 아니라
             서로 다른 질문의 답입니다.
-          </p>
+          </Hint></p>
         </>
       )}
     </div>

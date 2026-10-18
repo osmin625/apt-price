@@ -5,6 +5,7 @@ import { fmt, useMeasure, useTooltip } from '../components/Charts'
 import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
+import Hint from '../components/Hint'
 import { heatVars, histZ, zText } from '../components/heat'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
@@ -81,27 +82,18 @@ export default function SupplyView() {
   return (
     <>
       <section className="card">
-        <h2>공급이 가격을 어디로 미나</h2>
-        <p className="sub">
-          <b>적정 공급 = 가구 증가 + 멸실</b> 로 계산합니다. 해마다 달라지는 값이라
-          고정된 목표치를 두지 않았습니다. 공급은 2~3년 전에 정해져 지금 나타나므로,
-          지금 부족하면 그 영향은 몇 해 더 갑니다.
-        </p>
-      </section>
-
-      <section className="card">
-        <h2>적정보다 더 지었나, 덜 지었나</h2>
-        <p className="sub">
-          <b>적정 공급</b>과 <b>준공</b>을 같은 축에 겹쳤습니다. 준공이 아래로 내려가
-          붉게 칠해진 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 <b>덜 지은 해</b>
-          이고, 파랗게 칠해진 해는 <b>더 지은 해</b>입니다. 차이만 그리면 적정이 커진
-          것인지 준공이 준 것인지 알 수 없어 두 선을 같이 둡니다.
-        </p>
-        <p className="sub">
-          점선은 <b>해마다의 차이를 더해 온 값</b>입니다(오른쪽 축). 더 지은 해에는
-          올라가고 <b>덜 지은 해에는 내려갑니다</b> — 한 방향으로만 쌓이는 값이
-          아닙니다. 0 아래로 내려가면 그 기간 전체로 덜 지었다는 뜻입니다.
-        </p>
+        <h2>
+          적정보다 더 지었나, 덜 지었나
+          <Hint
+            wide
+            notes={[
+              '적정 공급 = 가구 증가 + 멸실. 해마다 달라지는 값이라 고정된 목표치를 두지 않습니다. 공급은 2~3년 전에 정해져 지금 나타나므로, 지금 부족하면 그 영향은 몇 해 더 갑니다.',
+              '적정 공급과 준공을 같은 축에 겹쳤습니다. 붉게 칠한 해는 그해 새로 생긴 가구와 없어진 집을 합친 것보다 덜 지은 해, 파랗게 칠한 해는 더 지은 해입니다.',
+              '점선은 해마다의 차이를 더해 온 값입니다(오른쪽 축). 0 아래로 내려가면 그 기간 전체로 덜 지었다는 뜻입니다.',
+              data.note,
+            ]}
+          />
+        </h2>
         <div className="macro-grid">
           {data.regions.map((r) => (
             <PanelCard
@@ -140,22 +132,20 @@ export default function SupplyView() {
             <AgeBars bands={data.age_pressure.bands} />
           </PanelCard>
         </div>
-        <p className="muted small">{data.note}</p>
       </section>
 
       <section className="card">
-        <h2>경기 남부는 얼마나 지어졌나</h2>
-        <p className="sub">
-          공급 통계가 시 단위로 오지 않아, <b>K-apt 의무관리대상 아파트를 경기 남부 구
-          전수로 받아</b> 사용승인 연도별로 모았습니다. 위의 '준공' 과는 다른 값입니다
-          — 소규모 단지와 비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게
-          잡힙니다. <b>적정 공급에서 빼지 않고 추세만 봅니다.</b>
-        </p>
-        <p className="sub">
-          짝이 되는 <b>가구 증가</b>도 경기도기본통계에서 시 단위로 받아 나란히 둡니다.
-          다만 <b>빼지 않습니다</b> — 가구 증가는 모든 주택 유형의 수요이고, 위 값은
-          아파트만이라 1:1 로 맞물리지 않습니다.
-        </p>
+        <h2>
+          경기 남부는 얼마나 지어졌나
+          <Hint
+            wide
+            notes={[
+              '공급 통계가 시 단위로 오지 않아, K-apt 의무관리대상 아파트를 경기 남부 구 전수로 받아 사용승인 연도별로 모았습니다.',
+              "위의 '준공' 과는 다른 값입니다 — 소규모 단지와 비아파트가 빠지고, 철거된 단지가 없어 과거일수록 적게 잡힙니다. 적정 공급에서 빼지 않고 추세만 봅니다.",
+              '짝이 되는 가구 증가도 경기도기본통계에서 시 단위로 받아 나란히 두지만 빼지 않습니다 — 가구 증가는 모든 주택 유형의 수요이고, 위 값은 아파트만입니다.',
+            ]}
+          />
+        </h2>
         <div className="macro-grid">
           <PanelCard
             title="경기 남부 아파트 입주 물량"
@@ -174,12 +164,16 @@ export default function SupplyView() {
       )}
 
       <section className="card">
-        <h2>미분양 — 지어 놓고 안 팔린 집</h2>
-        <p className="sub">
-          공급 지표 가운데 <b>시 단위가 있는 것은 미분양뿐</b>입니다. 그래서 여기서만
-          경기 남부를 따로 낼 수 있습니다. 지역마다 자릿수가 달라 한 축에 겹치지 않고
-          카드를 나눴습니다.
-        </p>
+        <h2>
+          미분양 — 지어 놓고 안 팔린 집
+          <Hint
+            notes={[
+              '공급 지표 가운데 시 단위가 있는 것은 미분양뿐이라, 여기서만 경기 남부를 따로 낼 수 있습니다.',
+              '지역마다 자릿수가 달라 한 축에 겹치지 않고 카드를 나눴습니다.',
+              data.unsold.note,
+            ]}
+          />
+        </h2>
         <HeatLegend>
           카드 색은 지금 미분양이 그 지역의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다
         </HeatLegend>
@@ -196,7 +190,6 @@ export default function SupplyView() {
             </PanelCard>
           ))}
         </div>
-        <p className="muted small">{data.unsold.note}</p>
       </section>
 
       {/* 미분양·파이프라인은 거시 분석에도 카드가 있다(미분양 · 준공 물량). 어디서
@@ -659,20 +652,19 @@ function SouthTable({ d }) {
     <>
       <p className="sub">{d.note}</p>
       {x && (
-        <p className="sub">
+        <p className="muted small"><Hint pill wide label="설명">
           <b>다른 자료와 맞춰 봤습니다.</b> {x.from}~{x.to}년 아파트 재고가{' '}
           {fmt(x.stock_delta)}호 늘었고(주택총조사), 같은 기간 입주 물량 합은{' '}
           {fmt(x.kapt_sum)}세대입니다(K-apt). 차이 {x.gap_pct}% — 기관도 방식도 다른 두
-          자료가 이만큼 맞으면 위 숫자를 믿을 근거가 됩니다. 남는 차이는 멸실분과 연말
-          기준 시차로 설명됩니다.
-        </p>
+          자료라, 남는 차이에는 멸실분과 연말 기준 시차가 들어 있습니다.
+        </Hint></p>
       )}
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         전수 {fmt(c.units)}곳 가운데 세대수가 있는 단지 {fmt(c.with_households)}곳,
         사용승인 연도가 있는 단지 {fmt(c.with_year)}곳입니다. 가구 증가는 시군구 값이
         있는 2021년부터만 냅니다 — 2015~2020 은 공표 자료에 시군구가 비어 있고,
         2021년에 주택수 출처가 바뀌어 그 앞과 이어지지 않습니다.
-      </p>
+      </Hint></p>
       <div className="table-wrap">
         <table className="coef">
           <thead>
@@ -766,12 +758,12 @@ function BalanceTable({ r }) {
       {/* 창에서는 3년 이동평균까지 셋을 그린다. 축소판은 둘만 — 카드가 답하는
           질문은 '볼 만한가' 하나다(PanelCard 주석). */}
       <GapLines rows={r.rows} height={210} smooth axis cumFrom={r.cum_from} />
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         적정 공급은 <b>가구 증가 + 멸실</b>입니다. 가구수는 '천' 단위로 공표되어
         1,000을 곱했습니다. 단년 증가분은 집계 기준이 바뀐 해에 튀므로 그림에서는{' '}
         <b>3년 이동평균을 기준선으로</b> 쓰고 단년은 옅게 겹칩니다. 중위 증가의 25%
         에 못 미치는 해를 '튄 해' 로 보아 그림에 테두리만 있는 점으로 표시합니다.
-      </p>
+      </Hint></p>
       <div className="table-wrap">
         <table className="coef">
           <thead>
@@ -816,10 +808,10 @@ function BalanceTable({ r }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         준공은 <b>12개월이 다 있는 해만</b> 셉니다. 올해는 아직 안 끝나서 빠집니다 —
-        8월까지만 더해 '올해 공급이 급감했다'고 적으면 거짓이 됩니다.
-      </p>
+        몇 달 치만 더해 '올해 공급이 급감했다'고 적으면 거짓이 됩니다.
+      </Hint></p>
       <NeedEnd r={r} />
     </>
   )
@@ -841,10 +833,10 @@ function NeedEnd({ r }) {
     ? `가구수·멸실은 ${r.households_to}년까지라`
     : `가구수는 ${r.households_to}년, 멸실은 ${r.demolish_to}년까지라`
   return (
-    <p className="muted small">
+    <p className="muted small"><Hint pill wide label="설명">
       {src} 적정 공급도 <b>{r.adequate_to}년까지</b>입니다. {span}은 준공만 있어 점만
       찍고 적정·차이 칸은 비워 둡니다. 누적 차이도 {r.adequate_to}년에서 멈춥니다.
-    </p>
+    </Hint></p>
   )
 }
 
@@ -879,11 +871,11 @@ function LeadDetail({ seoul, gg }) {
       <p className="paste-warn" style={{ marginTop: 12 }}>
         <b>서울은 가늠하지 않습니다.</b> {seoul?.lead?.note}
       </p>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         미래 입주 예정 물량은 공표 통계에 없습니다 — 준공실적은 이미 지어진 것이고,
         예정치는 민간 집계입니다. 여기 값은 <b>착공으로 미룬 추정</b>이지 확정된
         입주 물량이 아닙니다.
-      </p>
+      </Hint></p>
     </>
   )
 }

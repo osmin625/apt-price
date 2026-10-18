@@ -1,4 +1,5 @@
 import { fmt } from '../components/Charts'
+import Hint from '../components/Hint'
 
 /**
  * 공급 분석의 표 둘 — 미분양·파이프라인.
@@ -46,10 +47,10 @@ export function UnsoldTable({ d }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         경기 남부는 수원·용인·화성·안양·오산·의왕·군포·과천 8개 시의 합입니다.
         시 단위는 전체보다 한두 달 늦게 공표됩니다.
-      </p>
+      </Hint></p>
     </>
   )
 }
@@ -59,11 +60,11 @@ export function PipeTable({ r }) {
   const find = (k, ym) => (r.pipeline.series[k] || []).find((d) => d.ym === ym)?.value
   return (
     <>
-      <p className="muted small">
+      <p className="muted small"><Hint pill wide label="설명">
         12개월 누적입니다. 월별은 큰 단지 하나가 들어오는 달에 튀어서 들쭉날쭉하므로
         누적으로 봐야 추세가 읽힙니다. <b>인허가는 연 누계로 공표</b>되어
         적재할 때 월별로 되돌렸습니다.
-      </p>
+      </Hint></p>
       <div className="table-wrap">
         <table className="coef">
           <thead>

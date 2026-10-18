@@ -160,8 +160,8 @@ export default function RankTable({ items, basis, cxParts, onDelete, deleting, o
     <>
       {noFactor && (
         <p className="paste-warn" style={{ marginBottom: 8 }}>
-          요인 적정가가 아직 없습니다. <b>분석</b> 탭을 한 번 열면 계산되고, 그 뒤
-          이 화면으로 돌아오면 채워집니다. 그때까지는 <b>실거래 기준</b>으로 보세요.
+          요인 적정가가 아직 없습니다 — <b>실거래 기준</b>으로 보세요.
+          <Hint notes={['매물 분석 탭을 한 번 열면 모델이 계산되고, 그 뒤 이 화면으로 돌아오면 채워집니다.']} />
         </p>
       )}
       {narrow ? (

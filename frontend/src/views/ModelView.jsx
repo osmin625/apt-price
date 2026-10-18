@@ -4,6 +4,7 @@ import { api } from '../api'
 import { fmt } from '../components/Charts'
 import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
+import Hint from '../components/Hint'
 import ModelFormula from '../components/ModelFormula'
 
 /**
@@ -56,15 +57,17 @@ export default function ModelView({ months }) {
       <CoefUsage />
 
       <div className="card">
-        <h2>통제를 늘려가면 계수가 어떻게 변하는가</h2>
-        <p className="muted">
-          통제 변수를 하나씩 더하며 같은 모델을 다시 적합한 결과입니다. 계수가 스펙에 따라
-          얼마나 움직이는지가 곧 <b>그 추정치를 얼마나 믿을 수 있는지</b>입니다.
-          M0·M1은 입지가 좋은 동네일수록 역도 가깝다는 교란이 섞여 있고, M2는 구 단위까지
-          통제해 그걸 걷어냅니다. M3은 <b>같은 법정동 안에서 역에 더 가까운 단지끼리만</b>{' '}
-          비교한 값이라 학군·상권 교란이 사라지는 대신 표본이 적은 동에서 불안정해집니다.
-          헤드라인은 균형점인 M2이지만, 둘을 같이 보는 것이 맞습니다.
-        </p>
+        <h2>
+          통제를 늘려가면 계수가 어떻게 변하는가
+          <Hint
+            wide
+            notes={[
+              '통제 변수를 하나씩 더하며 같은 모델을 다시 적합한 결과입니다. 계수가 스펙에 따라 얼마나 움직이는지가 곧 그 추정치를 얼마나 믿을 수 있는지입니다.',
+              'M0·M1은 입지가 좋은 동네일수록 역도 가깝다는 교란이 섞여 있고, M2는 구 단위까지 통제해 그걸 걷어냅니다.',
+              'M3은 같은 법정동 안에서 역에 더 가까운 단지끼리만 비교한 값이라 학군·상권 교란이 사라지는 대신 표본이 적은 동에서 불안정해집니다. 헤드라인은 균형점인 M2입니다.',
+            ]}
+          />
+        </h2>
         <div className="table-wrap">
           <table>
             <thead>
@@ -145,13 +148,17 @@ function GroupCompare({ months }) {
 
   return (
     <div className="card">
-      <h2>노선·생활권으로 묶어 보기</h2>
-      <p className="muted">
-        비교에 쓰는 값은 원자료 평당가가 아니라 <b>보정 평당가</b>(전용 84㎡·중층·최신월
-        환산)입니다. 면적·층·시점 구성이 제거돼 있어야 그룹 간 비교가 성립합니다.{' '}
-        <b>잔차</b>는 도보거리·연식·면적·층·구를 모두 통제한 뒤에도 남는 차이라, 모델에
-        없는 무언가(노선 가치, 신도시 계획, 학군)의 크기를 나타냅니다.
-      </p>
+      <h2>
+        노선·생활권으로 묶어 보기
+        <Hint
+          wide
+          notes={[
+            '비교에 쓰는 값은 원자료 평당가가 아니라 보정 평당가(전용 84㎡·중층·최신월 환산)입니다. 면적·층·시점 구성이 제거돼 있어야 그룹 간 비교가 성립합니다.',
+            '잔차는 모델에 든 요인을 모두 통제한 뒤에도 남는 차이라, 모델에 없는 무언가(신도시 계획·조망·재건축 기대 같은 것)의 크기를 나타냅니다.',
+            '생활권(법정동 × 노선)은 같은 법정동에 두 노선이 걸치는 곳을 노선별로 나눕니다 — 그 차이는 구 FE 로도 법정동 FE 로도 구분되지 않습니다.',
+          ]}
+        />
+      </h2>
 
       <div className="seg" role="tablist" aria-label="묶는 기준">
         {(data?.options || []).map((o) => (
@@ -165,14 +172,6 @@ function GroupCompare({ months }) {
           </button>
         ))}
       </div>
-
-      {by === 'line_umd' && (
-        <p className="muted small" style={{ marginTop: 8 }}>
-          같은 법정동에 두 노선이 걸치는 경우가 있습니다(예: 수원 원천동의 신분당선 쪽과
-          수인분당선 쪽). 그 사이의 보정 평당가 차이는 <b>구 FE로도 법정동 FE로도
-          구분되지 않는 차이</b>라 노선을 함께 묶습니다.
-        </p>
-      )}
 
       {!data ? (
         <div className="empty">불러오는 중…</div>

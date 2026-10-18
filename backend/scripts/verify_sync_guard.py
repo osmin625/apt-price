@@ -136,6 +136,16 @@ CASES = [
      lambda s: s.replace("'올랐는데 거래는 평상시보다 적다.'",
                          "`순위상관 ${fmt(0.352, 3)} 이다.`", 1),
      None),
+    # 설명은 호버로 접는다. 카드 아래에 긴 문단을 펼치면 걸린다.
+    ("문구 — 긴 설명을 펼쳐 둠", "frontend/src/views/MarketView.jsx",
+     lambda s: s.replace("      <FactorPanel months={filters.months} />",
+                         "      <p className=\"sub\">이 문단은 일부러 길게 적은 설명입니다. 카드 아래에 이렇게 두세 줄씩 펼쳐 두면 그림보다 글이 먼저 보이고, 같은 말이 탭마다 되풀이됩니다.</p>\n      <FactorPanel months={filters.months} />", 1),
+     "펼쳐 둔 설명"),
+    # **걸리지 말아야 할 때** — 같은 문단이라도 Hint 안에 접혀 있으면 괜찮다.
+    ("문구 — 긴 설명을 Hint 로 접음(통과해야 함)", "frontend/src/views/MarketView.jsx",
+     lambda s: s.replace("      <FactorPanel months={filters.months} />",
+                         "      <p className=\"muted small\">요약 <Hint notes={[]}>이 문단은 일부러 길게 적은 설명입니다. 카드 아래에 이렇게 두세 줄씩 펼쳐 두면 그림보다 글이 먼저 보이고, 같은 말이 탭마다 되풀이됩니다.</Hint></p>\n      <FactorPanel months={filters.months} />", 1),
+     None),
     ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
     ("조사 — 받침에 안 맞는 조사", "docs/engineering/performance.md",

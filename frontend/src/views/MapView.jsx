@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { fmt } from '../components/Charts'
+import Hint from '../components/Hint'
 import FitLoading from '../components/FitLoading'
 import KakaoMap from '../components/KakaoMap'
 
@@ -100,7 +101,10 @@ export default function MapView({ months, onSelect }) {
     <>
       <div className="card">
         <div className="map-toolbar">
-          <strong className="map-metric">모델 잔차</strong>
+          <strong className="map-metric">
+            모델 잔차
+            {meta?.note && <Hint notes={[meta.note]} />}
+          </strong>
           <div className="map-scale" aria-hidden="true">
             <span>{fmt(meta?.min, 1)}</span>
             <i className={meta?.scale === 'diverging' ? 'grad-div' : 'grad-seq'} />
@@ -108,7 +112,6 @@ export default function MapView({ months, onSelect }) {
             <small>{meta?.unit}</small>
           </div>
         </div>
-        {meta?.note && <p className="muted small">{meta.note}</p>}
 
         <div className="map-wrap">
           <KakaoMap

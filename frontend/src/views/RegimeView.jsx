@@ -4,6 +4,7 @@ import { api } from '../api'
 import { fmt, useMeasure, useTooltip } from '../components/Charts'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
+import Hint from '../components/Hint'
 import { heatVars, zText } from '../components/heat'
 import TimeLines from '../components/TimeLines'
 import TopicModal from '../topics/TopicModal'
@@ -75,7 +76,7 @@ export default function RegimeView() {
     )
   }
 
-  // 요인 카드 왼쪽 막대의 방향. 맨 위 합산 모델의 판정을 쓴다 — 요인별 `pressure` 는 '보통'(30~70%)·
+  // 요인 카드 왼쪽 막대의 방향. 맨 위 합산 모델의 판정을 쓴다 — 요인별 `pressure` 는 '보통'(±0.5배 안)·
   // 약한 상관에서 방향을 비워 두어, 같은 화면에서 합산 카드는 '내림' 인데 막대는 회색인 요인이
   // 생겼다(미분양·전세가율·M2). 막대가 맨 위 카드와 다른 말을 하면 막대가 없는 것보다 나쁘다.
   const modelDir = Object.fromEntries((data.model?.used || []).map((u) => [u.key, u.dir]))
@@ -86,17 +87,22 @@ export default function RegimeView() {
       {data.model?.available && <MacroModel m={data.model} price={data.price} />}
 
       <section className="card">
-        <h2>요인별로 하나씩</h2>
-        <p className="sub">
-          값이 아니라 <b>자기 평균보다 얼마나 위·아래인지</b>로 봅니다. 미분양 몇 호가 많은
-          것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다. '몇 배' 는 평소
-          오르내림 폭(표준편차)의 몇 배인가입니다.
-        </p>
-        <HeatLegend>카드 색은 자기 평균에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
+        <h2>
+          요인별로 하나씩
+          <Hint
+            wide
+            notes={[
+              '값이 아니라 자기 평균보다 얼마나 위·아래인지로 봅니다. 미분양 몇 호가 많은 것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.',
+              "'몇 배' 는 평소 오르내림 폭(표준편차)의 몇 배인가입니다.",
+              "왼쪽 막대의 방향은 맨 위 '요인을 합치면' 의 판정과 같습니다.",
+              data.note,
+            ]}
+          />
+        </h2>
+        <HeatLegend>카드 색은 자기 평균에서의 위치입니다. 좋고 나쁨이 아닙니다.</HeatLegend>
         <div className="legend">
           <span className="key"><span className="swatch" style={{ background: 'var(--good)' }} />왼쪽 막대 — 가격을 올리는 쪽</span>
           <span className="key"><span className="swatch" style={{ background: 'var(--neg)' }} />내리는 쪽</span>
-          <span className="key muted">맨 위 '요인을 합치면' 의 판정과 같습니다</span>
         </div>
         {/* **데이터 하나에 카드 하나.** 준공·미분양·거래량·전세가율은 공급·가격 분석에
             카드가 있어, 여기서 같은 선을 또 그리면 같은 데이터가 두 탭에 카드로 선다.
@@ -137,16 +143,18 @@ export default function RegimeView() {
             </div>
           </>
         )}
-        <p className="muted small">{data.note}</p>
       </section>
 
       <section className="card">
-        <h2>정책과 세금</h2>
-        <p className="sub">
-          API 가 없어 손으로 적은 연표입니다({data.policy_covers_from} 부터, 한 줄마다
-          출처를 달았습니다). 사건 뒤 12개월 가격 변화를 함께 적되,{' '}
-          <b>인과로 읽지 마세요</b> — 오르니까 규제가 나옵니다.
-        </p>
+        <h2>
+          정책과 세금
+          <Hint
+            notes={[
+              `API 가 없어 손으로 적은 연표입니다(${data.policy_covers_from} 부터, 한 줄마다 출처를 달았습니다).`,
+              '사건 뒤 12개월 가격 변화를 함께 적되, 인과로 읽지 마세요 — 오르니까 규제가 나옵니다.',
+            ]}
+          />
+        </h2>
         <div className="rg-after">
           {data.policy_aftermath.map((a) => (
             <div key={a.kind} className="rg-after-cell">
@@ -165,18 +173,19 @@ export default function RegimeView() {
       </section>
 
       <section className="card">
-        <h2>전에도 이런 적이 있었나</h2>
+        <h2>
+          전에도 이런 적이 있었나
+          {data.similar.available && data.similar.note && <Hint notes={[data.similar.note]} />}
+        </h2>
         {data.similar.available ? (
           <>
-            <p className="sub">
-              요인 상태가 지금과 가장 가까웠던 달 {data.similar.fwd12.n}개를 찾았습니다.
-              그 뒤 12개월 가격 변화는 중위{' '}
+            <p className="muted small">
+              가장 가까웠던 달 {data.similar.fwd12.n}개 · 그 뒤 12개월 중위{' '}
               <b className={data.similar.fwd12.median >= 0 ? 'tone-pos' : 'tone-neg'}>
                 {data.similar.fwd12.median >= 0 ? '+' : ''}
                 {data.similar.fwd12.median}%
               </b>{' '}
-              ({data.similar.fwd12.min}~{data.similar.fwd12.max}%), {data.similar.fwd12.n}개
-              중 {data.similar.fwd12.up}개가 상승이었습니다.
+              ({data.similar.fwd12.min}~{data.similar.fwd12.max}%) · 상승 {data.similar.fwd12.up}개
             </p>
             <div className="rg-similar">
               {data.similar.months.map((m) => (
@@ -189,7 +198,6 @@ export default function RegimeView() {
                 </div>
               ))}
             </div>
-            <p className="muted small">{data.similar.note}</p>
           </>
         ) : (
           <p className="empty">{data.similar.note}</p>
@@ -277,11 +285,12 @@ function PolicyList({ rows }) {
               </span>
             )}
           </div>
-          <div className="muted small">{r.summary}</div>
-          {r.note && <div className="muted small">{r.note}</div>}
-          <a className="muted small" href={r.source} target="_blank" rel="noopener noreferrer">
-            출처 ↗
-          </a>
+          <div className="rg-tl-foot">
+            <Hint notes={[r.summary, r.note]} />
+            <a className="muted small" href={r.source} target="_blank" rel="noopener noreferrer">
+              출처 ↗
+            </a>
+          </div>
         </li>
       ))}
     </ol>
@@ -297,8 +306,8 @@ function HistoryTable({ h, factors }) {
   const labels = Object.fromEntries(factors.map((f) => [f.key, f.label]))
   return (
     <>
-      <p className="sub">{h.note}</p>
       <HeatLegend>
+        {h.note}{' '}
         칸 색은 자기 평균에서의 위치(평소 폭의 몇 배)이고, 글자는{' '}
         {(h.levels || []).map((l) =>
           `${l.label}${l.max != null ? ` ${l.max}배 이하` : l.min != null ? ` +${l.min}배 이상` : ''}`,
@@ -439,11 +448,19 @@ function MacroModel({ m, price }) {
   const tip = useTooltip()
   return (
     <section className="card">
-      <h2>요인을 합치면 — 그 뒤 12개월</h2>
-      <p className="sub">
-        요인들이 가격을 올리는 쪽과 내리는 쪽으로 나뉘어 줄다리기를 합니다. 어느 쪽이 더 센지로
-        그 뒤 12개월을 예상합니다.
-      </p>
+      <h2>
+        요인을 합치면 — 그 뒤 12개월
+        <Hint
+          wide
+          notes={[
+            '요인들이 가격을 올리는 쪽과 내리는 쪽으로 나뉘어 줄다리기를 합니다. 어느 쪽이 더 센지로 그 뒤 12개월을 예상합니다.',
+            m.note,
+            beats
+              ? '표본 밖 성적: 과거 평균만 쓸 때보다 덜 빗나갔습니다 — 아래 성적표.'
+              : '표본 밖 성적: 과거 평균만 쓸 때보다 덜 빗나가지 않았습니다 — 이 값은 참고로만 보세요.',
+          ]}
+        />
+      </h2>
       <div className="rg-after">
         <div className="rg-after-cell">
           <div className="muted small">{ymText(m.now)} 기준 그 뒤 12개월 예상</div>
@@ -486,26 +503,32 @@ function MacroModel({ m, price }) {
       </div>
       {tip.node}
       <p className="muted small">
-        '몇 배' 는 그 요인이 지금 평소에서 얼마나 벗어나 있는지입니다 — 평소 오르내림 폭(표준편차)의
-        몇 배인가. 1배 안쪽은 흔한 범위이고, 많이 벗어난 요인일수록 세게 당깁니다. 막대의 비율이 이
-        값들의 합입니다. 요인에 마우스를 올리면 지금 어떤지와 과거에 그런 때 그 뒤 가격이 보입니다. 아홉 요인이 모두 나온 {ymText(m.now)} 값이라, 그 뒤 달이 먼저 나온 요인은
-        아래 요인 카드와 숫자가 조금 다를 수 있습니다 — 평균은 같습니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
-        나누지는 않습니다.
-        {m.excluded.length > 0 && ` 과거 관계가 약해 뺀 요인: ${m.excluded.join(', ')}.`}
-      </p>
-      <p className="muted small">
-        {m.note}
-        {beats
-          ? ' 과거 평균만 쓸 때보다 덜 빗나갔지만 차이는 크지 않습니다 — 아래 성적표.'
-          : ' 과거 평균만 쓸 때보다 덜 빗나가지 않았습니다 — 이 값은 참고로만 보세요.'}
+        요인에 마우스를 올리면 지금 어떤지와 과거에 그런 때 그 뒤 가격이 보입니다.
+        {m.excluded.length > 0 && ` 뺀 요인: ${m.excluded.join(', ')}.`}
+        <Hint
+          wide
+          notes={[
+            "'몇 배' 는 그 요인이 지금 평소에서 얼마나 벗어나 있는지입니다 — 평소 오르내림 폭(표준편차)의 몇 배인가. 1배 안쪽은 흔한 범위이고, 많이 벗어난 요인일수록 세게 당깁니다. 막대의 비율이 이 값들의 합입니다.",
+            `모든 요인이 다 나온 ${ymText(m.now)} 값이라, 그 뒤 달이 먼저 나온 요인은 아래 요인 카드와 숫자가 조금 다를 수 있습니다 — 평균은 같습니다.`,
+            '요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로 나누지는 않습니다.',
+            m.excluded.length > 0 ? '뺀 요인은 과거 관계가 약한 것입니다.' : null,
+          ]}
+        />
       </p>
 
-      <h3 className="mt16">그때 알려진 것만으로 예측했다면</h3>
-      <p className="muted small">
-        매달 그 시점에 결과가 알려진 자료(최소 {m.min_train}개월)로만 다시 맞춰 다음 1년을 예측한
-        값과 실제를 겹쳤습니다. 이웃한 달은 11개월을 공유해 같이 움직이므로, 점이 많아 보여도
-        독립된 시험은 해마다 하나 남짓입니다.
-      </p>
+      <h3 className="mt16">
+        그때 알려진 것만으로 예측했다면
+        <Hint
+          wide
+          notes={[
+            `매달 그 시점에 결과가 알려진 자료(최소 ${m.min_train}개월)로만 다시 맞춰 다음 1년을 예측한 값과 실제를 겹쳤습니다.`,
+            '이웃한 달은 11개월을 공유해 같이 움직이므로, 점이 많아 보여도 독립된 시험은 해마다 하나 남짓입니다.',
+            "'과거 평균 대비' 는 1 − (오차 ÷ 과거 평균의 오차)² 입니다. 0 보다 크면 아무 요인도 안 쓴 예측보다 나았다는 뜻입니다.",
+            "방향 적중은 오를지 내릴지를 맞힌 비율입니다. 오른 해가 많은 기간이면 '늘 오른다' 만으로도 높게 나옵니다.",
+            '요인이 가격을 움직였다는 뜻이 아닙니다 — 요인들은 서로 얽혀 있고, 이것은 과거에 같이 움직인 방식을 그대로 옮긴 것입니다.',
+          ]}
+        />
+      </h3>
       <TimeLines
         series={[
           { key: 'actual', label: '실제 그 뒤 12개월', color: 'var(--series-2)',
@@ -545,12 +568,6 @@ function MacroModel({ m, price }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">
-        '과거 평균 대비' 는 1 − (오차 ÷ 과거 평균의 오차)² 입니다. 0 보다 크면 아무 요인도 안 쓴
-        예측보다 나았다는 뜻입니다. 방향 적중은 오를지 내릴지를 맞힌 비율인데, 이 기간은 대체로
-        올라서 '늘 오른다' 만으로도 높게 나옵니다. 요인이 가격을 움직였다는 뜻이 아닙니다 —
-        요인들은 서로 얽혀 있고, 이것은 과거에 같이 움직인 방식을 그대로 옮긴 것입니다.
-      </p>
     </section>
   )
 }

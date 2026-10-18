@@ -4,6 +4,7 @@ import { api } from '../api'
 import FitLoading from '../components/FitLoading'
 import { PremiumBars, fmt } from '../components/Charts'
 import FactorCurve from '../components/FactorCurve'
+import Hint from '../components/Hint'
 import Modal from '../components/Modal'
 import WalkDetail from '../components/WalkDetail'
 
@@ -25,12 +26,15 @@ export default function MarketView({ filters, setFilters }) {
   return (
     <>
       <div className="card">
-        <h2>무엇이 가격을 얼마나 움직이나</h2>
-        <p className="sub">
-          모든 요인을 <b>같은 기준점 대비 %</b>로 환산해 나란히 둡니다. 나머지를 고정했을
-          때의 <b>순효과</b>라, 구간별 실제 평당가 분포(단지 비교·지도 탭)와는 숫자가
-          다릅니다 — 그쪽은 다른 요인이 섞인 관측값입니다.
-        </p>
+        <h2>
+          무엇이 가격을 얼마나 움직이나
+          <Hint
+            notes={[
+              '모든 요인을 같은 기준점 대비 %로 환산해 나란히 둡니다.',
+              '다른 요인을 고정했을 때의 순효과라, 단지 상세의 실제 평당가 분포와는 숫자가 다릅니다 — 그쪽은 다른 요인이 섞인 관측값입니다.',
+            ]}
+          />
+        </h2>
         <div className="filters">
           <div className="field">
             <label htmlFor="mk-months">분석 기간</label>
@@ -133,10 +137,10 @@ function FactorPanel({ months }) {
 
   return (
     <section className="card">
-      <h2>요인별 보정계수</h2>
-      <p className="sub">
-        {data.note} 기준은 <b>{data.reference}</b> 입니다.
-      </p>
+      <h2>
+        요인별 보정계수
+        <Hint notes={[data.note, `기준: ${data.reference}`]} />
+      </h2>
       <div className="factor-grid">
         {data.factors.map((f) => (
           <div className="factor" key={f.key}>
@@ -158,22 +162,28 @@ function FactorPanel({ months }) {
               {/* 검출 여부가 먼저다. 효과가 0 과 구분되지 않는 요인에 '선형' 배지를
                   달면 '직선으로 움직인다' 로 읽힌다 — 움직이지 않는 것인데. */}
               {f.linearity?.significant === false && (
-                <span
-                  className="lin-badge is-null"
-                  title={f.linearity.joint_note}
-                >
-                  검출 안 됨
-                </span>
+                <span className="lin-badge is-null">검출 안 됨</span>
               )}
               {f.linearity?.testable && f.linearity?.significant !== false && (
                 <span
                   className={`lin-badge ${f.linearity.nonlinear ? 'is-nonlinear' : 'is-linear'}`}
-                  title={`${f.linearity.note} (p=${f.linearity.p})`}
                 >
                   {f.linearity.nonlinear ? '비선형' : '선형'}
                 </span>
               )}
-              <span className="muted small">기준 {f.reference}</span>
+              <Hint
+                notes={[
+                  `기준 ${f.reference}`,
+                  f.note,
+                  f.linearity?.significant === false
+                    ? `이 요인 전체가 0 이라는 가설을 기각하지 못했습니다(p=${f.linearity.joint_p}). 효과가 검출되지 않았으니 곡선의 모양을 그대로 믿으면 안 됩니다.`
+                    : null,
+                  f.linearity?.testable && f.linearity?.significant !== false
+                    ? `${f.linearity.nonlinear ? '비선형' : '선형'} (p=${f.linearity.p}). ${f.linearity.note}`
+                    : null,
+                  f.linear_curve ? '점선은 직선으로 제약했을 때의 모습입니다.' : null,
+                ]}
+              />
             </div>
             {/* 연속 요인은 곡선으로 — 로그·2차항·스플라인의 굽은 모양은
                 대표 지점 막대만으로는 보이지 않는다. 범주형(층·노선)은 막대. */}
@@ -200,21 +210,6 @@ function FactorPanel({ months }) {
                 {f.per_unit.se_pct ? ` (SE ${fmt(f.per_unit.se_pct, 2)}%p)` : ''}
               </div>
             )}
-            {f.linearity?.significant === false && (
-              <div className="paste-warn" style={{ paddingLeft: 0 }}>
-                이 요인 전체가 0 이라는 가설을 기각하지 못했습니다 (p=
-                {f.linearity.joint_p}). 이 표본에서는 <b>효과가 검출되지 않았습니다</b> —
-                곡선의 모양을 그대로 믿으면 안 됩니다.
-              </div>
-            )}
-            {f.linearity?.testable && f.linearity?.significant !== false && (
-              <div className="muted small">
-                <b>{f.linearity.nonlinear ? '비선형' : '선형'}</b> (p={f.linearity.p}).{' '}
-                {f.linearity.note}
-                {f.linear_curve ? ' 점선은 직선으로 제약했을 때의 모습입니다.' : ''}
-              </div>
-            )}
-            <div className="muted small">{f.note}</div>
             {f.key === 'walk' && (
               <button className="linklike factor-open-hint" onClick={() => setOpenWalk(true)}>
                 산점도와 같은 단지 안 비교 보기 →
@@ -231,9 +226,8 @@ function FactorPanel({ months }) {
       )}
 
       <p className="muted small">
-        스펙 {data.spec} · 거래 {fmt(data.n_obs)}건 · 단지 {data.n_complexes}곳.
-        스펙은 M0(도보만) → M3(법정동 고정효과)까지 사다리로 확인할 수 있습니다
-        (분해 모델 탭).
+        스펙 {data.spec} · 거래 {fmt(data.n_obs)}건 · 단지 {fmt(data.n_complexes)}곳
+        <Hint notes={['스펙은 M0(도보만) → M3(법정동 고정효과)까지 사다리로 분해 모델 탭에서 확인할 수 있습니다.']} />
       </p>
     </section>
   )

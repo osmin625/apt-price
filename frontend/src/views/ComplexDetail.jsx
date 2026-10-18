@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import { RangeDotChart, fmt } from '../components/Charts'
+import Hint from '../components/Hint'
 import Loading from '../components/Loading'
 
 export default function ComplexDetail({ complexId, months, onClose }) {
@@ -105,10 +106,10 @@ export default function ComplexDetail({ complexId, months, onClose }) {
       </section>
 
       <section className="card">
-        <h2>실거래 내역</h2>
-        <p className="sub">
-          시점 보정가는 과거 거래를 최신 월 시세 수준으로 환산한 값입니다 · 단위 만원
-        </p>
+        <h2>
+          실거래 내역
+          <Hint notes={['시점 보정가는 과거 거래를 최신 월 시세 수준으로 환산한 값입니다.', '단위는 만원입니다.']} />
+        </h2>
         <div className="table-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
           <table>
             <thead>
@@ -243,11 +244,13 @@ function DongPanel({ complexId, data, onChange }) {
     <section className="card">
       <h2>
         동<span className="muted small"> {data.items.length}개</span>
+        <Hint
+          notes={[
+            '누르면 민간임대로 표시되고, 다시 누르면 해제됩니다. 표시한 동의 매물은 호가 분석의 비고에 자동으로 따라붙습니다.',
+            '동 번호에 마우스를 올리면 역까지 도보시간이 보입니다.',
+          ]}
+        />
       </h2>
-      <p className="sub">
-        누르면 <b>민간임대</b>로 표시됩니다. 표시한 동의 매물은 호가 분석의 비고에
-        자동으로 따라붙습니다.
-      </p>
       {err && <p className="paste-warn">{err}</p>}
 
       <div className="dong-chips">
@@ -271,15 +274,11 @@ function DongPanel({ complexId, data, onChange }) {
         ))}
       </div>
 
-      <p className="muted small" style={{ marginTop: 10 }}>
-        {marked > 0 ? (
-          <>
-            민간임대 <b>{data.rental_dongs.join(' · ')}</b> — 다시 누르면 해제됩니다.
-          </>
-        ) : (
-          '아직 표시한 동이 없습니다. 동 번호에 마우스를 올리면 역까지 도보시간이 보입니다.'
-        )}
-      </p>
+      {marked > 0 && (
+        <p className="muted small" style={{ marginTop: 10 }}>
+          민간임대 <b>{data.rental_dongs.join(' · ')}</b>
+        </p>
+      )}
     </section>
   )
 }
