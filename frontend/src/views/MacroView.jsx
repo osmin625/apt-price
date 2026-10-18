@@ -7,7 +7,7 @@ import Modal from '../components/Modal'
 import MacroBars from '../components/MacroBars'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
-import { heatColor } from '../components/heat'
+import { heatColor, zText } from '../components/heat'
 import QuadrantScatter from '../components/QuadrantScatter'
 import { MultiLine } from '../topics/RegionMetric'
 import TopicModal from '../topics/TopicModal'
@@ -232,8 +232,8 @@ export default function MacroView() {
             ]}
             caveat="월간 매매가격지수 기준이다. 어디가 어느 국면인지까지만 말하고, 거기서 투자 판단으로 넘어가는 것은 이 데이터 밖이다."
           />
-          <HeatLegend lo="역대 최저" hi="역대 최고">
-            점 색은 지금 지수가 그 구의 자기 역사에서 몇 % 지점인지입니다. 좋고 나쁨이 아닙니다
+          <HeatLegend>
+            점 색은 지금 지수가 그 구의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다
           </HeatLegend>
           <CycleChart ins={ins} />
           {ins.cycle.excluded.length > 0 && (
@@ -465,7 +465,7 @@ function CycleChart({ ins, compact }) {
   return (
     <QuadrantScatter
       items={ins.cycle.items}
-      color={(d) => heatColor(d.hist_pct)}
+      color={(d) => heatColor(d.hist_z)}
       x={(d) => d.from_peak}
       y={(d) => d.m3}
       xLabel={ins.cycle.x_label}
@@ -489,8 +489,8 @@ function CycleChart({ ins, compact }) {
             {fmt(d.m3, 2)}% · 12개월 {d.m12 > 0 ? '+' : ''}
             {fmt(d.m12, 2)}%
           </div>
-          {d.hist_pct != null && (
-            <div className="t-row">자기 역사 {Math.round(d.hist_pct * 100)}% 지점</div>
+          {d.hist_z != null && (
+            <div className="t-row">{zText(d.hist_z)}</div>
           )}
           {d.accel != null && (
             <div className="t-row">

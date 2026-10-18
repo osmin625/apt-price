@@ -5,7 +5,7 @@ import { fmt, useMeasure, useTooltip } from '../components/Charts'
 import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
-import { heatVars, histPct } from '../components/heat'
+import { heatVars, histZ, zText } from '../components/heat'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
 
@@ -180,8 +180,8 @@ export default function SupplyView() {
           경기 남부를 따로 낼 수 있습니다. 지역마다 자릿수가 달라 한 축에 겹치지 않고
           카드를 나눴습니다.
         </p>
-        <HeatLegend lo="역대 최저" hi="역대 최고">
-          카드 색은 지금 미분양이 그 지역의 자기 역사에서 몇 % 지점인지입니다. 좋고 나쁨이 아닙니다
+        <HeatLegend>
+          카드 색은 지금 미분양이 그 지역의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다
         </HeatLegend>
         <div className="macro-grid">
           {data.unsold.regions.map((u) => (
@@ -708,15 +708,15 @@ function SouthTable({ d }) {
 }
 
 /**
- * 지금 미분양(호)이 이 지역의 자기 역사에서 몇 % 지점인가(0~1). 카드 색이 된다.
+ * 지금 미분양(호)이 이 지역의 자기 평균에서 표준편차 몇 배인가(z). 카드 색이 된다.
  *
- * 탭 공통의 자(`heat.js` 의 `histPct`)다. 예전에는 '역대 최저~최고 사이' 로 칠했는데,
- * 거시 분석은 백분위를 써서 같은 경기 미분양이 두 숫자로 나왔다. 표의 '최고 대비' 는
+ * 탭 공통의 자(`heat.js` 의 `histZ`)다. 예전에는 '역대 최저~최고 사이', 그다음 백분위로
+ * 칠했다 — 자가 탭마다 다르면 같은 경기 미분양이 두 숫자로 나온다. 표의 '최고 대비' 는
  * 최근 ÷ 최고라 0 이 '미분양 0호' 인 다른 값이다.
  */
 function unsoldPos(u) {
   const vs = (u.series || []).map((d) => d.value)
-  return vs.length ? histPct(vs, u.latest.value) : null
+  return vs.length ? histZ(vs, u.latest.value) : null
 }
 
 function unsoldSub(u) {
@@ -726,7 +726,7 @@ function unsoldSub(u) {
     <>
       {fmtYm(u.latest.ym)} {fmt(u.latest.value)}호{y}
       {pos != null && (
-        <> · 자기 역사 <span className="heat-pct">{Math.round(pos * 100)}%</span> 지점</>
+        <> · <span className="heat-pos">{zText(pos)}</span></>
       )}
     </>
   )

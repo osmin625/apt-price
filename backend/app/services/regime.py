@@ -27,11 +27,12 @@
 독립 표본은 20개 남짓이다. 그래서 **매년 12월만 쓴 겹치지 않는 상관**을 같이 낸다.
 둘의 부호가 다르면 그 요인은 방향을 말하지 않는다.
 
-## 지금 값이 아니라 '자기 역사 대비 어디쯤' 을 쓴다
+## 지금 값이 아니라 '자기 평균에서 얼마나 벗어났나' 를 쓴다
 
 요인마다 단위가 다르고(호, 지수, %, 십억원) 추세도 다르다. 수준을 그대로 비교할
-수 없으니 **자기 과거 분포에서의 백분위**로 바꾼다. 미분양 14,509호가 많은 것인지는
-경기도 미분양의 지난 25년을 봐야 안다.
+수 없으니 **자기 역사 평균에서 평소 오르내림 폭(표준편차)의 몇 배 벗어났나**(z)로 바꾼다.
+미분양이 많은 것인지는 경기도 미분양의 긴 역사에 비춰 봐야 안다. 예전에는 백분위였다 —
+`hist_z` 주석.
 
 ## 지역이 섞인다
 
@@ -43,7 +44,6 @@
 from __future__ import annotations
 
 import math
-from bisect import bisect_left
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -58,8 +58,10 @@ from .policy import COVERS_FROM, POLICY
 # M2(-0.07) 가 아래로, 거래량(+0.25)·미분양(-0.31)이 위로 떨어진다.
 MIN_R = 0.15
 
-# 백분위를 '높다/낮다' 로 가르는 선. 가운데 40% 는 '보통' 이다.
-HI, LO = 0.70, 0.30
+# 평균에서 얼마나 벗어나야 '높다/낮다' 인가(z). 0.5 안쪽은 '보통', 1.5 바깥은 '매우'.
+# 합산 모델의 세기 말(조금 · 꽤 · 크게, `STRENGTH`)과 같은 선이다 — 같은 요인을 한 카드는
+# '보통', 다른 카드는 '꽤' 라고 하면 자가 둘이다.
+Z_MID, Z_FAR = 0.5, 1.5
 
 # 상관을 잴 때 필요한 최소 관측. 겹치는 창이라 실제 독립 표본은 이보다 훨씬 적다.
 MIN_OBS = 60
@@ -147,8 +149,8 @@ def _log12(s: dict[str, float]) -> dict[str, float]:
     덮어 나머지가 0 근처에 납작해지고, 상관도 그 몇 점에 끌려 **실제보다 약하게**
     나왔다(미분양 0개월 −0.31, 같은 비율을 로그로 재면 −0.50).
 
-    로그는 전년비와 **순서가 같다**(같은 비율 x/y 를 다른 눈금으로 잴 뿐). 그래서 자기
-    역사 백분위·과거 국면·비슷했던 달은 바뀌지 않고 상관의 크기와 그림만 바뀐다.
+    로그는 전년비와 **순서가 같다**(같은 비율 x/y 를 다른 눈금으로 잴 뿐). 그래서 그때
+    (자가 백분위이던 때) 과거 국면·비슷했던 달은 바뀌지 않고 상관의 크기와 그림만 바뀌었다.
     0 이하가 낀 달은 로그를 낼 수 없어 뺀다(전년비도 1년 전 0 은 뺐다).
     """
     ks = sorted(s)
@@ -196,22 +198,30 @@ def _corr(a: list[float], b: list[float]) -> float:
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (sa * sb) if sa and sb else 0.0
 
 
-def hist_percentile(values: list[float], v: float) -> float:
-    """`v` 가 자기 역사(`values`)에서 몇 % 지점인가 — **탭 공통의 자**(0~1).
+def hist_z(values: list[float], v: float) -> float:
+    """`v` 가 자기 역사(`values`) **평균에서 표준편차 몇 배** 떨어져 있나 — **탭 공통의 자**.
 
-    지금보다 낮았던 달의 몫이다. 거시 분석의 요인 카드, 가격 분석의 국면 점 색, 공급
-    분석의 미분양 카드가 모두 이 값으로 칠한다. 예전에는 거시만 이것이고 나머지 둘은
-    '역대 최저~최고 사이 어디인가' 였다. 같은 경기 미분양이 한 탭에서는 '자기 역사 67%',
-    다른 탭에서는 '최저~최고의 50%' 로 나와 두 숫자가 같은 것을 다르게 말했다.
-    백분위로 맞춘 것은 방향 판정(`_pressure`)이 이미 이 값을 쓰기 때문이다. 화면의
-    `heat.js` 의 `histPct` 가 같은 공식이다.
+    + 면 평균보다 높고 − 면 낮다. 거시 분석의 요인 카드·방향 판정·과거 국면 표·비슷했던 달,
+    가격 분석의 국면 점, 공급 분석의 미분양 카드가 모두 이 값으로 칠하고 판정한다. 화면의
+    `heat.js` 의 `histZ` 가 같은 공식이다.
+
+    예전에는 백분위(지금보다 낮았던 달의 몫)였다. 그 전에는 '역대 최저~최고 사이' 였고, 둘이
+    섞여 같은 미분양이 두 숫자로 나와 백분위로 맞췄다. 그런데 백분위는 사실상 **중위**가
+    기준이라, 맨 위 요인 합산 카드(평균 기준 z)와 같은 요인이 다른 말을 했다 — 거래량이
+    한 카드는 '평균의 1.0배 위', 다른 카드는 '자기 역사 90%' 였다. 평균이 아니라 중위로 가르면
+    '평균보다 높은데 아래 절반' 인 달도 생긴다. 2026-10-18 평균으로 통일했다.
+    모집단 표준편차다(표본 수가 수백이라 n−1 과 차이가 없다). 흔들림이 없는 계열은 0 이다.
     """
-    below = sum(1 for x in values if x < v)
-    return below / max(len(values) - 1, 1)
+    n = len(values)
+    if not n:
+        return 0.0
+    mu = sum(values) / n
+    sd = math.sqrt(sum((x - mu) ** 2 for x in values) / n)
+    return (v - mu) / sd if sd else 0.0
 
 
-def _percentile(s: dict[str, float], ym: str) -> float:
-    return hist_percentile(list(s.values()), s[ym])
+def _z(s: dict[str, float], ym: str) -> float:
+    return hist_z(list(s.values()), s[ym])
 
 
 def _fwd12(price: dict[str, float], yms: list[str], i: int) -> float | None:
@@ -278,20 +288,20 @@ def nonoverlap(x: dict[str, float], price: dict[str, float]) -> tuple[float | No
     return round(_corr([p[0] for p in pairs], [p[1] for p in pairs]), 3), len(pairs)
 
 
-def _pressure(r: float | None, pct: float, agree: bool) -> dict:
+def _pressure(r: float | None, z: float, agree: bool) -> dict:
     """방향은 **측정된 부호 × 지금 위치**다.
 
-    상관이 양(+)인 요인이 지금 자기 역사에서 높은 쪽이면 상승 압력으로 읽는다.
+    상관이 양(+)인 요인이 지금 자기 평균보다 높은 쪽이면 상승 압력으로 읽는다.
     둘 중 하나라도 약하면 방향을 말하지 않는다 — 없는 확신을 파느니 비워 둔다.
     """
     if r is None or abs(r) < MIN_R:
         return {"dir": "none", "strength": "거의 없음",
                 "why": f"가격과의 상관이 {'측정 불가' if r is None else f'{r:+.2f}'} 라 "
                        f"방향을 말할 수 없습니다"}
-    if LO < pct < HI:
+    if abs(z) < Z_MID:
         return {"dir": "none", "strength": "중립",
-                "why": "지금 값이 자기 역사의 가운데라 어느 쪽도 아닙니다"}
-    high = pct >= HI
+                "why": "지금 값이 자기 평균 가까이라 어느 쪽도 아닙니다"}
+    high = z > 0
     up = (r > 0) == high
     strength = "약함" if abs(r) < 0.30 else "중간"
     if not agree:
@@ -299,8 +309,8 @@ def _pressure(r: float | None, pct: float, agree: bool) -> dict:
     return {
         "dir": "up" if up else "down",
         "strength": strength,
-        "why": (f"이 요인은 가격과 {r:+.2f} 로 움직였고, 지금 값이 자기 역사의 "
-                f"{'위쪽' if high else '아래쪽'} {round(pct * 100)}% 입니다"
+        "why": (f"이 요인은 가격과 {r:+.2f} 로 움직였고, 지금 값이 자기 평균보다 "
+                f"{'높습니다' if high else '낮습니다'}(평소 폭의 {abs(z):.1f}배)"
                 + ("" if agree else " (겹치지 않는 표본에서는 부호가 달라 약하게 봅니다)")),
     }
 
@@ -333,16 +343,16 @@ def factor_rows(db: Session) -> list[dict]:
         r0 = prof[0]["r"]
         nr, nn = nonoverlap(s, price)
         agree = r0 is not None and nr is not None and (r0 > 0) == (nr > 0)
-        pct = _percentile(s, last)
+        z = _z(s, last)
         out.append({
             "key": f.key, "group": f.group, "label": f.label, "region": f.region,
             "unit": f.unit, "transform": f.transform, "up_means": f.up_means,
             "transform_label": TRANSFORM_LABEL[f.transform],
             "latest": {"ym": last, "value": round(s[last], 2)},
-            "percentile": round(pct, 3),
+            "z": round(z, 2),
             "measured": {"r": r0, "n": prof[0]["n"], "nonoverlap_r": nr,
                          "nonoverlap_n": nn, "agree": agree, "profile": prof},
-            "pressure": _pressure(r0, pct, agree),
+            "pressure": _pressure(r0, z, agree),
             "series": [{"ym": k, "v": round(v, 2)} for k, v in sorted(s.items())],
         })
     return out
@@ -351,22 +361,18 @@ def factor_rows(db: Session) -> list[dict]:
 # ──────────────────────────────────────────────────────────
 # 과거 추적 — 그때 각 요인은 어땠고, 집값은 어떻게 됐나
 # ──────────────────────────────────────────────────────────
-# 과거 국면 표의 다섯 단계. 가운데 경계(30%·70%)는 방향 판정의 `LO`·`HI` 와 같게 둔다 —
-# 표에서 '높음' 인 칸이 판정에서는 '보통' 이면 같은 말을 두 자로 하는 셈이다. 끝의 두
-# 단계(10%·90%)는 그 바깥을 한 번 더 가른다. 세 단계일 때는 자기 역사 71% 와 99% 가 같은
-# '높음' 이라, 2008년 미분양처럼 역대급인 칸과 그냥 높은 칸이 구분되지 않았다.
-# 칸 색은 이 단계가 아니라 백분위 그대로(연속)다 — 글자는 읽기 쉽게, 색은 끊지 않게.
-VLO, VHI = 0.10, 0.90
-
-
-def _state(pct: float) -> str:
-    if pct <= VLO:
+# 과거 국면 표의 다섯 단계 — 평균에서 몇 표준편차인가(z). 가운데 경계(±0.5)는 방향 판정의
+# `Z_MID` 와 같고, 끝의 두 단계(±1.5)는 그 바깥을 한 번 더 가른다. 세 단계일 때는 역대급인 칸과
+# 그냥 높은 칸이 구분되지 않았다. 칸 색은 이 단계가 아니라 z 그대로(연속)다 — 글자는 읽기 쉽게,
+# 색은 끊지 않게. 예전 경계는 백분위 10·30·70·90% 였다(`hist_z` 주석).
+def _state(z: float) -> str:
+    if z <= -Z_FAR:
         return "매우 낮음"
-    if pct <= LO:
+    if z <= -Z_MID:
         return "낮음"
-    if pct >= VHI:
+    if z >= Z_FAR:
         return "매우 높음"
-    if pct >= HI:
+    if z >= Z_MID:
         return "높음"
     return "보통"
 
@@ -381,7 +387,7 @@ def history(db: Session, step: int = 6) -> dict:
     yms = sorted(price)
     idx = {y: i for i, y in enumerate(yms)}
     cols = [(f, series_of(db, f)) for f in FACTORS]
-    # 각 계열의 백분위는 **그 시점까지가 아니라 전체 기간** 기준이다. 보는 사람이
+    # 각 계열의 평균·표준편차는 **그 시점까지가 아니라 전체 기간** 기준이다. 보는 사람이
     # '지금 높음' 과 '그때 높음' 을 같은 자로 견주려면 자가 하나여야 한다.
     rows = []
     for i in range(0, len(yms), step):
@@ -389,8 +395,8 @@ def history(db: Session, step: int = 6) -> dict:
         states = {}
         for f, s in cols:
             if ym in s:
-                pct = _percentile(s, ym)
-                states[f.key] = {"state": _state(pct), "pct": round(pct, 3),
+                z = _z(s, ym)
+                states[f.key] = {"state": _state(z), "z": round(z, 2),
                                  "v": round(s[ym], 2)}
         if not states:
             continue
@@ -403,9 +409,9 @@ def history(db: Session, step: int = 6) -> dict:
     return {"step_months": step, "rows": rows,
             # 다섯 단계의 경계. 화면 범례가 이것을 읽는다 — 화면에 경계를 따로 적으면
             # 여기와 어긋난다.
-            "levels": [{"label": "매우 낮음", "max": VLO}, {"label": "낮음", "max": LO},
-                       {"label": "보통"}, {"label": "높음", "min": HI},
-                       {"label": "매우 높음", "min": VHI}],
+            "levels": [{"label": "매우 낮음", "max": -Z_FAR}, {"label": "낮음", "max": -Z_MID},
+                       {"label": "보통"}, {"label": "높음", "min": Z_MID},
+                       {"label": "매우 높음", "min": Z_FAR}],
             # 표본 길이를 문구에 얼리지 않는다('스무 해') — 해마다 하나씩 는다.
             "note": ("그때의 요인 상태와 그 뒤 12개월 가격 변화를 나란히 둔 것입니다. "
                      "요인이 가격을 움직였다는 뜻이 아닙니다 — 요인들은 서로 얽혀 "
@@ -415,8 +421,9 @@ def history(db: Session, step: int = 6) -> dict:
 def similar_months(db: Session, top: int = 12) -> dict:
     """지금과 요인 상태가 비슷했던 과거 달을 찾아 **그 뒤 무슨 일이 있었나** 본다.
 
-    거리는 백분위 차의 제곱합이다. 요인 수가 적고 단위가 제각각이라 백분위로
-    맞춘 뒤 비교한다. 비슷한 달이 적으면 적다고 말한다.
+    거리는 z(평균에서 표준편차 몇 배) 차의 제곱합이다. 요인 수가 적고 단위가 제각각이라
+    z 로 맞춘 뒤 비교한다. 예전에는 백분위였는데, 표본 밖 성적을 재 보니 z 쪽이 덜
+    빗나갔다(RMSE 12.0 → 10.7, `macro_model` 성적표의 '비슷했던 달').
     """
     price = price_series(db)
     yms = sorted(price)
@@ -427,7 +434,7 @@ def similar_months(db: Session, top: int = 12) -> dict:
         return {"available": False,
                 "note": "요인이 모두 갖춰진 달이 24개월이 안 돼 비교할 수 없습니다."}
 
-    pcts = {ym: {f.key: _percentile(s, ym) for f, s in cols} for ym in common}
+    pcts = {ym: {f.key: _z(s, ym) for f, s in cols} for ym in common}
     now = common[-1]
     scored = []
     for ym in common[:-13]:  # 뒤 12개월 결과가 있어야 쓸모가 있다
@@ -531,7 +538,7 @@ def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
                 "members": [{"label": f["label"], "dir": f["pressure"]["dir"],
                              "strength": f["pressure"]["strength"],
                              "r": f["measured"]["r"],
-                             "percentile": f["percentile"]} for f in mine],
+                             "z": f["z"]} for f in mine],
             })
             continue
 
@@ -556,7 +563,7 @@ def group_rows(factors: list[dict], policy: list[dict]) -> list[dict]:
 MODEL_MIN_TRAIN = 60
 
 
-def _score_model(train: list[dict]) -> dict:
+def _score_model(train: list[dict], ref: tuple[list[float], list[float]]) -> dict:
     """요인 방향 합산 점수 → 그 뒤 12개월. **계수는 하나뿐**이다.
 
     요인마다 (훈련 표본에서 잰 상관의 부호) × (z 점수)를 내고, |상관| 이 `MIN_R` 이상인
@@ -576,8 +583,11 @@ def _score_model(train: list[dict]) -> dict:
     p = len(train[0]["x"])
     n = len(train)
     ys = [r["y"] for r in train]
-    mu = [sum(r["x"][j] for r in train) / n for j in range(p)]
-    sd = [math.sqrt(sum((r["x"][j] - mu[j]) ** 2 for r in train) / n) or 1.0 for j in range(p)]
+    # 평소(평균·표준편차)는 학습 행이 아니라 `ref` — 그 시점까지 **그 요인의 자기 역사 전체**다.
+    # 예전에는 학습 행(요인 아홉이 다 있는 2012년 이후, 그것도 결과가 알려진 1년 전까지)으로
+    # 표준화해서, 같은 화면의 요인 카드와 '평균' 이 달랐다 — 준공 물량이 이 카드에서는 평소의
+    # 3.8배 아래, 카드 쪽 자로는 2.4배 아래였다. 자가 둘이면 같은 요인이 두 말을 한다.
+    mu, sd = ref
     rs = [_corr([r["x"][j] for r in train], ys) for j in range(p)]
     use = [j for j in range(p) if abs(rs[j]) >= MIN_R]
 
@@ -597,7 +607,7 @@ def _predict(m: dict, x: list[float]) -> float:
 
 
 # 평소에서 얼마나 벗어났나(|z|). 칸을 셋만 둔다 — 그 이상 잘게 나누면 다시 몫처럼 읽힌다.
-STRENGTH = ((1.5, 3, "크게"), (0.5, 2, "꽤"), (0.0, 1, "조금"))
+STRENGTH = ((Z_FAR, 3, "크게"), (Z_MID, 2, "꽤"), (0.0, 1, "조금"))
 
 
 def _plain(f: Factor, z: float, x: float, r: float) -> dict:
@@ -656,17 +666,27 @@ def macro_model(db: Session) -> dict:
     def known(t: dict) -> list[dict]:
         return [q for q in lab if idx[q["ym"]] + 12 <= idx[t["ym"]]]
 
-    def similar(t: dict, train: list[dict]) -> float:
-        hist = [q for q in rows if idx[q["ym"]] <= idx[t["ym"]]]
-        cols_sorted = [sorted(q["x"][j] for q in hist) for j in range(len(t["x"]))]
-        n1 = max(len(hist) - 1, 1)
+    # 그 시점까지의 자기 역사 평균·표준편차. 미래 값이 섞이면 백테스트가 거짓이 된다.
+    hist = [sorted(sv.items()) for _, sv in cols]
 
-        # `hist_percentile` 과 같은 값(낮았던 달의 몫)이다. 정렬해 둔 목록에서 이분 탐색으로
-        # 센다 — 매번 처음부터 세면 이 함수가 모델 전체 시간의 88% 를 먹었다(6.0초 중 5.6초).
-        def pct(j, v):
-            return bisect_left(cols_sorted[j], v) / n1
-        now = [pct(j, t["x"][j]) for j in range(len(t["x"]))]
-        near = sorted(train, key=lambda q: sum((pct(j, q["x"][j]) - now[j]) ** 2
+    def ref_at(ym: str) -> tuple[list[float], list[float]]:
+        mus, sds = [], []
+        for h in hist:
+            vs = [v for k, v in h if k <= ym]
+            mu = sum(vs) / len(vs)
+            mus.append(mu)
+            sds.append(math.sqrt(sum((v - mu) ** 2 for v in vs) / len(vs)) or 1.0)
+        return mus, sds
+
+    def similar(t: dict, train: list[dict], ref) -> float:
+        # `similar_months` 와 같은 거리 — 평균에서 몇 표준편차인가(z)의 차. 자는 그 시점까지의
+        # 자기 역사다.
+        mu, sd = ref
+
+        def z(j, v):
+            return (v - mu[j]) / sd[j]
+        now = [z(j, t["x"][j]) for j in range(len(t["x"]))]
+        near = sorted(train, key=lambda q: sum((z(j, q["x"][j]) - now[j]) ** 2
                                                for j in range(len(now))))[:12]
         vs = sorted(q["y"] for q in near)
         return (vs[len(vs) // 2] + vs[(len(vs) - 1) // 2]) / 2
@@ -676,7 +696,8 @@ def macro_model(db: Session) -> dict:
         train = known(t)
         if len(train) < MODEL_MIN_TRAIN:
             continue
-        m = _score_model(train)
+        ref = ref_at(t["ym"])
+        m = _score_model(train, ref)
         yhat = _predict(m, t["x"])
         mean = sum(q["y"] for q in train) / len(train)
         back.append({"ym": t["ym"], "pred": round(yhat, 2), "actual": round(t["y"], 2)})
@@ -684,7 +705,7 @@ def macro_model(db: Session) -> dict:
         preds["mean"].append((t["ym"], mean, t["y"]))
         if t["mom"] is not None:
             preds["mom"].append((t["ym"], t["mom"], t["y"]))
-        preds["similar"].append((t["ym"], similar(t, train), t["y"]))
+        preds["similar"].append((t["ym"], similar(t, train, ref), t["y"]))
 
     def score(ps: list) -> dict:
         e = [p - a for _, p, a in ps]
@@ -706,7 +727,7 @@ def macro_model(db: Session) -> dict:
 
     # 지금 — 결과가 알려진 달 전부로 맞추고 가장 최근 달에 적용한다.
     now = rows[-1]
-    m = _score_model(known(now) or lab)
+    m = _score_model(known(now) or lab, ref_at(now["ym"]))
     yhat = _predict(m, now["x"])
     parts = m["parts"](now["x"])
     errs = sorted(p - a for _, p, a in preds["model"])

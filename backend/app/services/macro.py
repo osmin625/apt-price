@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
 from ..models import RebStat
-from .regime import hist_percentile
+from .regime import hist_z
 
 PYEONG_M2 = 3.305785
 
@@ -258,11 +258,11 @@ def cycle_phase(db: Session) -> dict:
         after = vals[pi:]
         ti = pi + min(range(len(after)), key=lambda i: after[i])
         cur = vals[-1]
-        # 지금 지수가 그 구의 자기 역사에서 몇 % 지점인가. 화면의 점 색이 된다(heat.js).
+        # 지금 지수가 그 구의 자기 역사 평균에서 표준편차 몇 배인가. 화면의 점 색이 된다(heat.js).
         # 처음에는 '고점 뒤 저점 ~ 고점' 의 회복 비율로 칠했는데, 과천처럼 고점에서
         # -1.3% 빠진 바로 그 달이 고점 뒤 저점이면 회복 0% 라 **가장 진한 파랑**이
         # 됐다. 고점 바로 아래인 곳이 바닥처럼 보인다. 그다음 '역대 최저~최고 사이' 로
-        # 칠했고, 지금은 탭 공통의 자인 백분위(`regime.hist_percentile`)로 맞췄다.
+        # 칠했고, 백분위로 맞췄다가, 지금은 탭 공통의 자인 평균 기준 z(`regime.hist_z`)다.
         m3 = _pct(vals[-4], cur) if len(vals) > 4 else None
         prev3 = _pct(vals[-7], vals[-4]) if len(vals) > 7 else None
         items.append({
@@ -272,7 +272,7 @@ def cycle_phase(db: Session) -> dict:
             "peak_ym": yms[pi],
             "from_trough": round(_pct(vals[ti], cur) or 0, 2),
             "trough_ym": yms[ti],
-            "hist_pct": round(hist_percentile(vals, cur), 3),
+            "hist_z": round(hist_z(vals, cur), 2),
             "m3": round(m3, 2) if m3 is not None else None,
             "m12": round(_pct(vals[-13], cur), 2) if len(vals) > 13 else None,
             "accel": round(m3 - prev3, 2) if (m3 is not None and prev3 is not None) else None,
