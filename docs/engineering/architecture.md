@@ -28,6 +28,7 @@ backend/
     routers/macro.py        한국부동산원 공표 통계
     routers/supply.py       공급 분석
     routers/regime.py       거시 국면
+    routers/tenure.py       매매·전세·월세
 
     services/analysis.py    DB → 거래 점·단지 상세·실거래 기준 적정가(비교표본 중앙값)
     services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
@@ -45,6 +46,8 @@ backend/
                             (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
     services/regime.py      요인 위치(z)·그때는·기저율·과거 국면(월별)·반영 분해(방향 고정)
     services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
+    services/tenure.py      매매·전세·월세 재료 — 빈 달 없는 구, 지수로 이은 가격, 금리, 인상기, 인상 뒤 경로
+                            (월 비용 곱셈은 화면이 한다 — 대출 비율을 바꾸므로)
 
     clients/molit.py        국토교통부 실거래가 API
     clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
@@ -62,6 +65,7 @@ backend/
     cv_reflect.py           반영 분해 — 이론 시차 판과 같은 달 판을 나란히
     verify_supply_cum.py    거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별) 대조
     verify_reflect.py       반영 분해의 부호 제약 최소제곱(순수 파이썬) vs scipy nnls
+    verify_tenure.py        매매·전세·월세의 이어 붙인 가격 수준에 표본 개편 튐이 없는지
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
     verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층
@@ -91,7 +95,7 @@ backend/
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
-  src/views/                매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 단지 상세
+  src/views/                매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 매매·전세·월세 / 단지 상세
                             / 호가 입력 / 호가 분석 / 지도 / 분해 모델
   src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선

@@ -1,0 +1,365 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import { api } from '../api'
+import { fmt, niceTicks, useMeasure } from '../components/Charts'
+import Hint from '../components/Hint'
+import TimeLines from '../components/TimeLines'
+
+/**
+ * 매매 · 전세 · 월세 — 같은 집을 세 방법으로 살 때 매달 얼마가 드는지, 금리가 오를 때 세 가격이
+ * 어떤 순서로 움직였는지(2026-10-19 요청).
+ *
+ * 보려는 연쇄: 금리 인상 → 매매·전세 이자가 무거워져 그쪽 수요가 빠짐 → 월세로 몰려 월세·전환율
+ * 상승 → 월세 지출이 이자와 맞붙으면 매매·전세로 돌아감. 그림 넷이 한 단계씩 맡는다 — 비용(①),
+ * 금리와 세 가격의 1년 변화(②), 월세 쏠림(③), 인상 시작 달 기준의 순서(④).
+ *
+ * ## 계산은 화면이 한다
+ *
+ * 월 비용은 대출 비율에 따라 달라진다. 비율마다 응답을 내보내면 정적 사이트 파일이 비율 수만큼
+ * 늘어나므로, 백엔드는 재료(가격·전환율·금리)만 보내고 곱셈은 여기서 한다(`services/tenure.py`).
+ *
+ * ## 증명이 아니라 지켜보기
+ *
+ * 월세 통계가 2015년부터라 큰 인상기는 한 번뿐이고 그 뒤 인하와 겹친다. 그림이 연쇄와 맞아도
+ * 다른 까닭(대출 규제·전세 사기·입주 물량)이 같이 움직였을 수 있다 — 호버에 적는다.
+ */
+const C = { sale: 'var(--series-1)', jeonse: 'var(--series-3)', rent: 'var(--series-2)', rate: 'var(--series-4)' }
+const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
+
+export default function TenureView() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [ltv, setLtv] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    api
+      .tenureOverview()
+      .then((d) => {
+        if (!alive) return
+        setData(d)
+        setLtv(d.ltv)
+      })
+      .catch((e) => alive && setError(e))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (error || (data && !data.available)) {
+    return (
+      <section className="card">
+        <h2>매매·전세·월세</h2>
+        <p className="empty">{error ? error.message : data.note}</p>
+      </section>
+    )
+  }
+  if (!data || !ltv) {
+    return (
+      <section className="card">
+        <h2>매매·전세·월세</h2>
+        <p className="empty">불러오는 중…</p>
+      </section>
+    )
+  }
+
+  const bands = data.hikes.map((h) => ({ from: h.from, to: h.to }))
+  const region = (
+    <Hint
+      notes={[
+        `${data.region} 평균입니다 — 모든 달에 값이 있는 구만 씁니다: ${data.used.join(', ')}.`,
+        data.dropped.length
+          ? `빠진 구: ${data.dropped.map((d) => d.name).join(', ')} — ${data.dropped[0].why}. 섞으면 구성이 바뀌는 달에 평균이 튑니다.`
+          : null,
+        '옅은 띠는 기준금리 인상기입니다(첫 인상~마지막 인상, 1년 안에 이어진 인상은 한 번으로 묶음).',
+      ]}
+    />
+  )
+
+  return (
+    <>
+      <Cost data={data} ltv={ltv} setLtv={setLtv} bands={bands} region={region} />
+      <Prices data={data} bands={bands} region={region} />
+      <RentTilt data={data} bands={bands} region={region} />
+      {data.events.length > 0 && <Order data={data} region={region} />}
+    </>
+  )
+}
+
+/** ① 같은 집 월 주거비 — 매매·전세는 이자(대출 + 자기 돈의 예금 이자), 월세는 전세가 × 전환율. */
+function Cost({ data, ltv, setLtv, bands, region }) {
+  const series = useMemo(() => {
+    const pts = (f) => data.rows.map((r) => ({ ym: r.ym, value: Math.round(f(r)) }))
+    return [
+      { key: 'sale', label: '매매', color: C.sale, width: 2.4,
+        points: pts((r) => (r.sale * (ltv.buy * r.mortgage + (1 - ltv.buy) * r.deposit)) / 1200) },
+      { key: 'jeonse', label: '전세', color: C.jeonse,
+        points: pts((r) => (r.jeonse * (ltv.jeonse * r.jeonse_loan + (1 - ltv.jeonse) * r.deposit)) / 1200) },
+      { key: 'rent', label: '월세', color: C.rent,
+        points: pts((r) => (r.jeonse * r.conv) / 1200) },
+    ]
+  }, [data, ltv])
+  const last = data.rows[data.rows.length - 1]
+  const now = Object.fromEntries(series.map((s) => [s.key, s.points[s.points.length - 1].value]))
+  const cheapest = series.reduce((a, s) => (now[s.key] < now[a.key] ? s : a))
+
+  return (
+    <section className="card">
+      <h2>
+        같은 집, 매달 드는 돈
+        <Hint
+          wide
+          notes={[
+            '같은 집을 세 방법으로 살 때의 한 달 비용(만원)입니다.',
+            '매매 = 매매가 × (대출 비율 × 주택담보대출 금리 + 나머지 × 정기예금 금리) ÷ 12. 전세 = 전세가 × (대출 비율 × 전세자금대출 금리 + 나머지 × 정기예금 금리) ÷ 12. 대출 아닌 몫은 그 돈을 예금에 넣었으면 받았을 이자로 셉니다.',
+            '월세 = 전세가 × 전월세 전환율 ÷ 12 — 같은 집의 전세 보증금을 전부 월세로 바꾼 값입니다. 실제 평균 월세는 소형 위주라 집 크기가 달라 쓰지 않습니다.',
+            '세지 않는 것: 집값이 오르내려 생기는 차익·손실, 취득세·보유세, 관리비, 원금 상환. 이자만 견주는 계산입니다.',
+            '금리는 한국은행 예금은행 신규취급액 기준(전국), 가격·전세가율·전환율은 한국부동산원입니다.',
+          ]}
+        />
+        {region}
+      </h2>
+      <div className="tn-ctrl">
+        <label>
+          매매 대출 비율 <b>{Math.round(ltv.buy * 100)}%</b>
+          <input type="range" min="0" max="0.8" step="0.1" value={ltv.buy}
+                 onChange={(e) => setLtv({ ...ltv, buy: Number(e.target.value) })} />
+        </label>
+        <label>
+          전세 대출 비율 <b>{Math.round(ltv.jeonse * 100)}%</b>
+          <input type="range" min="0" max="0.9" step="0.1" value={ltv.jeonse}
+                 onChange={(e) => setLtv({ ...ltv, jeonse: Number(e.target.value) })} />
+        </label>
+      </div>
+      <div className="tn-now">
+        {series.map((s) => (
+          <span key={s.key} className={s.key === cheapest.key ? 'is-min' : ''}>
+            <span className="swatch" style={{ background: s.color }} />
+            {s.label} <b>{fmt(now[s.key])}</b>만원
+          </span>
+        ))}
+        <span className="muted small">{ymText(last.ym)} · 같은 집 매매가 {fmt(last.sale)} · 전세가 {fmt(last.jeonse)}만원</span>
+      </div>
+      <TimeLines series={series} unit="만원" bands={bands} height={300}
+                 ariaLabel="매매·전세·월세의 같은 집 월 비용 추이" />
+    </section>
+  )
+}
+
+/** ② 금리와 세 가격 — 지수 1년 변화(왼쪽)와 금리(오른쪽). */
+function Prices({ data, bands, region }) {
+  const series = useMemo(() => {
+    const y = (k) => data.yoy[k].map((p) => ({ ym: p.ym, value: p.v }))
+    const r = (k) => data.rates[k].map((p) => ({ ym: p.ym, value: p.v }))
+    return [
+      { key: 'sale', label: '매매지수', color: C.sale, width: 2.4, points: y('sale_index') },
+      { key: 'jeonse', label: '전세지수', color: C.jeonse, points: y('jeonse_index') },
+      { key: 'rent', label: '월세지수', color: C.rent, points: y('rent_index') },
+      { key: 'base', label: '기준금리', color: C.rate, axis: 'right', dash: true, points: r('base_rate') },
+      { key: 'mort', label: '주택담보대출 금리', color: C.rate, axis: 'right', dash: '1 3', points: r('mortgage_rate') },
+    ]
+  }, [data])
+  const months = data.yoy.rent_index.map((p) => p.ym)
+  return (
+    <section className="card">
+      <h2>
+        금리와 세 가격
+        <Hint
+          wide
+          notes={[
+            '왼쪽 축은 매매·전세·월세 가격지수의 1년 변화율(%), 오른쪽 축은 금리(연%)입니다.',
+            '연쇄대로라면 인상기(띠)에 매매·전세 선은 내려가고 월세 선은 버티거나 오릅니다.',
+            '같이 움직였다고 원인은 아닙니다 — 같은 시기 대출 규제·입주 물량·전세 사기 같은 일도 겹쳤습니다.',
+          ]}
+        />
+        {region}
+      </h2>
+      <TimeLines series={series} unit="%" decimals={1} zero rightUnit="%" rightDecimals={1}
+                 months={months} bands={bands} height={300}
+                 ariaLabel="매매·전세·월세 지수 1년 변화와 금리" />
+    </section>
+  )
+}
+
+/** ③ 월세 쏠림 — 전환율이 대출·예금 금리 위로 얼마나 벌어지나, 월세 가격은 어떻게 가나. */
+function RentTilt({ data, bands, region }) {
+  const series = useMemo(() => {
+    const row = (k) => data.rows.map((r) => ({ ym: r.ym, value: r[k] }))
+    return [
+      { key: 'conv', label: '전월세 전환율', color: C.rent, width: 2.4, points: row('conv') },
+      { key: 'jl', label: '전세자금대출 금리', color: C.jeonse, dash: true, points: row('jeonse_loan') },
+      { key: 'mort', label: '주택담보대출 금리', color: C.sale, dash: true, points: row('mortgage') },
+      { key: 'dep', label: '정기예금 금리', color: C.rate, dash: '1 3', points: row('deposit') },
+    ]
+  }, [data])
+  const last = data.rows[data.rows.length - 1]
+  const gap = last.conv - last.jeonse_loan
+  return (
+    <section className="card">
+      <h2>
+        월세 쏠림 — 전환율과 금리
+        <Hint
+          wide
+          notes={[
+            '전월세 전환율은 보증금을 월세로 바꿀 때 쓰는 연 이율입니다. 월세 수요가 몰리면 집주인이 더 높은 전환율을 받을 수 있어 올라갑니다.',
+            '전환율이 전세자금대출 금리보다 높으면 세입자는 빌려서라도 전세가 싸고, 낮아지면 월세가 덜 불리해집니다. 둘 사이가 좁혀지는 것이 월세로 몰리는 신호입니다.',
+            '예금 금리는 집주인 쪽 기준입니다 — 전환율이 예금 금리에 가까워지면 보증금을 받아 맡기는 것과 월세로 받는 것의 차이가 줄어듭니다.',
+          ]}
+        />
+        {region}
+      </h2>
+      <p className="muted small">
+        {ymText(last.ym)} 전환율 {fmt(last.conv, 2)}% · 전세자금대출 {fmt(last.jeonse_loan, 2)}% ·
+        {' '}차이 {gap >= 0 ? '+' : '−'}{fmt(Math.abs(gap), 2)}%p
+      </p>
+      <TimeLines series={series} unit="%" decimals={1} bands={bands} height={280}
+                 ariaLabel="전월세 전환율과 대출·예금 금리" />
+    </section>
+  )
+}
+
+/**
+ * ④ 순서 확인 — 인상 시작 달을 100 으로 놓고 세 지수가 그 앞뒤로 어떻게 갔나.
+ *
+ * 연쇄의 '순서' 는 달력이 아니라 **인상 뒤 몇 달째** 로 봐야 인상기끼리 견줄 수 있다. 저점은
+ * 시작 뒤 가장 낮았던 달이다 — 그 달이 시작 달이면 '내리지 않음' 이다(월세처럼 계속 오른 선).
+ */
+function Order({ data, region }) {
+  const [pick, setPick] = useState(() => {
+    const full = data.events.filter((e) => e.paths.rent_index.length > 24)
+    return (full[full.length - 1] || data.events[data.events.length - 1]).start
+  })
+  const ev = data.events.find((e) => e.start === pick) || data.events[0]
+  const lines = [
+    { key: 'sale_index', label: '매매지수', color: C.sale, width: 2.4 },
+    { key: 'jeonse_index', label: '전세지수', color: C.jeonse },
+    { key: 'rent_index', label: '월세지수', color: C.rent },
+  ].map((l) => {
+    const pts = ev.paths[l.key]
+    const after = pts.filter((p) => p.k >= 0)
+    const low = after.reduce((a, p) => (p.v < a.v ? p : a), after[0])
+    const lastK = pts[pts.length - 1].k
+    return { ...l, pts, low: low && low.k > 0 && low.k < lastK ? low : null, lastK }
+  })
+  const endK = gapMonths(ev.start, ev.end)
+
+  return (
+    <section className="card">
+      <h2>
+        순서 확인 — 인상 뒤 몇 달째에
+        <Hint
+          wide
+          notes={[
+            '기준금리 인상 시작 달을 100 으로 놓고, 그 12개월 전부터 48개월 뒤까지 세 지수가 어떻게 갔는지입니다.',
+            '세로 실선은 인상 시작, 점선은 마지막 인상 달입니다. 점은 시작 뒤 가장 낮았던 달(저점)입니다.',
+            '연쇄대로라면 매매·전세가 먼저 꺾여 저점을 찍고, 월세는 그동안 버티거나 오르며, 시차를 두고 매매·전세가 다시 오릅니다.',
+            '인상기가 몇 번 안 됩니다 — 한 번의 경로를 법칙으로 읽지 마세요. 인상 뒤에 인하가 이어지면 반등은 인하 몫과 섞입니다.',
+          ]}
+        />
+        {region}
+      </h2>
+      <div className="seg" role="tablist" aria-label="인상기 고르기">
+        {data.events.map((e) => (
+          <button key={e.start} role="tab" aria-selected={e.start === ev.start} onClick={() => setPick(e.start)}>
+            {ymText(e.start)} (+{fmt(e.rise, 2)}%p)
+          </button>
+        ))}
+      </div>
+      <EventChart lines={lines} span={data.event_span} endK={endK} />
+      <div className="tn-lows">
+        {lines.map((l) => (
+          <span key={l.key}>
+            <span className="swatch" style={{ background: l.color }} />
+            {l.label}{' '}
+            {l.low
+              ? <>저점 <b>{l.low.k}개월째</b> ({fmt(l.low.v - 100, 1)}%)</>
+              : l.lastK < 24 ? <span className="muted">진행 중</span> : <span className="muted">시작 뒤 내리지 않음</span>}
+          </span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function gapMonths(a, b) {
+  return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(4)) - Number(a.slice(4))
+}
+
+/** 상대 달(k) 축의 선 그래프. TimeLines 는 달력 축(ym)이라 따로 둔다. */
+function EventChart({ lines, span, endK }) {
+  const [ref, width] = useMeasure()
+  const [hover, setHover] = useState(null)
+  const W = Math.max(width || 640, 280)
+  const H = 280
+  const P = { t: 12, r: 14, b: 26, l: 48 }
+  const iw = W - P.l - P.r
+  const ih = H - P.t - P.b
+  const vals = lines.flatMap((l) => l.pts.map((p) => p.v))
+  let lo = Math.min(100, ...vals)
+  let hi = Math.max(100, ...vals)
+  const pad = (hi - lo) * 0.06 || 1
+  lo -= pad
+  hi += pad
+  const x = (k) => P.l + ((k - span[0]) / (span[1] - span[0])) * iw
+  const y = (v) => P.t + ih - ((v - lo) / (hi - lo)) * ih
+  const ticks = niceTicks(lo, hi, 5).filter((t) => t >= lo && t <= hi)
+  const kTicks = []
+  for (let k = span[0]; k <= span[1]; k += 12) kTicks.push(k)
+
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    const k = Math.round(span[0] + ((px - P.l) / iw) * (span[1] - span[0]))
+    setHover({ k: Math.min(Math.max(k, span[0]), span[1]), cx: e.clientX, cy: e.clientY })
+  }
+
+  return (
+    <div className="macro-chart" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="인상 시작 달 기준 세 지수 경로"
+           onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <rect x={x(0)} y={P.t} width={Math.max(x(endK) - x(0), 2)} height={ih} fill="var(--band)" />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="var(--grid)"
+                  strokeDasharray={t === 100 ? undefined : '2 3'} />
+            <text x={P.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{fmt(t)}</text>
+          </g>
+        ))}
+        {kTicks.map((k, i) => (
+          <text key={k} x={x(k)} y={H - 8} textAnchor={i === kTicks.length - 1 ? 'end' : 'middle'} fontSize="10.5" fill="var(--text-muted)">
+            {k > 0 ? `+${k}` : k}개월
+          </text>
+        ))}
+        <line x1={x(0)} x2={x(0)} y1={P.t} y2={P.t + ih} stroke="var(--text-secondary)" />
+        <line x1={x(endK)} x2={x(endK)} y1={P.t} y2={P.t + ih} stroke="var(--text-secondary)" strokeDasharray="4 3" />
+        {lines.map((l) => (
+          <path key={l.key} fill="none" stroke={l.color} strokeWidth={l.width ?? 1.9} strokeLinejoin="round"
+                d={l.pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.k).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')} />
+        ))}
+        {lines.map((l) => l.low && (
+          <circle key={l.key} cx={x(l.low.k)} cy={y(l.low.v)} r="4" fill={l.color} stroke="var(--surface-1)" />
+        ))}
+        {hover && (
+          <line x1={x(hover.k)} x2={x(hover.k)} y1={P.t} y2={P.t + ih} stroke="var(--text-muted)"
+                strokeDasharray="3 3" pointerEvents="none" />
+        )}
+        <rect x={P.l} y={P.t} width={iw} height={ih} fill="transparent" />
+      </svg>
+      <div className="legend">
+        {lines.map((l) => (
+          <span className="key" key={l.key}><span className="swatch" style={{ background: l.color }} />{l.label}</span>
+        ))}
+      </div>
+      {hover && (
+        <div className="chart-tooltip"
+             style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
+          <div className="t-title">인상 시작 {hover.k > 0 ? `${hover.k}개월 뒤` : hover.k < 0 ? `${-hover.k}개월 전` : '달'}</div>
+          {lines.map((l) => {
+            const p = l.pts.find((q) => q.k === hover.k)
+            return <div className="t-row" key={l.key}>{l.label} {p ? fmt(p.v, 1) : '—'}</div>
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
