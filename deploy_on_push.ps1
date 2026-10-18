@@ -53,7 +53,7 @@
     (Kernel-Power 507 과 1초 안) 스케줄러가 밀린 06:30 차례를 띄웠고,
     powershell.exe 가 **스크립트를 읽기도 전에**(CLR 초기화 중) ntdll 에서
     0xC0000005 로 죽었다. sync_static.log 에 한 줄도 없다. 이 저장소가 고칠 수 있는
-    자리가 아니다 — 경위는 docs/deploy.md '스케줄러가 띄운 PowerShell 이 죽는다'.
+    자리가 아니다 — 경위는 docs/engineering/deploy.md '스케줄러가 띄운 PowerShell 이 죽는다'.
 
     고칠 수 없으면 **다음 차례가 메우게** 한다. 이 작업은 10분마다 돌므로, 마지막
     '배포 완료' 가 $StaleAfter 보다 오래면 main 이 그대로여도 sync_static.ps1 을
