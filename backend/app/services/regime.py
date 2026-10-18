@@ -73,7 +73,7 @@ class Factor:
     metric: str
     sgg_cd: str
     region: str
-    transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log | vs_adequate
+    transform: str  # level | yoy | diff12 | roll12_yoy | log12 | roll12_log | vs_adequate | cum_adequate
     unit: str
     up_means: str   # 이 값이 커지면 어떤 뜻인가(화면 설명)
 
@@ -83,11 +83,15 @@ FACTORS: tuple[Factor, ...] = (
     # 건수 계열(준공·미분양·거래량)은 로그 변화율이다(`_log12`). 전년비(%)는 1년 전
     # 값이 작으면 수천 %로 터져 그림과 상관을 그 몇 달이 덮었다. 단위는 비운다 —
     # 로그 변화율은 %가 아니다. 읽는 법은 `TRANSFORM_LABEL` 이 화면에 붙인다.
-    # '공급' 은 준공을 **적정 공급(가구 증가 + 멸실) 대비**로 잰다(`_vs_adequate`). 예전에는
-    # '준공 물량' — 준공 12개월 합의 로그 변화율 — 이었는데, 그것은 작년보다 더 지었나만
-    # 말하고 **필요한 만큼 지었나** 는 말하지 않는다. 공급 분석이 묻는 질문이 뒤의 것이다.
-    Factor("supply", "공급", "공급", "done", "41", "경기", "vs_adequate", "%",
-           "적정 공급보다 더 지었다(100 이 적정)"),
+    # '누적 공급' — 적정 공급(가구 증가 + 멸실) 대비 준공의 **누적 차이**(`_cum_adequate`).
+    # 공급 분석의 '누적 차이' 점선과 같은 값을 달마다 쌓은 것이다. 바뀐 경위(2026-10-18~19):
+    #   준공 물량(준공 12개월 합의 로그 변화율) — 작년보다 더 지었나만 말했다
+    #   공급(12개월 준공 ÷ 적정) — 그 1년이 필요한 만큼이었나. 한 해 덜 지어도 앞서 많이
+    #     지었으면 모자라지 않은데, 그것을 못 본다
+    #   누적 공급 — 그동안 쌓인 과부족. 요청. (12개월 비율은 `_vs_adequate` 로 남아
+    #     scripts/cv_macro.py 의 기록 재현에 쓴다.)
+    Factor("supply", "공급", "누적 공급", "done", "41", "경기", "cum_adequate", "호",
+           "적정보다 더 지은 것이 쌓였다(0 이면 그동안 적정만큼)"),
     Factor("unsold", "공급", "미분양", "unsold", "41", "경기", "log12", "",
            "안 팔린 집이 늘었다"),
     Factor("trade", "수요", "거래량", "trade_volume", "", "경기 남부", "roll12_log", "",
@@ -208,6 +212,42 @@ def _vs_adequate(db: Session, sgg_cd: str) -> dict[str, float]:
     return out
 
 
+def _cum_adequate(db: Session, sgg_cd: str) -> dict[str, float]:
+    """적정 공급 대비 준공의 **누적 차이**(호). 0 이면 그동안 적정만큼 지었다.
+
+    공급 분석의 `gap_cum_smooth`(연 단위, 3년평균 적정 기준)와 **같은 계산을 달마다** 한다 —
+    달마다 (그 달 준공 − 그 해 적정 ÷ 12)를 더한다. 그래서 12월 값이 그 해 누계와 같아야
+    하고, scripts/verify_supply_cum.py 가 전수로 대조한다. 시작은 공급 분석의 누계 시작 해
+    (`cum_from`) 1월이다 — 절대 수준이 아니라 그 뒤의 기울기를 보는 값이라 시작 해를 화면에
+    적는다(`TRANSFORM_LABEL` 뒤에 붙인다).
+
+    적정이 아직 공표되지 않은 해는 마지막 해 적정을 이어 쓴다(`_vs_adequate` 와 같은 까닭,
+    화면이 `caveat` 로 적는다). 준공이 빠진 달이 있으면 거기서 멈춘다 — 빈 달을 0 으로
+    더하면 '그달 하나도 안 지었다' 는 거짓 누적이 된다.
+    """
+    from . import supply as sp
+
+    b = sp.balance(db, sgg_cd)
+    need = {r["year"]: r["adequate_smooth"] for r in b["rows"] if r.get("adequate_smooth")}
+    start = b.get("cum_from")
+    if not need or not start:
+        return {}
+    last_year = max(need)
+    done = _raw(db, "done", sgg_cd)
+    out: dict[str, float] = {}
+    cum = 0.0
+    y, m = int(start), 1
+    while f"{y}{m:02d}" in done:
+        ym = f"{y}{m:02d}"
+        n = need.get(str(y), need[last_year] if str(y) > last_year else None)
+        if n is None:
+            break
+        cum += done[ym] - n / 12
+        out[ym] = cum
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
 def adequate_carried(db: Session, sgg_cd: str = "41") -> str | None:
     """적정 공급이 공표된 마지막 해. 그 뒤 달의 '공급' 은 이 해 적정을 이어 쓴 값이다."""
     from . import supply as sp
@@ -218,6 +258,8 @@ def adequate_carried(db: Session, sgg_cd: str = "41") -> str | None:
 def series_of(db: Session, f: Factor) -> dict[str, float]:
     if f.transform == "vs_adequate":
         return _vs_adequate(db, f.sgg_cd)
+    if f.transform == "cum_adequate":
+        return _cum_adequate(db, f.sgg_cd)
     raw = _raw(db, f.metric, f.sgg_cd)
     if f.transform == "level":
         return raw
@@ -356,24 +398,25 @@ TRANSFORM_LABEL = {
     "log12": "1년 전 대비 로그 변화율(두 배면 +69)",
     "roll12_log": "12개월 합의 1년 전 대비 로그 변화율(두 배면 +69)",
     "vs_adequate": "12개월 준공 ÷ 적정 공급(100 이 적정)",
+    "cum_adequate": "적정 공급 대비 준공의 누적 차이",
 }
 
 # 높다·낮다로 읽는 변환. 증감(늘었다·줄었다)이 아니라 수준이다 — 문장과 그림의 0 선이 갈린다.
-LEVEL_LIKE = ("level", "vs_adequate")
+LEVEL_LIKE = ("level", "vs_adequate", "cum_adequate")
 
-# 수준값 요인의 기준선. 심리지수는 100 이 '사겠다 = 팔겠다', 공급은 100 이 '적정만큼' 이다.
-# 화면이 요인 키로 짐작하지 않게 여기서 준다.
-REF_LINE = {"sentiment": 100, "supply": 100}
+# 수준값 요인의 기준선. 심리지수는 100 이 '사겠다 = 팔겠다', 누적 공급은 0 이 '그동안 적정만큼'
+# 이다. 화면이 요인 키로 짐작하지 않게 여기서 준다.
+REF_LINE = {"sentiment": 100, "supply": 0}
 
 
 def _caveat(db: Session, f: Factor, last: str) -> str | None:
     """그 요인의 지금 값이 **추정을 낀** 것이면 그렇다고 말한다. 연도는 데이터에서 읽는다."""
-    if f.transform != "vs_adequate":
+    if f.transform not in ("vs_adequate", "cum_adequate"):
         return None
     to = adequate_carried(db, f.sgg_cd)
     if to and last[:4] > to:
         return (f"적정 공급은 {to}년까지 공표돼, 그 뒤 달은 {to}년 적정을 이어 써서 "
-                "나눈 값입니다(준공은 실적).")
+                "셈한 값입니다(준공은 실적).")
     return None
 
 
@@ -393,7 +436,9 @@ def factor_rows(db: Session) -> list[dict]:
         out.append({
             "key": f.key, "group": f.group, "label": f.label, "region": f.region,
             "unit": f.unit, "transform": f.transform, "up_means": f.up_means,
-            "transform_label": TRANSFORM_LABEL[f.transform],
+            # 누적은 시작 해가 뜻의 일부다 — 데이터에서 읽어 붙인다(박으면 어긋난다).
+            "transform_label": (f"{TRANSFORM_LABEL[f.transform]}({min(s)[:4]}년~, 호)"
+                                if f.transform == "cum_adequate" else TRANSFORM_LABEL[f.transform]),
             # 0 이 기준인 계열(증감·차이)인가. 수준값은 0 선을 맞추지 않는다.
             "level_like": f.transform in LEVEL_LIKE,
             "ref_line": REF_LINE.get(f.key),

@@ -95,6 +95,7 @@
 - `scripts/verify_listing_parse.py` — 파서 주석의 '실제로 겪은' 사례를 입력으로, 주석이
   말하는 값을 기대값으로. 지금 출력을 얼리지 않는다 — 그러면 지금의 버그가 정답이 된다
 - `scripts/verify_payloads.py` — 적합 페이로드가 정말 JSON 이 되는지
+- `scripts/verify_supply_cum.py` — 거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별), 12월 값 대조
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지,
   코드 주석이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다

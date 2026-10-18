@@ -56,6 +56,11 @@ from app.services import regime as R  # noqa: E402
 # 운영 모델의 '준공 물량' 정의(2026-10-18 에 '공급' 으로 바뀌기 전). 비교용으로만 둔다.
 DONE = R.Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll12_log", "",
                 "새 아파트가 더 많이 입주했다")
+# '공급판' 의 공급 — 12개월 준공 ÷ 적정(2026-10-18). 화면은 2026-10-19 에 '누적 공급' 으로
+# 바뀌었지만 기록(macro-model.md)은 이 정의로 쟀으므로 여기서 고정한다. `R.FACTORS` 를 그대로
+# 쓰면 화면이 바뀔 때마다 재현 숫자가 조용히 달라진다.
+SUPPLY12 = R.Factor("supply", "공급", "공급", "done", "41", "경기", "vs_adequate", "%",
+                    "적정 공급보다 더 지었다(100 이 적정)")
 VALUATION_WINDOW = 60
 LEAD_MONTHS = 24
 NW_LAG = 11  # 12개월 창이 겹쳐 오차가 11개월까지 자기상관을 가진다
@@ -178,7 +183,8 @@ def dm(pa: dict, pb: dict, keys: list[str], lag: int = NW_LAG) -> tuple[float, f
 
 
 def factor_sets(db) -> dict[str, dict[str, Col]]:
-    base = {f.key: Col(f.key, f.group, R.series_of(db, f)) for f in R.FACTORS}
+    fs = [SUPPLY12 if f.key == "supply" else f for f in R.FACTORS]
+    base = {f.key: Col(f.key, f.group, R.series_of(db, f)) for f in fs}
     done = {"done": Col("done", "공급", R.series_of(db, DONE)),
             **{k: v for k, v in base.items() if k != "supply"}}
     return {"공급판": base, "준공판": done}

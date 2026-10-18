@@ -26,9 +26,9 @@ export const TOPICS = [
   { id: 'trade_volume', title: '매매 거래량', metric: 'trade_volume', factor: 'trade' },
   { id: 'unsold', title: '미분양', supply: 'unsold', factor: 'unsold' },
   { id: 'pipeline', title: '공급 파이프라인 — 인허가 · 착공 · 준공', supply: 'pipeline' },
-  // 거시 분석의 '공급' 은 경기의 12개월 준공 ÷ 적정 공급이다. 공급 분석의 '적정보다 더
-  // 지었나' 카드와 같은 데이터라 창이 하나다. 예전에는 거시 분석에 '준공 물량'(준공 12개월
-  // 합의 로그 변화율)이 있었고 파이프라인 창에 묶여 있었다.
+  // 거시 분석의 '누적 공급' 은 경기의 적정 공급 대비 준공 누적 차이다 — 공급 분석의 '적정보다
+  // 더 지었나' 카드의 누적 점선과 같은 값이라 창이 하나다(scripts/verify_supply_cum.py 가 대조).
+  // 예전에는 '준공 물량'(12개월 합의 로그 변화율), 그다음 '공급'(12개월 준공 ÷ 적정)이었다.
   { id: 'balance', title: '적정 대비 공급', supply: 'balance', factor: 'supply' },
 ]
 

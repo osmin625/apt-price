@@ -59,6 +59,7 @@ backend/
     validate_model.py       참값 복원 + 커버리지 검증
     cv_model.py             Stage 2 교차검증 — 요인을 넣을지 정하는 자
     cv_macro.py             거시 합산 모델(화면에서 걷음) — 같은 백테스트 + DM 검정
+    verify_supply_cum.py    거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별) 대조
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
     verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층
