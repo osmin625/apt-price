@@ -5,7 +5,7 @@ import { fmt, useMeasure, useTooltip } from '../components/Charts'
 import Modal from '../components/Modal'
 import PanelCard from '../components/PanelCard'
 import HeatLegend from '../components/HeatLegend'
-import { heatVars } from '../components/heat'
+import { heatVars, zText } from '../components/heat'
 import TimeLines from '../components/TimeLines'
 import TopicModal from '../topics/TopicModal'
 import { homeOf, topicFor } from '../topics/registry'
@@ -30,7 +30,7 @@ import { homeOf, topicFor } from '../topics/registry'
  * ## 세 번째 블록이 사실 핵심이다
  *
  * '지금 어느 쪽' 보다 **'전에도 이런 적이 있었나'** 가 더 답할 만한 질문이다.
- * 요인 상태를 백분위로 바꿔 지금과 가장 가까웠던 과거 달을 찾고, 그 뒤 12개월에
+ * 요인 상태를 평균 기준 z 로 바꿔 지금과 가장 가까웠던 과거 달을 찾고, 그 뒤 12개월에
  * 무슨 일이 있었는지를 보여 준다. 예측이 아니라 전례다.
  */
 export default function RegimeView() {
@@ -102,10 +102,11 @@ export default function RegimeView() {
       <section className="card">
         <h2>요인별로 하나씩</h2>
         <p className="sub">
-          값이 아니라 <b>자기 역사에서 어디쯤인지</b>로 봅니다. 미분양 몇 호가 많은
-          것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다.
+          값이 아니라 <b>자기 평균보다 얼마나 위·아래인지</b>로 봅니다. 미분양 몇 호가 많은
+          것인지는 그 지역 미분양의 긴 역사에 비춰 봐야 알 수 있기 때문입니다. '몇 배' 는 평소
+          오르내림 폭(표준편차)의 몇 배인가입니다.
         </p>
-        <HeatLegend>카드 색은 자기 역사에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
+        <HeatLegend>카드 색은 자기 평균에서의 위치입니다. 좋고 나쁨이 아닙니다</HeatLegend>
         <div className="legend">
           <span className="key"><span className="swatch" style={{ background: 'var(--good)' }} />왼쪽 막대 — 가격을 올리는 쪽</span>
           <span className="key"><span className="swatch" style={{ background: 'var(--neg)' }} />내리는 쪽</span>
@@ -121,7 +122,7 @@ export default function RegimeView() {
               key={f.key}
               title={f.label}
               sub={factorSub(f)}
-              heat={heatVars(f.percentile)}
+              heat={heatVars(f.z)}
               edge={edgeOf(f)}
               onOpen={() => setOpen({ kind: 'factor', f })}
             >
@@ -134,15 +135,14 @@ export default function RegimeView() {
             <h3 className="mt16">카드가 다른 탭에 있는 요인</h3>
             <div className="rg-shared">
               {data.factors.filter((f) => homeOf(topicFor('factor', f.key))).map((f) => (
-                <button key={f.key} className="rg-shared-row" style={heatVars(f.percentile)}
+                <button key={f.key} className="rg-shared-row" style={heatVars(f.z)}
                         data-edge={edgeOf(f)}
                         onClick={() => setOpen({ kind: 'factor', f })} aria-haspopup="dialog">
                   <strong>{f.label}</strong>
-                  {/* 무엇의 백분위인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
+                  {/* 무엇의 위치인지 적는다. 공급 분석 미분양 카드는 '호' 의 위치이고
                       여기는 그 전년비의 위치라, 같은 자라도 숫자가 다를 수 있다. */}
                   <span className="muted small">
-                    {f.transform_label} · 자기 역사{' '}
-                    <span className="heat-pct">{Math.round(f.percentile * 100)}%</span> 지점 · {f.region}
+                    {f.transform_label} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
                   </span>
                   <span className="muted small">카드는 {homeOf(topicFor('factor', f.key))}</span>
                   <span className="factor-caret" aria-hidden="true">&#10530;</span>
@@ -242,10 +242,9 @@ const DIRWORD = { up: '상승 압력', down: '하락 압력', none: '방향 없�
 
 function factorSub(f) {
   const v = `${f.latest.value}${f.unit}`
-  const pct = Math.round(f.percentile * 100)
   return (
     <>
-      {ymText(f.latest.ym)} {v} · 자기 역사 <span className="heat-pct">{pct}%</span> 지점 · {f.region}
+      {ymText(f.latest.ym)} {v} · <span className="heat-pos">{zText(f.z)}</span> · {f.region}
     </>
   )
 }
@@ -330,7 +329,7 @@ function GroupDetail({ g }) {
               </td>
               <td className="muted">{m.strength}</td>
               <td>{m.r == null ? '—' : m.r > 0 ? `+${m.r}` : m.r}</td>
-              <td className="muted">{Math.round(m.percentile * 100)}%</td>
+              <td className="muted">{zText(m.z)}</td>
             </tr>
           ))}
         </tbody>
@@ -410,10 +409,10 @@ function HistoryTable({ h, factors }) {
   return (
     <>
       <p className="sub">{h.note}</p>
-      <HeatLegend lo="역대 최저" hi="역대 최고">
-        칸 색은 자기 역사에서의 위치(백분위)이고, 글자는{' '}
+      <HeatLegend>
+        칸 색은 자기 평균에서의 위치(평소 폭의 몇 배)이고, 글자는{' '}
         {(h.levels || []).map((l) =>
-          `${l.label}${l.max != null ? ` ≤${Math.round(l.max * 100)}%` : l.min != null ? ` ≥${Math.round(l.min * 100)}%` : ''}`,
+          `${l.label}${l.max != null ? ` ${l.max}배 이하` : l.min != null ? ` +${l.min}배 이상` : ''}`,
         ).join(' · ')}
       </HeatLegend>
       <div className="table-wrap">
@@ -436,17 +435,17 @@ function HistoryTable({ h, factors }) {
                   return (
                     <td key={k}>
                       {c ? (
-                        // 색은 백분위 그대로(연속), 글자는 다섯 단계. 끊는 것은 읽기 위한
-                        // 글자뿐이다 — 색까지 끊으면 71% 와 99% 가 같은 칸이 된다.
+                        // 색은 z 그대로(연속), 글자는 다섯 단계. 끊는 것은 읽기 위한
+                        // 글자뿐이다 — 색까지 끊으면 0.6배와 1.4배가 같은 칸이 된다.
                         <span
                           className="rg-state"
-                          style={heatVars(c.pct)}
+                          style={heatVars(c.z)}
                           onMouseMove={(e) =>
                             tip.show(e, (
                               <>
                                 <div className="t-title">{labels[k]} · {ymText(r.ym)}</div>
                                 <div className="t-row">값 {c.v}</div>
-                                <div className="t-row">자기 역사 {Math.round(c.pct * 100)}% 지점</div>
+                                <div className="t-row">{zText(c.z)}</div>
                               </>
                             ))
                           }
@@ -564,13 +563,16 @@ function MacroModel({ m, price }) {
         <div className="rg-tug-side is-up" style={{ flexGrow: upPct }}>▲ 올리는 힘 {upPct}%</div>
       </div>
       <div className="rg-tug-cols">
-        <TugList dir="up" title="▲ 올리는 쪽" items={ups} />
+        {/* 위 막대와 같은 좌우 — 내리는 쪽이 왼쪽, 올리는 쪽이 오른쪽. 처음에는 목록만 반대라
+            막대의 ▼ 아래에 ▲ 목록이 있었다. */}
         <TugList dir="down" title="▼ 내리는 쪽" items={downs} />
+        <TugList dir="up" title="▲ 올리는 쪽" items={ups} />
       </div>
       <p className="muted small">
         '몇 배' 는 그 요인이 지금 평소에서 얼마나 벗어나 있는지입니다 — 평소 오르내림 폭(표준편차)의
         몇 배인가. 1배 안쪽은 흔한 범위이고, 많이 벗어난 요인일수록 세게 당깁니다. 막대의 비율이 이
-        값들의 합입니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
+        값들의 합입니다. 아홉 요인이 모두 나온 {ymText(m.now)} 값이라, 그 뒤 달이 먼저 나온 요인은
+        아래 요인 카드와 숫자가 조금 다를 수 있습니다 — 평균은 같습니다. 요인끼리 얽혀 함께 움직이므로, 요인마다 가격을 몇 %p 바꿨는지로
         나누지는 않습니다.
         {m.excluded.length > 0 && ` 과거 관계가 약해 뺀 요인: ${m.excluded.join(', ')}.`}
       </p>

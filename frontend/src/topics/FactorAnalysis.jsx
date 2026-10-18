@@ -4,6 +4,7 @@
  * 원래 `views/RegimeView.jsx` 의 요인 창이었다. 이제 어느 탭에서 열든 주제 창
  * (`TopicModal`)의 '가격과의 관계' 절로 들어간다.
  */
+import { zText } from '../components/heat'
 
 const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
 
@@ -13,7 +14,7 @@ export function FactorDetail({ f }) {
     <>
       <p className="sub">
         {f.up_means}는 뜻입니다. 지금 {ymText(f.latest.ym)} 값은 {f.latest.value}
-        {f.unit} 로 자기 역사의 {Math.round(f.percentile * 100)}% 지점입니다.{' '}
+        {f.unit} 로 {zText(f.z)}입니다.{' '}
         <b>{f.region}</b> 기준입니다.
       </p>
       <p className="sub">{f.pressure.why}</p>

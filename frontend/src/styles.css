@@ -683,7 +683,7 @@ tr.is-deleting td { opacity: 0.4; }
   .rg-shared-row { grid-template-columns: 1fr 14px; row-gap: 2px; }
   .rg-shared-row > .muted { grid-column: 1; }
 }
-.heat-pct { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
+.heat-pos { font-weight: 600; color: color-mix(in srgb, var(--heat-c) var(--heat-edge), var(--text-secondary)); }
 /* 범례 — 카드 색이 무엇을 뜻하는지 격자 바로 위에서 말한다. */
 .heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
 /* 양 끝 이름('역대 최저')은 쪼개지 않는다. 설명이 길면 그 설명만 줄을 바꾼다 —

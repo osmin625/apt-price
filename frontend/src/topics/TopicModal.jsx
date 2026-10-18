@@ -4,7 +4,7 @@ import { api } from '../api'
 import { fmt } from '../components/Charts'
 import Modal from '../components/Modal'
 import TimeLines from '../components/TimeLines'
-import { heatVars, histPct } from '../components/heat'
+import { heatVars, histZ, zText } from '../components/heat'
 import { FactorDetail } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
 import { PRICE_METRIC } from './registry'
@@ -257,7 +257,7 @@ const REGION_LABEL = { 서울: '서울', 경기: '경기 전체' }
  * 파이프라인을 크게. 카드 축소판은 세 선의 모양만 보여 주고 숫자가 없었다.
  *
  * 숫자 타일은 계열마다 **지금 12개월 누적 · 1년 전 대비 · 역대 범위 안 위치** 셋이다.
- * 위치는 탭 공통의 자(자기 역사 백분위, `heat.js` 의 `histPct`)다 — 준공이 자기
+ * 위치는 탭 공통의 자(자기 평균 기준 z, `heat.js` 의 `histZ`)다 — 준공이 자기
  * 역사의 어디쯤인지가 '지금 공급이 많은가' 에 대한 가장 짧은 답이다.
  */
 function PipelineDetail({ regions, initial }) {
@@ -286,7 +286,7 @@ function PipelineDetail({ regions, initial }) {
           const yoy = prev?.value ? (last.value / prev.value - 1) * 100 : null
           const vals = pts.map((p) => p.value)
           const peak = pts.reduce((a, b) => (b.value > a.value ? b : a))
-          const pos = histPct(vals, last.value)
+          const pos = histZ(vals, last.value)
           return (
             <div className="tile" key={k} style={heatVars(pos)}>
               <div className="label">{label} · 12개월 누적</div>
@@ -301,7 +301,7 @@ function PipelineDetail({ regions, initial }) {
               <div className="note">
                 역대 최고 {fmt(peak.value)}호({fmtYm(peak.ym)})
                 {pos != null && (
-                  <> · 자기 역사 <span className="heat-pct">{Math.round(pos * 100)}%</span> 지점</>
+                  <> · <span className="heat-pos">{zText(pos)}</span></>
                 )}
               </div>
             </div>
