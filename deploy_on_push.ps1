@@ -43,6 +43,23 @@
     sync_static.log 에 덧붙인 줄에서 **"배포 완료 … (소스 <해시>)"** 를 찾는다.
     찾았을 때만 상태 파일을 고친다 — 못 찾았는데 고치면 그 커밋은 영영 안 올라간다.
 
+    ## 배포가 묵었으면 소스가 같아도 돈다
+
+    일일 작업('apt-price 정적 사이트 동기화')은 하루 한 번만 기회가 있다. 그 한 번이
+    죽으면 실거래 적재처럼 푸시 없이 바뀐 데이터가 **하루 통째로** 안 올라가고,
+    화면은 멀쩡히 옛 값을 보여 준다.
+
+    실제로 죽었다. 2026-10-05·10-08·10-15 세 번, 모던 스탠바이에서 깨어나는 순간
+    (Kernel-Power 507 과 1초 안) 스케줄러가 밀린 06:30 차례를 띄웠고,
+    powershell.exe 가 **스크립트를 읽기도 전에**(CLR 초기화 중) ntdll 에서
+    0xC0000005 로 죽었다. sync_static.log 에 한 줄도 없다. 이 저장소가 고칠 수 있는
+    자리가 아니다 — 경위는 docs/deploy.md '스케줄러가 띄운 PowerShell 이 죽는다'.
+
+    고칠 수 없으면 **다음 차례가 메우게** 한다. 이 작업은 10분마다 돌므로, 마지막
+    '배포 완료' 가 $StaleAfter 보다 오래면 main 이 그대로여도 sync_static.ps1 을
+    부른다. 이것도 같은 순간에 죽을 수 있지만(10-16 01:22 첫 차례가 그랬다) 10분
+    뒤 다시 본다.
+
     UTF-8 with BOM 으로 저장해야 한다 — setup.ps1 의 주석 참조.
 #>
 [CmdletBinding()]
@@ -66,6 +83,11 @@ if (-not $gitDir) { Write-Host "[X] git 저장소가 아닙니다: $Repo"; exit 
 if (-not [IO.Path]::IsPathRooted($gitDir)) { $gitDir = Join-Path $Repo $gitDir }
 $StateFile = Join-Path $gitDir 'deploy_on_push.state'
 $RetryAfter = New-TimeSpan -Hours 1
+# 24시간 + 2시간. 06:30 일일 작업이 제대로 돌면 성공 간격은 24시간을 넘지 않으므로
+# 이 경로는 발동하지 않는다. 깨어난 뒤 밀린 차례로 늦게 돈 날(10:52 등)의 이튿날도
+# 06:30 이면 20시간 남짓이다. 2시간은 06:30 차례가 몇 분 늦게 끝나는 것을 '묵었다'
+# 로 세지 않을 여유다.
+$StaleAfter = New-TimeSpan -Hours 26
 
 function Say ($t) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $t"
@@ -100,6 +122,27 @@ function Save-State ($s) {
     ($s | ConvertTo-Json) | Set-Content -Path $StateFile -Encoding utf8
 }
 
+# 마지막으로 올린 시각 — 누가 올렸든(일일 작업·이 작업·손) sync_static.log 의
+# '배포 완료 · ' 줄이 기준이다. 상태 파일은 이 작업이 올린 것만 알아서 못 쓴다.
+# 끝 64KB 만 읽는다(한 번 도는 데 5KB 남짓 쌓인다). 못 찾으면 $null — 묵은 것으로 본다.
+function Last-Deployed {
+    if (-not (Test-Path $SyncLog)) { return $null }
+    $fs = [IO.File]::Open($SyncLog, 'Open', 'Read', 'ReadWrite')
+    try {
+        $n = [int][Math]::Min($fs.Length, 65536)
+        $null = $fs.Seek(-$n, 'End')
+        $buf = New-Object byte[] $n
+        $null = $fs.Read($buf, 0, $n)
+    } finally { $fs.Close() }
+    $lines = [Text.Encoding]::UTF8.GetString($buf) -split "`r?`n"
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+        if ($lines[$i] -match '^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)  배포 완료 · ') {
+            return [datetime]::ParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', $null)
+        }
+    }
+    return $null
+}
+
 if (-not (Test-Path $Sync)) { Say "[X] sync_static.ps1 이 없습니다: $Sync"; exit 1 }
 
 # ------------------------------------------------------------ 1) 무엇이 올라가 있어야 하나
@@ -125,7 +168,15 @@ if (-not $state.deployed) {
     }
 }
 
-if ($state.deployed -eq $target) { exit 0 }   # 할 일 없음. 로그도 남기지 않는다.
+$stale = ''
+if ($state.deployed -eq $target) {
+    $last = Last-Deployed
+    if ($last -and ((Get-Date) - $last) -lt $StaleAfter) { exit 0 }   # 할 일 없음. 로그도 남기지 않는다.
+    $stale = if ($last) { "마지막 배포가 {0:N0}시간 전" -f ((Get-Date) - $last).TotalHours } else { '배포 기록을 찾지 못함' }
+}
+# 로그에 적는 '무엇 때문에 도나'. 묵어서 도는 것과 새 main 이라 도는 것을 구분해야
+# 나중에 로그만 보고 일일 작업이 죽었던 날을 셀 수 있다.
+$what = if ($stale) { "$stale($short)" } else { "새 main($short)" }
 
 # ------------------------------------------------------------ 2) 올려도 되는 상태인가
 $why = @()
@@ -138,7 +189,7 @@ if ($ahead -match '^[0-9]+$' -and [int]$ahead -gt 0) { $why += "origin/main 에 
 if ($why.Count) {
     $reason = "$short : " + ($why -join ' · ')
     if ($reason -ne $state.deferred) {
-        Say "미룸 — 새 main($short)이 있지만 $($why -join ' · '). main 으로 돌아오면 올립니다."
+        Say "미룸 — $what 이지만 $($why -join ' · '). main 으로 돌아오면 올립니다."
         $state.deferred = $reason
         Save-State $state
     }
@@ -154,7 +205,7 @@ if ($state.failed -eq $target -and $state.failed_at) {
 $out = GitOut @('merge', '--ff-only', '-q', 'origin/main')
 if ($GitCode -ne 0) { Say "[X] main 을 fast-forward 하지 못했습니다: $out"; exit 1 }
 
-Say "새 main $short — 배포를 시작합니다"
+Say "$what — 배포를 시작합니다"
 $before = if (Test-Path $SyncLog) { (Get-Item $SyncLog).Length } else { 0 }
 
 & $Sync -Quiet
@@ -216,7 +267,8 @@ exit 1
     뮤텍스가 막는다.
 
     일일 작업은 그대로 둔다. 실거래 적재처럼 **푸시 없이 데이터만 바뀌는** 경우는
-    이것이 못 본다.
+    일일 작업이 맡는다. 이것은 그 일일 작업이 빠진 날(26시간 넘게 배포가 없을 때)만
+    대신 돈다 — 위 '배포가 묵었으면'.
 
     로그는 deploy_on_push.log(.gitignore 의 *.log), 상태는 .git/deploy_on_push.state.
     해제: Unregister-ScheduledTask -TaskName 'apt-price 푸시 연동 배포'
