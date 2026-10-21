@@ -29,8 +29,12 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  *
  * ## 띠
  *
- * `bands`: [{ from, to, label? }] — 그 기간을 옅게 칠한다(금리 인상기). 선과 다른 층이라
- * 선 색을 가리지 않게 맨 아래에 깐다. 한 달짜리 띠도 보이도록 양쪽으로 반 달씩 넓힌다.
+ * `bands`: [{ from, to, label?, tip?, tone?, edge? }] — 그 기간을 옅게 칠한다(금리 인상기). 선과
+ * 다른 층이라 선 색을 가리지 않게 맨 아래에 깐다. 한 달짜리 띠도 보이도록 양쪽으로 반 달씩 넓힌다.
+ *
+ * 정권처럼 기간이 빈틈없이 이어지는 띠(2026-10-21)는 `tone: 'alt'` 로 한 칸 걸러 무채색으로 칠하고
+ * `edge` 로 시작 달에 경계선을 긋고, `label` 을 그림 위 한 줄에 적는다(칸이 좁으면 생략 — 권한대행
+ * 두어 달은 글자가 안 들어간다). 마우스를 올린 달의 띠 이름(`tip`, 없으면 `label`)은 툴팁 제목에 붙는다.
  */
 /* 축 범위 안의 눈금. 0 선을 맞추려고 범위를 늘리면 눈금 계산에서 -0 이 나와 축에
    '-0' 이 찍혔다(미분양 창 오른쪽 축) — 0 으로 바로잡는다. */
@@ -62,7 +66,9 @@ export default function TimeLines({
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState(null)
   const hasRight = series.some((s) => s.axis === 'right')
-  const PAD = { t: 12, r: hasRight ? 52 : 14, b: 26, l: 56 }
+  // 띠 이름을 적을 한 줄을 그림 위에 둔다 — 그림 안에 적으면 선과 겹친다.
+  const hasBandLabel = bands.some((b) => b.label)
+  const PAD = { t: hasBandLabel ? 26 : 12, r: hasRight ? 52 : 14, b: 26, l: 56 }
   const W = Math.max(width || 640, 280)
 
   const g = useMemo(() => {
@@ -138,7 +144,7 @@ export default function TimeLines({
         if (!a || !z || a > z) return null
         const x0 = Math.max(PAD.l, xOf(a) - step / 2)
         const x1 = Math.min(PAD.l + iw, xOf(z) + step / 2)
-        return { key: `${b.from}-${b.to}`, x: x0, w: x1 - x0, label: b.label }
+        return { key: `${b.from}-${b.to}`, x: x0, w: x1 - x0, label: b.label, tone: b.tone, edge: b.edge }
       })
       .filter(Boolean)
 
@@ -147,7 +153,7 @@ export default function TimeLines({
       ticksL: L ? axisTicks(L) : [],
       ticksR: R ? axisTicks(R) : [],
     }
-  }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero, bands])
+  }, [series, W, height, zero, refLine, monthsProp, hasRight, rightZero, bands, PAD.t])
 
   if (!g) return <p className="empty">값이 없습니다</p>
 
@@ -167,6 +173,20 @@ export default function TimeLines({
     return hasRight && ss.length === 1 ? ss[0].color : 'var(--text-muted)'
   }
   const unitOf = (s) => (s.axis === 'right' ? rightUnit : unit)
+  const keyStyle = (s) => {
+    const dash = typeof s.dash === 'string' ? s.dash : s.dash ? '5 4' : null
+    const [on, off] = dash ? dash.split(/\s+/).map(Number) : [0, 0]
+    return {
+      height: `${Math.max(2, Math.min(s.width ?? 1.9, 3))}px`,
+      background: dash
+        ? `repeating-linear-gradient(90deg, ${s.color} 0 ${on}px, transparent ${on}px ${on + off}px)`
+        : s.color,
+    }
+  }
+  const bandAt = (ym) => {
+    const b = bands.find((x) => (x.tip || x.label) && x.from <= ym && ym <= x.to)
+    return b ? b.tip || b.label : null
+  }
   const decOf = (s) => (s.axis === 'right' ? rightDecimals : decimals)
 
   return (
@@ -174,7 +194,17 @@ export default function TimeLines({
       <svg viewBox={`0 0 ${W} ${height}`} role="img" aria-label={ariaLabel}
            onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         {g.shade.map((b) => (
-          <rect key={b.key} x={b.x} y={PAD.t} width={b.w} height={g.ih} fill="var(--band)" />
+          <g key={b.key}>
+            <rect x={b.x} y={PAD.t} width={b.w} height={g.ih}
+                  fill={b.tone === 'alt' ? 'var(--era)' : b.tone === 'plain' ? 'transparent' : 'var(--band)'} />
+            {b.edge && b.x > PAD.l + 1 && (
+              <line x1={b.x} x2={b.x} y1={PAD.t - 12} y2={PAD.t + g.ih} stroke="var(--axis)" />
+            )}
+            {b.label && b.w >= b.label.length * 11 + 6 && (
+              <text x={b.x + b.w / 2} y={PAD.t - 8} textAnchor="middle" fontSize="11"
+                    fill="var(--text-secondary)">{b.label}</text>
+            )}
+          </g>
         ))}
         {g.ticksL.map((t) => (
           <g key={`l${t}`}>
@@ -241,12 +271,20 @@ export default function TimeLines({
       {hm && (
         <div className="chart-tooltip"
              style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
-          <div className="t-title">{hm.slice(0, 4)}.{hm.slice(4)}</div>
+          <div className="t-title">
+            {hm.slice(0, 4)}.{hm.slice(4)}
+            {bandAt(hm) && <span className="muted"> · {bandAt(hm)}</span>}
+          </div>
           {series.map((s, si) => {
             const v = g.lookup[si].get(hm)
             const u = unitOf(s)
             return (
               <div className="t-row" key={s.key}>
+                {/* 줄 앞에 그 선의 색·모양을 짧게 그린다. 거시 '한 그림에' 처럼 선이 열 개쯤이면 이름만으로는
+                    어느 선인지 그림에서 다시 찾아야 했다(2026-10-21 요청). 그림과 같은 굵기·점선 간격이다.
+                    처음에 작은 svg 로 그렸더니 `.macro-chart svg` 의 폭 100% 가 걸려 툴팁이 화면만 해졌다 —
+                    그래서 배경 무늬로 그린다. */}
+                {series.length > 1 && <span className="t-key" style={keyStyle(s)} aria-hidden="true" />}
                 {series.length > 1 && <>{s.label} </>}
                 {v == null ? '—' : `${fmt(v, decOf(s))}${u ? ` ${u}` : ''}`}
               </div>
