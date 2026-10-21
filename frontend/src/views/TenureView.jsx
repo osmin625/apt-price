@@ -181,8 +181,35 @@ function Prices({ data, bands, region }) {
   )
 }
 
-/** ③ 월세 쏠림 — 전환율이 대출·예금 금리 위로 얼마나 벌어지나, 월세 가격은 어떻게 가나. */
+/**
+ * ③ 월세 쏠림 — 전환율과 각 금리의 **차이**로, 누가 어느 쪽을 고를 유인이 있나.
+ *
+ * 처음에는 전환율과 금리 넷을 수준 그대로 겹쳤다. 선 넷이 2~5% 사이에서 얽혀 '어느 쪽이
+ * 유리한가' 를 읽으려면 두 선의 높낮이를 눈으로 빼야 했다(2026-10-21 요청 — 선호 변화가 더
+ * 잘 느껴지게). 그래서 고르는 사람마다 견주는 두 값의 차이를 한 줄씩 두고, 0 위·아래를 그때
+ * 유리한 쪽의 색으로 칠한다. 색은 탭 공통(매매 파랑 · 전세 청록 · 월세 주황)이다.
+ *
+ * 세 줄은 같은 %p 축이다 — 줄마다 축을 따로 잡으면 집주인 줄(폭이 큰)과 세입자 줄의 크기를
+ * 견줄 수 없다. 수준 그림은 '금리 수준' 단추로 남겼다.
+ */
+const TILT = [
+  { key: 'jeonse', who: '세입자', title: '전세 vs 월세', rate: 'jeonse_loan', rateLabel: '전세자금대출',
+    up: { k: 'jeonse', label: '전세 유리' }, down: { k: 'rent', label: '월세 유리' } },
+  { key: 'buy', who: '실수요', title: '매매 vs 월세', rate: 'mortgage', rateLabel: '주택담보대출',
+    up: { k: 'sale', label: '매매 유리' }, down: { k: 'rent', label: '월세 유리' } },
+  { key: 'owner', who: '집주인', title: '월세 vs 전세', rate: 'deposit', rateLabel: '정기예금',
+    up: { k: 'rent', label: '월세로 받기 유리' }, down: { k: 'jeonse', label: '전세로 받기 유리' } },
+]
+const signed = (v, d = 2) => `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}`
+
 function RentTilt({ data, bands, region }) {
+  const [view, setView] = useState('gap')
+  const [hover, setHover] = useState(null)
+  const months = data.rows.map((r) => r.ym)
+  const gaps = useMemo(
+    () => TILT.map((t) => ({ ...t, vals: data.rows.map((r) => r.conv - r[t.rate]) })),
+    [data],
+  )
   const series = useMemo(() => {
     const row = (k) => data.rows.map((r) => ({ ym: r.ym, value: r[k] }))
     return [
@@ -192,29 +219,139 @@ function RentTilt({ data, bands, region }) {
       { key: 'dep', label: '정기예금 금리', color: C.rate, dash: '1 3', points: row('deposit') },
     ]
   }, [data])
-  const last = data.rows[data.rows.length - 1]
-  const gap = last.conv - last.jeonse_loan
+  const all = gaps.flatMap((g) => g.vals)
+  const pad = (Math.max(...all) - Math.min(...all)) * 0.08
+  // 0 아래를 최소 1.5%p 는 남긴다. 차이가 0 아래로 내려간 때가 드물어(2022년 말 몇 달) 값에만 맞추면
+  // 0 선이 바닥에 붙어 '반대쪽이 유리한 영역' 이 있다는 것 자체가 안 보였다.
+  const dom = [Math.min(-1.5, Math.min(...all) - pad), Math.max(0, ...all) + pad]
+  const hi = hover == null ? null : hover.i
+  const r = data.rows[hi ?? data.rows.length - 1]
+
   return (
     <section className="card">
       <h2>
-        월세 쏠림 — 전환율과 금리
+        월세 쏠림 — 누가 어느 쪽을 고르나
         <Hint
           wide
           notes={[
-            '전월세 전환율은 보증금을 월세로 바꿀 때 쓰는 연 이율입니다. 월세 수요가 몰리면 집주인이 더 높은 전환율을 받을 수 있어 올라갑니다.',
-            '전환율이 전세자금대출 금리보다 높으면 세입자는 빌려서라도 전세가 싸고, 낮아지면 월세가 덜 불리해집니다. 둘 사이가 좁혀지는 것이 월세로 몰리는 신호입니다.',
-            '예금 금리는 집주인 쪽 기준입니다 — 전환율이 예금 금리에 가까워지면 보증금을 받아 맡기는 것과 월세로 받는 것의 차이가 줄어듭니다.',
+            '전월세 전환율은 보증금을 월세로 바꿀 때 쓰는 연 이율입니다. 세 줄은 이 전환율에서, 고르는 사람이 견주는 금리를 뺀 값(%p)입니다.',
+            '세입자 — 전환율 − 전세자금대출 금리. 0 위면 대출을 받아서라도 전세가 월세보다 싸고(전세 유리), 0 아래면 월세가 쌉니다. 이 줄이 0 쪽으로 내려오는 것이 월세로 몰리는 신호입니다.',
+            '실수요 — 전환율 − 주택담보대출 금리. 0 위면 빌려서 사는 이자율이 월세 이율보다 낮습니다(매매 유리). 집값의 오르내림·세금은 빼고 이율만 견줍니다. 같은 집의 실제 월 금액은 맨 위 그림입니다.',
+            '집주인 — 전환율 − 정기예금 금리. 0 위면 보증금을 받아 예금에 넣는 것보다 월세로 받는 쪽이 더 법니다. 이 줄이 클수록 전세 매물이 월세로 돌아설 유인이 큽니다.',
+            '세 줄은 같은 축(%p)입니다. 칠한 색은 그때 유리한 쪽, 옅은 띠는 기준금리 인상기입니다. 그림 위에 마우스를 올리면 그 달 값이 머리에 나옵니다.',
           ]}
         />
         {region}
       </h2>
-      <p className="muted small">
-        {ymText(last.ym)} 전환율 {fmt(last.conv, 2)}% · 전세자금대출 {fmt(last.jeonse_loan, 2)}% ·
-        {' '}차이 {gap >= 0 ? '+' : '−'}{fmt(Math.abs(gap), 2)}%p
-      </p>
-      <TimeLines series={series} unit="%" decimals={1} bands={bands} height={280}
-                 ariaLabel="전월세 전환율과 대출·예금 금리" />
+      <div className="seg" role="tablist" aria-label="보기">
+        <button role="tab" aria-selected={view === 'gap'} onClick={() => setView('gap')}>유리한 쪽</button>
+        <button role="tab" aria-selected={view === 'level'} onClick={() => setView('level')}>금리 수준</button>
+      </div>
+      {view === 'level' ? (
+        <TimeLines series={series} unit="%" decimals={1} bands={bands} height={280}
+                   ariaLabel="전월세 전환율과 대출·예금 금리" />
+      ) : (
+        <div className="tilt" onMouseLeave={() => setHover(null)}>
+          <p className="muted small">
+            {ymText(r.ym)} 전환율 {fmt(r.conv, 2)}% · 전세대출 {fmt(r.jeonse_loan, 2)}% · 주담대 {fmt(r.mortgage, 2)}% · 예금 {fmt(r.deposit, 2)}%
+          </p>
+          {gaps.map((g, gi) => (
+            <TiltRow key={g.key} g={g} months={months} dom={dom} bands={bands} hi={hi}
+                     last={gi === gaps.length - 1} onHover={setHover} />
+          ))}
+        </div>
+      )}
     </section>
+  )
+}
+
+/** 한 줄 — 0 위는 `up` 쪽 색, 아래는 `down` 쪽 색으로 칠한 차이 그림. 마우스는 세 줄이 같이 짚는다. */
+function TiltRow({ g, months, dom, bands, hi, last, onHover }) {
+  const [ref, width] = useMeasure()
+  const W = Math.max(width || 640, 280)
+  const H = last ? 112 : 88
+  const P = { t: 6, r: 10, b: last ? 24 : 4, l: 40 }
+  const iw = W - P.l - P.r
+  const ih = H - P.t - P.b
+  const n = months.length
+  const x = (i) => P.l + (i / Math.max(n - 1, 1)) * iw
+  const y = (v) => P.t + ih - ((v - dom[0]) / (dom[1] - dom[0])) * ih
+  const y0 = y(0)
+  const line = g.vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(n - 1).toFixed(1)},${y0.toFixed(1)} L${x(0).toFixed(1)},${y0.toFixed(1)} Z`
+  const i = hi ?? n - 1
+  const v = g.vals[i]
+  const side = v >= 0 ? g.up : g.down
+  const step = iw / Math.max(n - 1, 1)
+  const shade = bands
+    .map((b) => {
+      const a = months.findIndex((m) => m >= b.from)
+      const z = months.map((m) => m <= b.to).lastIndexOf(true)
+      if (a < 0 || z < a) return null
+      const x0 = Math.max(P.l, x(a) - step / 2)
+      return { key: b.from, x: x0, w: Math.min(P.l + iw, x(z) + step / 2) - x0 }
+    })
+    .filter(Boolean)
+  const years = months.map((m, k) => [m, k]).filter(([m]) => m.endsWith('01'))
+  const every = Math.ceil(years.length / Math.max(Math.floor(iw / 56), 1))
+  const ticks = [-2, -1, 0, 2, 4].filter((t) => t > dom[0] && t < dom[1])
+
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    const k = Math.round(((px - P.l) / iw) * (n - 1))
+    onHover({ i: Math.min(Math.max(k, 0), n - 1) })
+  }
+
+  return (
+    <div className="tilt-row" ref={ref}>
+      <div className="tilt-head">
+        <span><b>{g.who}</b> {g.title} <span className="muted">· 전환율 − {g.rateLabel}</span></span>
+        <span className="tilt-now">
+          <span className="swatch" style={{ background: C[side.k] }} />
+          {side.label} <b>{signed(v)}%p</b>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" onMouseMove={onMove}
+           aria-label={`${g.who} ${g.title} — 전환율에서 ${g.rateLabel} 금리를 뺀 값. 0 위는 ${g.up.label}, 아래는 ${g.down.label}`}>
+        <defs>
+          <clipPath id={`tilt-up-${g.key}`}><rect x={P.l} y={0} width={iw} height={y0} /></clipPath>
+          <clipPath id={`tilt-dn-${g.key}`}><rect x={P.l} y={y0} width={iw} height={H - y0} /></clipPath>
+        </defs>
+        {/* 영역 바탕 — 위·아래가 각각 누구 편인지 선보다 먼저 보이게 아주 옅게 깐다. */}
+        <rect x={P.l} y={P.t} width={iw} height={y0 - P.t} fill={C[g.up.k]} fillOpacity="0.06" />
+        <rect x={P.l} y={y0} width={iw} height={P.t + ih - y0} fill={C[g.down.k]} fillOpacity="0.08" />
+        {shade.map((b) => <rect key={b.key} x={b.x} y={P.t} width={b.w} height={ih} fill="var(--band)" />)}
+        {ticks.map((t) => (
+          <g key={t}>
+            {t !== 0 && <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeDasharray="2 3" />}
+            <text x={P.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{t > 0 ? `+${t}` : t}</text>
+          </g>
+        ))}
+        <path d={area} fill={C[g.up.k]} fillOpacity="0.3" clipPath={`url(#tilt-up-${g.key})`} />
+        <path d={area} fill={C[g.down.k]} fillOpacity="0.45" clipPath={`url(#tilt-dn-${g.key})`} />
+        <line x1={P.l} x2={W - P.r} y1={y0} y2={y0} stroke="var(--text-secondary)" />
+        <path d={line} fill="none" stroke="var(--text-secondary)" strokeWidth="1.4" strokeLinejoin="round" />
+        {/* 영역 이름은 오른쪽 끝, 바탕색 테를 둘러 선과 겹쳐도 읽히게 한다. 왼쪽에 두었더니 2015년 값이
+            높아 위쪽 이름이 선에 묻혔다. */}
+        <text x={W - P.r - 4} y={P.t + 11} textAnchor="end" fontSize="10.5" fill="var(--text-secondary)"
+              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">▲ {g.up.label}</text>
+        <text x={W - P.r - 4} y={P.t + ih - 4} textAnchor="end" fontSize="10.5" fill="var(--text-secondary)"
+              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">▼ {g.down.label}</text>
+        {hi != null && (
+          <g pointerEvents="none">
+            <line x1={x(hi)} x2={x(hi)} y1={P.t} y2={P.t + ih} stroke="var(--text-muted)" strokeDasharray="3 3" />
+            <circle cx={x(hi)} cy={y(v)} r="4" fill={C[side.k]} stroke="var(--surface-1)" strokeWidth="2" />
+          </g>
+        )}
+        {last && years.filter((_, k) => k % every === 0).map(([m, k]) => (
+          <text key={m} x={x(k)} y={H - 7} textAnchor="middle" fontSize="10.5" fill="var(--text-muted)">
+            {m.slice(0, 4)}
+          </text>
+        ))}
+        <rect x={P.l} y={P.t} width={iw} height={ih} fill="transparent" />
+      </svg>
+    </div>
   )
 }
 
