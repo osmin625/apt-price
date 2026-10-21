@@ -104,10 +104,11 @@ export default function RegimeView() {
               '매매지수는 1년 변화율로 그립니다(굵은 선). 지수 수준은 추세로만 올라, 요인들(대개 증감)과 같은 결로 견주려면 변화율이어야 합니다.',
               '그룹마다 색이 같고 그룹 안에서는 선 모양이 다릅니다. 아래 단추로 그룹을 켜고 끕니다. 그림 위에 마우스를 올리면 그 달의 모든 값이 나옵니다.',
               '같이 움직였다고 원인이라는 뜻은 아닙니다 — 요인들도 서로 얽혀 움직입니다.',
+              '그림 위 이름과 세로선은 대통령 임기입니다(공식 임기 기준, 파면 뒤 선거까지는 권한대행). 마우스를 올리면 그 달이 누구 임기였는지 나옵니다.',
             ]}
           />
         </h2>
-        <Overlay factors={data.factors} price={data.price} />
+        <Overlay factors={data.factors} price={data.price} governments={data.governments} />
       </section>
 
       <section className="card">
@@ -125,6 +126,7 @@ export default function RegimeView() {
             notes={[
               `API 가 없어 손으로 적은 연표입니다(${data.policy_covers_from} 부터, 한 줄마다 출처를 달았습니다).`,
               '사건 뒤 12개월 가격 변화를 함께 적되, 인과로 읽지 마세요 — 오르니까 규제가 나옵니다.',
+              '대책은 발표 날 대통령 임기로 묶었습니다. 탄핵 소추로 직무가 정지된 기간은 그 대통령 임기 안에, 파면 뒤 선거까지는 권한대행으로 둡니다.',
             ]}
           />
         </h2>
@@ -142,7 +144,7 @@ export default function RegimeView() {
             </div>
           ))}
         </div>
-        <PolicyList rows={data.policy} />
+        <PolicyList rows={data.policy} governments={data.governments} source={data.governments_source} />
       </section>
 
     </>
@@ -180,10 +182,23 @@ function FactorTile({ f }) {
   )
 }
 
-function PolicyList({ rows }) {
+const dotDate = (d) => d.replaceAll('-', '.')
+
+function PolicyList({ rows, governments = [], source }) {
+  const byLabel = Object.fromEntries(governments.map((g) => [g.label, g]))
   return (
     <ol className="rg-timeline">
-      {rows.map((r) => (
+      {rows.flatMap((r, i) => {
+        // 최신이 위라 정권도 거꾸로 내려간다. 정권이 바뀌는 줄마다 머리를 한 번 둔다.
+        const g = r.gov && r.gov !== rows[i - 1]?.gov ? byLabel[r.gov] : null
+        const head = g ? (
+          <li key={`gov-${g.start}`} className="rg-tl-gov">
+            <strong>{g.label}</strong>
+            <span className="muted small">{dotDate(g.start)} ~ {g.end ? dotDate(g.end) : ''}</span>
+            <Hint notes={[g.note, source ? `임기: ${source}` : null]} />
+          </li>
+        ) : null
+        return [head, (
         <li key={r.date}>
           <div className="rg-tl-head">
             <span className={`rg-kind is-${kindTone(r.kind)}`}>{r.kind}</span>
@@ -203,7 +218,8 @@ function PolicyList({ rows }) {
             </a>
           </div>
         </li>
-      ))}
+        )].filter(Boolean)
+      })}
     </ol>
   )
 }
@@ -329,7 +345,24 @@ const GROUP_COLOR = {
 const DASHES = [null, '6 3', '2 3']
 
 /** 모든 요인(z)과 매매지수 1년 변화율(z)을 한 그림에. 그룹 단추로 켜고 끈다. */
-function Overlay({ factors, price }) {
+/** 정권 띠 — 시작 달이 다음 정부 시작 달 앞까지. 파면 달처럼 한 달에 둘이 걸치면 새로 들어선 쪽이 갖는다. */
+function govBands(govs) {
+  const prev = (ym) => {
+    const y = Number(ym.slice(0, 4))
+    const m = Number(ym.slice(4))
+    return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`
+  }
+  return (govs || []).map((g, i, all) => ({
+    from: g.from,
+    to: all[i + 1] ? prev(all[i + 1].from) : '999912',
+    label: g.name,
+    tip: g.label,
+    tone: i % 2 ? 'alt' : 'plain',
+    edge: true,
+  }))
+}
+
+function Overlay({ factors, price, governments }) {
   const groups = [...new Set(factors.map((f) => f.group))]
   const [on, setOn] = useState(() => new Set(groups))
   const toggle = (g) => setOn((prev) => {
@@ -373,7 +406,8 @@ function Overlay({ factors, price }) {
         zero
         height={340}
         months={months}
-        ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림"
+        bands={govBands(governments)}
+        ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림 — 위에 대통령 임기"
       />
     </>
   )

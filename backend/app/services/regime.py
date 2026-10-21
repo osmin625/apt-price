@@ -51,7 +51,7 @@ from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
 from ..models import RebStat
-from .policy import COVERS_FROM, POLICY
+from .policy import COVERS_FROM, GOV_SOURCE, GOVERNMENTS, POLICY, government_at
 
 # '그때는' 의 '지금과 비슷한 자리'(±0.5, `SIMILAR_BAND`). 예전에는 과거 국면 표의 다섯 단계
 # (보통 ±0.5 · 매우 ±1.5) 경계이기도 했는데, 그 표가 글자를 빼고 배수만 적게 되며(2026-10-19)
@@ -732,8 +732,10 @@ def policy_rows(db: Session) -> list[dict]:
     for p in POLICY:
         ym = p["date"][:4] + p["date"][5:7]
         i = idx.get(ym)
+        g = government_at(p["date"])
         out.append({
             **p,
+            "gov": g["label"] if g else None,
             "fwd12": (round(_fwd12(price, yms, i), 2)
                       if i is not None and _fwd12(price, yms, i) is not None else None),
         })
@@ -788,6 +790,14 @@ def overview(db: Session) -> dict:
         "policy": policy,
         "policy_covers_from": COVERS_FROM,
         "policy_aftermath": policy_summary(policy),
+        # 겹친 그림의 정권 띠와 연표의 묶음 머리. 달(YYYYMM)로 넘긴다 — 그림의 x 축이 달이다.
+        # 시작 달이 같으면 늦게 시작한 쪽이 그 달을 갖는다(파면 달은 권한대행).
+        "governments": [{"from": g["start"][:4] + g["start"][5:7],
+                         "to": g["end"][:4] + g["end"][5:7] if g["end"] else None,
+                         "name": g["name"], "label": g["label"],
+                         "start": g["start"], "end": g["end"], "note": g["note"]}
+                        for g in GOVERNMENTS],
+        "governments_source": GOV_SOURCE,
         "history": history(db),
         "reflect": reflect(db),
         # '가장 센 것도 0.50 이라 어느 요인도 혼자서는 설명하지 못한다' 를 적었었다.
