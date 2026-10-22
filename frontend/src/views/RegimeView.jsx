@@ -127,7 +127,8 @@ export default function RegimeView() {
           정책과 세금
           <Hint
             notes={[
-              `API 가 없어 손으로 적은 연표입니다(${data.policy_covers_from} 부터, 한 줄마다 출처를 달았습니다).`,
+              `API 가 없어 손으로 적은 연표입니다(${data.policy_covers_from} 부터).`,
+              '원문은 부처가 낸 보도자료입니다(정책브리핑 korea.kr — 첨부에 PDF·HWP 원본). 참고 기사는 처음 요약을 확인한 기사·해설입니다.',
               '사건 뒤 12개월 가격 변화를 함께 적되, 인과로 읽지 마세요 — 오르니까 규제가 나옵니다.',
               '대책은 발표 날 대통령 임기로 묶었습니다. 탄핵 소추로 직무가 정지된 기간은 그 대통령 임기 안에, 파면 뒤 선거까지는 권한대행으로 둡니다.',
             ]}
@@ -214,10 +215,19 @@ function PolicyList({ rows, governments = [], source }) {
               </span>
             )}
           </div>
+          {/* 원문(부처 보도자료)을 앞에, 처음 요약을 확인한 기사는 '참고' 로 뒤에(2026-10-22 요청). */}
           <div className="rg-tl-foot">
-            <Hint notes={[r.summary, r.note]} />
+            <Hint notes={[
+              r.summary, r.note,
+              ...(r.official || []).map((o) => `${o.org} ${o.date.replaceAll('-', '.')} 「${o.title}」`),
+            ]} />
+            {(r.official || []).map((o) => (
+              <a key={o.url} className="rg-src" href={o.url} target="_blank" rel="noopener noreferrer">
+                원문 · {o.org} ↗
+              </a>
+            ))}
             <a className="muted small" href={r.source} target="_blank" rel="noopener noreferrer">
-              출처 ↗
+              참고 기사 ↗
             </a>
           </div>
         </li>
