@@ -728,6 +728,9 @@ tr.is-deleting td { opacity: 0.4; }
 .tn-emp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; }
 .tn-emp label { display: flex; align-items: center; gap: 6px; }
 .tn-emp select { font: inherit; }
+.tn-emp .tn-price { width: 72px; font: inherit; padding: 2px 4px; }
+.tn-emp .link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--accent);
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .swatch.is-dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 6px); height: 3px !important; vertical-align: 3px !important; }
 .tn-now .swatch, .tn-lows .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
 .rg-tile .rg-then { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
