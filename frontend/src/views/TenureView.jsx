@@ -32,9 +32,19 @@ const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
  *
  * 실효 금리 = 본인 부담 + 회사 지원 × 세율(회사 지원분이 근로소득으로 과세된다). 대출 중 가격의
  * `ltv`·`cap` 까지가 사내대출이고 넘는 몫은 시중 금리(매매는 주담대, 전세는 전세대출)다. 월세는 그대로다.
- * 지금 조건을 과거 모든 달에 적용한 가정이라 임직원 선은 점선으로 둔다.
+ * 사내 금리 이력이 없어 임직원 선은 가정이고 점선으로 둔다.
+ *
+ * ## 사내 금리는 기준금리를 따라 움직인다고 본다(2026-10-22 요청)
+ *
+ * 처음에는 지금 조건(본인 부담 1.5%)을 모든 달에 그었다. 그러면 금리 인상기에도 사내 금리가 그대로라
+ * '인상이 임직원에게 안 닿는다' 가 가정에서 바로 나온다. 요청대로 본인 부담이 **마지막 달 기준금리와의
+ * 차이를 유지한 채 같은 폭으로** 움직인다고 본다 — 본인 부담(t) = 지금 본인 부담 + 기준금리(t) − 지금 기준금리.
+ * 회사 지원분(과세되는 몫)은 그대로 둔다. 기준금리가 지금보다 크게 낮던 달(2020~21 의 0.5% 등)은 이 식이
+ * 0 아래로 가므로 **0% 에서 멈춘다** — 금리가 음수일 수는 없다.
  */
-const empRate = (E, tax) => E.rate + E.support * tax
+const empOwn = (E, r) => (r && r.base != null && E.baseNow != null
+  ? Math.max(0, E.rate + r.base - E.baseNow) : E.rate)
+const empRate = (E, tax, r) => empOwn(E, r) + E.support * tax
 // kind: 'buy'(매매가·주담대) | 'jeonse'(전세가·전세대출)
 function empCost(r, kind, ltvShare, E, tax) {
   const price = kind === 'buy' ? r.sale : r.jeonse
@@ -42,7 +52,7 @@ function empCost(r, kind, ltvShare, E, tax) {
   const lim = E[kind]
   const loan = ltvShare * price
   const inHouse = Math.min(loan, lim.ltv * price, lim.cap)
-  return (inHouse * empRate(E, tax) + (loan - inHouse) * market + (price - loan) * r.deposit) / 1200
+  return (inHouse * empRate(E, tax, r) + (loan - inHouse) * market + (price - loan) * r.deposit) / 1200
 }
 const genCost = (r, kind, ltvShare) => (kind === 'buy'
   ? r.sale * (ltvShare * r.mortgage + (1 - ltvShare) * r.deposit)
@@ -96,14 +106,14 @@ function EmpBar({ E, emp, setEmp, tax, setTax }) {
               {E.tax.map((t) => <option key={t} value={t}>{fmt(t * 100, 1)}%</option>)}
             </select>
           </label>
-          <span className="muted small">실효 금리 {fmt(empRate(E, tax), 2)}%</span>
+          <span className="muted small">지금 실효 금리 {fmt(empRate(E, tax), 2)}%</span>
           <Hint
             wide
             notes={[
               `${E.loan}: 매매는 매매가의 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억 원까지, 전세는 보증금의 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억 원까지. 본인 부담 연 ${E.rate}% · 회사 지원 연 ${E.support}%(근로소득으로 과세 — 소득세 구간 + 지방소득세 10%). 실효 금리 = ${E.rate} + ${E.support} × 세율.`,
               '바뀌는 것은 매매와 전세입니다. 월세에는 사내 지원이 없어 그대로입니다. 대상은 무주택 임직원입니다.',
               '전세에서 회사가 내는 보증보험료도 소득으로 잡히지만 금액을 알 수 없어 세지 않았습니다.',
-              '지금 조건을 과거 모든 달에 적용한 가정입니다 — 사내 금리 이력은 없습니다. 그래서 임직원 선은 점선입니다.',
+              '사내 금리 이력이 없어, 본인 부담 금리가 지금 기준금리와의 차이를 유지한 채 기준금리와 같은 폭으로 움직였다고 가정합니다. 0% 아래로는 내려가지 않게 했습니다(기준금리가 크게 낮던 달). 그래서 임직원 선은 점선입니다.',
               '거치·상환 방식은 세지 않습니다. 이 탭은 이자만 견줍니다.',
             ]}
           />
@@ -168,7 +178,9 @@ export default function TenureView() {
   )
 
   // 임직원 보기는 네 그림이 같이 쓴다 — 켜면 매매에 사내대출 선이 더해진다.
-  const E = emp && data.employee ? { ...data.employee, taxRate: tax } : null
+  // baseNow — 사내 금리를 기준금리에 잇는 기준점(마지막 달 기준금리).
+  const baseNow = [...data.rows].reverse().find((r) => r.base != null)?.base ?? null
+  const E = emp && data.employee ? { ...data.employee, taxRate: tax, baseNow } : null
   // 고른 매물 가격으로 늘이거나 줄인 행 — 월 비용(①)과 그 증가율(④)이 쓴다.
   const priced = price ? { ...data, rows: scaleRows(data.rows, price) } : data
   return (
@@ -178,6 +190,7 @@ export default function TenureView() {
         {data.employee && <EmpBar E={data.employee} emp={emp} setEmp={setEmp} tax={tax} setTax={setTax} />}
       </div>
       <Cost data={priced} ltv={ltv} setLtv={setLtv} bands={bands} region={region} E={E} picked={!!price} />
+      <BuyVsJeonse data={priced} ltv={ltv} bands={bands} region={region} E={E} />
       <Prices data={data} bands={bands} region={region} E={E} />
       <RentTilt data={data} bands={bands} region={region} E={E} />
       {data.events.length > 0 && <Order data={priced} region={region} E={E} ltv={ltv} />}
@@ -222,7 +235,7 @@ function Cost({ data, ltv, setLtv, bands, region, E, picked }) {
             '세지 않는 것: 집값이 오르내려 생기는 차익·손실, 취득세·보유세, 관리비, 원금 상환. 이자만 견주는 계산입니다.',
             picked ? '매물 매매가를 고르면 그 값을 지금 매매가로 놓고, 과거 매매가·전세가를 구 평균과 같은 비율로 늘이거나 줄입니다 — 지수 흐름과 평균 전세가율은 그대로입니다.' : null,
             '금리는 한국은행 예금은행 신규취급액 기준(전국), 가격·전세가율·전환율은 한국부동산원입니다.',
-            E ? `매매·전세 · ${E.label}(점선) = 대출 중 사내 한도(매매가 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억, 보증금 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억)까지 사내대출 실효 금리 ${fmt(empRate(E, E.taxRate), 2)}%, 넘는 몫은 시중 주담대·전세대출 금리, 나머지는 예금 이자로 셉니다.` : null,
+            E ? `매매·전세 · ${E.label}(점선) = 대출 중 사내 한도(매매가 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억, 보증금 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억)까지 사내대출 실효 금리(지금 ${fmt(empRate(E, E.taxRate), 2)}%, 기준금리를 따라 움직인다고 가정), 넘는 몫은 시중 주담대·전세대출 금리, 나머지는 예금 이자로 셉니다.` : null,
           ]}
         />
         {region}
@@ -257,6 +270,60 @@ function Cost({ data, ltv, setLtv, bands, region, E, picked }) {
   )
 }
 
+/**
+ * 매매 vs 전세 — 같은 집의 월 비용 차이(전세 − 매매, 만원). 2026-10-22 요청(임직원 매매 vs 임직원 전세).
+ *
+ * 금리끼리 견주면(③) 사내 금리가 매매·전세 같아 차이가 0 이다. 둘을 가르는 것은 **금액** — 매매가가
+ * 전세가보다 크고, 사내 한도(매매 70%·5억, 전세 80%·3억)와 시중 금리(주담대·전세대출)가 다르다. 그래서
+ * 맨 위 그림의 두 선을 빼서 한 줄로 둔다. 0 위면 매매가 덜 들고(파랑), 아래면 전세가 덜 든다(청록).
+ * 일반(시중 대출) 줄을 늘 두고, 임직원을 켜면 그 아래 한 줄을 더한다. 대출 비율·매물 가격은 맨 위 그림과 같다.
+ */
+function BuyVsJeonse({ data, ltv, bands, region, E }) {
+  const [hover, setHover] = useState(null)
+  const months = data.rows.map((r) => r.ym)
+  const rows = useMemo(() => {
+    const up = { k: 'sale', label: '매매 유리' }
+    const down = { k: 'jeonse', label: '전세 유리' }
+    const out = [{ key: 'bvj-gen', who: '일반', title: '매매 vs 전세', sub: '전세 월 비용 − 매매 월 비용', unit: '만원',
+                   up, down, vals: data.rows.map((r) => genCost(r, 'jeonse', ltv.jeonse) - genCost(r, 'buy', ltv.buy)) }]
+    if (E) {
+      out.push({ key: 'bvj-emp', who: E.label, title: '매매 vs 전세', sub: '사내대출 기준', unit: '만원', up, down,
+                 vals: data.rows.map((r) => empCost(r, 'jeonse', ltv.jeonse, E, E.taxRate)
+                   - empCost(r, 'buy', ltv.buy, E, E.taxRate)) })
+    }
+    return out
+  }, [data, ltv, E])
+  const all = rows.flatMap((g) => g.vals)
+  const span = Math.max(...all) - Math.min(...all)
+  // 0 아래·위를 모두 조금씩 남긴다 — 한쪽만 있던 기간에도 반대편이 있다는 것이 보이게.
+  const dom = [Math.min(-span * 0.15, Math.min(...all) - span * 0.06), Math.max(span * 0.15, Math.max(...all) + span * 0.06)]
+  const hi = hover == null ? null : hover.i
+  return (
+    <section className="card">
+      <h2>
+        매매 vs 전세 — 매달 드는 돈의 차이
+        <Hint
+          wide
+          notes={[
+            '같은 집을 사는 것과 전세로 사는 것의 한 달 비용 차이(만원)입니다 — 맨 위 그림의 전세 선에서 매매 선을 뺀 값. 0 위면 매매가 덜 들고, 0 아래면 전세가 덜 듭니다.',
+            '대출 비율과 매물 가격은 맨 위 그림과 같습니다. 집값의 오르내림·세금은 세지 않습니다 — 이자만 견줍니다.',
+            E ? `${E.label} 줄은 사내대출(매매 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억, 전세 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억까지)로 센 차이입니다. 사내 금리가 매매·전세 같아도, 한도와 넘는 몫의 시중 금리가 달라 차이가 납니다.` : '탭 맨 위에서 임직원을 켜면 사내대출 기준 줄이 더해집니다.',
+          ]}
+        />
+        {region}
+        <ChartLink id="buy-vs-jeonse" />
+      </h2>
+      <div className="tilt" onMouseLeave={() => setHover(null)}>
+        <p className="muted small">{ymText(months[hi ?? months.length - 1])}</p>
+        {rows.map((g, gi) => (
+          <TiltRow key={g.key} g={g} months={months} dom={dom} bands={bands} hi={hi}
+                   last={gi === rows.length - 1} onHover={setHover} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 /** ② 금리와 세 가격 — 지수 1년 변화(왼쪽)와 금리(오른쪽). */
 function Prices({ data, bands, region, E }) {
   const series = useMemo(() => {
@@ -269,7 +336,7 @@ function Prices({ data, bands, region, E }) {
       { key: 'base', label: '기준금리', color: C.rate, axis: 'right', dash: true, points: r('base_rate') },
       { key: 'mort', label: '주택담보대출 금리', color: C.rate, axis: 'right', dash: '1 3', points: r('mortgage_rate') },
       ...(E ? [{ key: 'emp', label: `사내대출 실효 금리(매매·전세 · ${E.label})`, color: C.sale, axis: 'right', dash: EMP_DASH,
-                 width: 2, points: data.rates.mortgage_rate.map((p) => ({ ym: p.ym, value: empRate(E, E.taxRate) })) }]
+                 width: 2, points: data.rows.map((r) => ({ ym: r.ym, value: empRate(E, E.taxRate, r) })) }]
          : []),
     ]
   }, [data, E])
@@ -284,7 +351,7 @@ function Prices({ data, bands, region, E }) {
             '왼쪽 축은 매매·전세·월세 가격지수의 1년 변화율(%), 오른쪽 축은 금리(연%)입니다.',
             '연쇄대로라면 인상기(띠)에 매매·전세 선은 내려가고 월세 선은 버티거나 오릅니다.',
             '같이 움직였다고 원인은 아닙니다 — 같은 시기 대출 규제·입주 물량·전세 사기 같은 일도 겹쳤습니다.',
-            E ? `사내대출 실효 금리(점선)는 지금 조건을 모든 달에 그은 가정입니다 — 금리 인상기에도 그대로라, 인상이 주담대만큼 ${E.label} 매매 비용에 닿지 않는다는 뜻입니다.` : null,
+            E ? `사내대출 실효 금리(점선)는 본인 부담이 지금 기준금리와의 차이를 유지하며 기준금리와 같은 폭으로 움직인다고 본 가정입니다(0% 아래로는 안 감). 시중 주담대와의 간격이 곧 사내대출의 이점입니다.` : null,
           ]}
         />
         {region}
@@ -326,7 +393,7 @@ function RentTilt({ data, bands, region, E }) {
     const rows = [...TILT]
     if (E) {
       // 매매·전세가 같은 사내 금리라 '전환율 − 사내 실효 금리' 는 둘에 같은 한 줄이다.
-      rows.splice(2, 0, { key: 'emp', who: '임직원', title: '매매·전세 vs 월세', rate: () => empRate(E, E.taxRate),
+      rows.splice(2, 0, { key: 'emp', who: '임직원', title: '매매·전세 vs 월세', rate: (r) => empRate(E, E.taxRate, r),
                           rateLabel: '사내대출 실효', up: { k: 'sale', label: '사내대출로 매매·전세 유리' },
                           down: { k: 'rent', label: '월세 유리' } })
     }
@@ -342,7 +409,7 @@ function RentTilt({ data, bands, region, E }) {
       { key: 'mort', label: '주택담보대출 금리', color: C.sale, dash: true, points: row('mortgage') },
       { key: 'dep', label: '정기예금 금리', color: C.rate, dash: '1 3', points: row('deposit') },
       ...(E ? [{ key: 'emp', label: `사내대출 실효 금리(매매·전세 · ${E.label})`, color: C.sale, dash: EMP_DASH, width: 2,
-                 points: data.rows.map((r) => ({ ym: r.ym, value: empRate(E, E.taxRate) })) }] : []),
+                 points: data.rows.map((r) => ({ ym: r.ym, value: empRate(E, E.taxRate, r) })) }] : []),
     ]
   }, [data, E])
   const all = gaps.flatMap((g) => g.vals)
@@ -365,7 +432,7 @@ function RentTilt({ data, bands, region, E }) {
             '실수요 — 전환율 − 주택담보대출 금리. 0 위면 빌려서 사는 이자율이 월세 이율보다 낮습니다(매매 유리). 집값의 오르내림·세금은 빼고 이율만 견줍니다. 같은 집의 실제 월 금액은 맨 위 그림입니다.',
             '집주인 — 전환율 − 정기예금 금리. 0 위면 보증금을 받아 예금에 넣는 것보다 월세로 받는 쪽이 더 법니다. 이 줄이 클수록 전세 매물이 월세로 돌아설 유인이 큽니다.',
             '세 줄은 같은 축(%p)입니다. 칠한 색은 그때 유리한 쪽, 옅은 띠는 기준금리 인상기입니다. 그림 위에 마우스를 올리면 그 달 값이 머리에 나옵니다.',
-            E ? `임직원 — 전환율 − 사내대출 실효 금리(${fmt(empRate(E, E.taxRate), 2)}%). 매매·전세 사내대출 금리가 같아 한 줄입니다. 0 위면 사내대출로 사거나 전세를 얻는 쪽이 월세보다 이율이 낮습니다. 사내 금리는 지금 조건을 모든 달에 적용한 가정입니다.` : null,
+            E ? `임직원 — 전환율 − 사내대출 실효 금리(지금 ${fmt(empRate(E, E.taxRate), 2)}%). 매매·전세 사내대출 금리가 같아 한 줄입니다. 0 위면 사내대출로 사거나 전세를 얻는 쪽이 월세보다 이율이 낮습니다. 사내 금리는 기준금리를 따라 움직인다고 본 가정입니다.` : null,
           ]}
         />
         {region}
@@ -382,7 +449,7 @@ function RentTilt({ data, bands, region, E }) {
         <div className="tilt" onMouseLeave={() => setHover(null)}>
           <p className="muted small">
             {ymText(r.ym)} 전환율 {fmt(r.conv, 2)}% · 전세대출 {fmt(r.jeonse_loan, 2)}% · 주담대 {fmt(r.mortgage, 2)}% · 예금 {fmt(r.deposit, 2)}%
-            {E && <> · 사내 {fmt(empRate(E, E.taxRate), 2)}%</>}
+            {E && <> · 사내 {fmt(empRate(E, E.taxRate, r), 2)}%</>}
           </p>
           {gaps.map((g, gi) => (
             <TiltRow key={g.key} g={g} months={months} dom={dom} bands={bands} hi={hi}
@@ -395,6 +462,7 @@ function RentTilt({ data, bands, region, E }) {
 }
 
 /** 한 줄 — 0 위는 `up` 쪽 색, 아래는 `down` 쪽 색으로 칠한 차이 그림. 마우스는 세 줄이 같이 짚는다. */
+// g.unit · g.sub 가 있으면 %p·'전환율 − …' 대신 그것을 쓴다(매매 vs 전세의 만원 줄).
 function TiltRow({ g, months, dom, bands, hi, last, onHover }) {
   const [ref, width] = useMeasure()
   const W = Math.max(width || 640, 280)
@@ -423,7 +491,9 @@ function TiltRow({ g, months, dom, bands, hi, last, onHover }) {
     .filter(Boolean)
   const years = months.map((m, k) => [m, k]).filter(([m]) => m.endsWith('01'))
   const every = Math.ceil(years.length / Math.max(Math.floor(iw / 56), 1))
-  const ticks = [-2, -1, 0, 2, 4].filter((t) => t > dom[0] && t < dom[1])
+  const ticks = g.unit
+    ? niceTicks(dom[0], dom[1], 4).filter((t) => t > dom[0] && t < dom[1])
+    : [-2, -1, 0, 2, 4].filter((t) => t > dom[0] && t < dom[1])
 
   const onMove = (e) => {
     const box = e.currentTarget.getBoundingClientRect()
@@ -435,14 +505,14 @@ function TiltRow({ g, months, dom, bands, hi, last, onHover }) {
   return (
     <div className="tilt-row" ref={ref}>
       <div className="tilt-head">
-        <span><b>{g.who}</b> {g.title} <span className="muted">· 전환율 − {g.rateLabel}</span></span>
+        <span><b>{g.who}</b> {g.title} <span className="muted">· {g.sub ?? `전환율 − ${g.rateLabel}`}</span></span>
         <span className="tilt-now">
           <span className="swatch" style={{ background: C[side.k] }} />
-          {side.label} <b>{signed(v)}%p</b>
+          {side.label} <b>{g.unit ? `${signed(v, 0)}${g.unit}` : `${signed(v)}%p`}</b>
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" onMouseMove={onMove}
-           aria-label={`${g.who} ${g.title} — 전환율에서 ${g.rateLabel} 금리를 뺀 값. 0 위는 ${g.up.label}, 아래는 ${g.down.label}`}>
+           aria-label={`${g.who} ${g.title} — ${g.sub ?? `전환율에서 ${g.rateLabel} 금리를 뺀 값`}. 0 위는 ${g.up.label}, 아래는 ${g.down.label}`}>
         <defs>
           <clipPath id={`tilt-up-${g.key}`}><rect x={P.l} y={0} width={iw} height={y0} /></clipPath>
           <clipPath id={`tilt-dn-${g.key}`}><rect x={P.l} y={y0} width={iw} height={H - y0} /></clipPath>
@@ -531,7 +601,7 @@ function Order({ data, region, E, ltv }) {
             '세로 실선은 인상 시작, 점선은 마지막 인상 달입니다. 점은 시작 뒤 가장 낮았던 달(저점)입니다.',
             '연쇄대로라면 매매·전세가 먼저 꺾여 저점을 찍고, 월세는 그동안 버티거나 오르며, 시차를 두고 매매·전세가 다시 오릅니다.',
             '인상기가 몇 번 안 됩니다 — 한 번의 경로를 법칙으로 읽지 마세요. 인상 뒤에 인하가 이어지면 반등은 인하 몫과 섞입니다.',
-            E ? `그림은 가격지수라 ${E.label} 여부와 무관합니다. 아래 줄은 인상 시작 달에서 마지막 인상 달까지 같은 집 매매·전세 월 비용(맨 위 그림, 같은 대출 비율)이 일반 대출과 사내대출에서 각각 얼마나 늘었는지입니다 — 사내 금리는 지금 조건을 적용한 가정입니다.` : null,
+            E ? `그림은 가격지수라 ${E.label} 여부와 무관합니다. 아래 줄은 인상 시작 달에서 마지막 인상 달까지 같은 집 매매·전세 월 비용(맨 위 그림, 같은 대출 비율)이 일반 대출과 사내대출에서 각각 얼마나 늘었는지입니다 — 사내 금리는 기준금리를 따라 움직인다고 본 가정입니다.` : null,
           ]}
         />
         {region}
