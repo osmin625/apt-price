@@ -66,6 +66,7 @@ backend/
     verify_supply_cum.py    거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별) 대조
     verify_reflect.py       반영 분해의 부호 제약 최소제곱(순수 파이썬) vs scipy nnls
     verify_tenure.py        매매·전세·월세의 이어 붙인 가격 수준에 표본 개편 튐이 없는지
+    probe_policy.py         정책 연표의 원문 링크(정책브리핑 보도자료)가 아직 그 부처·제목·날짜인지(네트워크)
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
     verify_docs.py          문서 링크·앵커가 가 닿는지 + 라우팅 표가 다 덮는지 + docs 계층
