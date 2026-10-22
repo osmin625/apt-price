@@ -5,6 +5,7 @@ import { fmt } from '../components/Charts'
 import Hint from '../components/Hint'
 import FitLoading from '../components/FitLoading'
 import KakaoMap from '../components/KakaoMap'
+import ChartLink from '../components/ChartLink'
 
 /* 지도는 **모델 잔차**만 칠한다.
  *
@@ -104,6 +105,7 @@ export default function MapView({ months, onSelect }) {
           <strong className="map-metric">
             모델 잔차
             {meta?.note && <Hint notes={[meta.note]} />}
+            <ChartLink id="residual" />
           </strong>
           <div className="map-scale" aria-hidden="true">
             <span>{fmt(meta?.min, 1)}</span>

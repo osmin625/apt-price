@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { fmt } from './Charts'
 import CoefTable from './CoefTable'
 import Hint from './Hint'
+import ChartLink from './ChartLink'
 
 /**
  * 분해 모델의 **입구** — 맨 위에 수식을 두고, 항을 누르면 그 항의 상세가 아래에 뜬다.
@@ -366,6 +367,7 @@ export default function ModelFormula({ fit }) {
             '항을 누르면 그 항이 무엇이고 얼마로 추정됐는지가 아래에 나옵니다.',
           ]}
         />
+        <ChartLink id="formula" />
       </h2>
       <Line label="Stage 1 · 거래 단위" terms={stage1Terms(fit)} pick={pick} setPick={setPick} linkedId={linkedId} />
       <Line label="Stage 2 · 단지 단위" terms={stage2Terms(fit)} pick={pick} setPick={setPick} linkedId={linkedId} />

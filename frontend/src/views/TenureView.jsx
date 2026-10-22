@@ -4,6 +4,7 @@ import { api } from '../api'
 import { fmt, niceTicks, useMeasure } from '../components/Charts'
 import Hint from '../components/Hint'
 import TimeLines from '../components/TimeLines'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 매매 · 전세 · 월세 — 같은 집을 세 방법으로 살 때 매달 얼마가 드는지, 금리가 오를 때 세 가격이
@@ -225,6 +226,7 @@ function Cost({ data, ltv, setLtv, bands, region, E, picked }) {
           ]}
         />
         {region}
+        <ChartLink id="cost" />
       </h2>
       <div className="tn-ctrl">
         <label>
@@ -286,6 +288,7 @@ function Prices({ data, bands, region, E }) {
           ]}
         />
         {region}
+        <ChartLink id="rates" />
       </h2>
       <TimeLines series={series} unit="%" decimals={1} zero rightUnit="%" rightDecimals={1}
                  months={months} bands={bands} height={300}
@@ -366,6 +369,7 @@ function RentTilt({ data, bands, region, E }) {
           ]}
         />
         {region}
+        <ChartLink id="tilt" />
       </h2>
       <div className="seg" role="tablist" aria-label="보기">
         <button role="tab" aria-selected={view === 'gap'} onClick={() => setView('gap')}>유리한 쪽</button>
@@ -531,6 +535,7 @@ function Order({ data, region, E, ltv }) {
           ]}
         />
         {region}
+        <ChartLink id="order" />
       </h2>
       <div className="seg" role="tablist" aria-label="인상기 고르기">
         {data.events.map((e) => (

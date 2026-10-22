@@ -4,6 +4,7 @@ import { api } from '../api'
 import Hint from '../components/Hint'
 import RankTable from '../components/RankTable'
 import UnresolvedPicker from '../components/UnresolvedPicker'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 목록을 통째로 붙여넣어 **여러 매물을 한 번에** 줄 세운다.
@@ -113,6 +114,7 @@ export default function BulkPaste({ months, incoming }) {
             '읽은 호가는 누적되어 동별 호가 추이로도 쌓입니다.',
           ]}
         />
+        <ChartLink id="bulk" />
       </h2>
 
       <div className="bulk-actions">

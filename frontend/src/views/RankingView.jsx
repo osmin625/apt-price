@@ -6,6 +6,7 @@ import Loading from '../components/Loading'
 import RankTable from '../components/RankTable'
 import TagFilter from '../components/TagFilter'
 import { inScope, scopeLabel } from '../components/rankSelect'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 지금까지 붙여넣은 **모든 매물**의 순위.
@@ -171,6 +172,7 @@ export default function RankingView({ months, setMonths, onSelect }) {
             '요인 기준 열은 헤도닉 적합에서 나오는데, 적합은 무거워서 이미 계산된 것만 씁니다. 요청한 기간의 적합이 아직 없으면 다른 기간 것을 쓰고 제목에 그 사실을 적습니다 — 매물 분석 탭을 같은 기간으로 한 번 열면 맞춰집니다.',
           ]}
         />
+        <ChartLink id="ranking" />
       </h2>
 
       <div className="filters">

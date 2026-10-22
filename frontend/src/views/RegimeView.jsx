@@ -6,6 +6,7 @@ import HeatLegend from '../components/HeatLegend'
 import Hint from '../components/Hint'
 import { heatVars, zText } from '../components/heat'
 import TimeLines from '../components/TimeLines'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 거시 분석 — 집값에 닿는 거시 요인이 **지금 어떤 상태인지**, 그리고 **과거에 비슷했던 때
@@ -83,6 +84,7 @@ export default function RegimeView() {
               data.note,
             ]}
           />
+          <ChartLink id="now" />
         </h2>
         <HeatLegend>카드 색은 자기 평균에서의 위치입니다. 좋고 나쁨이 아닙니다.</HeatLegend>
         {/* 그림 없는 작은 카드로 한눈에. 추이는 아래 '한 그림에' 가 모든 요인을 겹쳐 보이므로
@@ -109,6 +111,7 @@ export default function RegimeView() {
               '국회 과반은 의석 변동 기록으로 정했고, 몇 달 만에 되찾은 짧은 미달(국회의장 탈당 등)은 넣지 않았습니다.',
             ]}
           />
+          <ChartLink id="overlay" />
         </h2>
         <Overlay factors={data.factors} price={data.price} governments={data.governments}
                  assemblies={data.assemblies} />
@@ -118,6 +121,7 @@ export default function RegimeView() {
         <h2>
           과거 국면 표
           <Hint notes={[data.history.note]} />
+          <ChartLink id="history" />
         </h2>
         <HistoryTable h={data.history} factors={data.factors} />
       </section>
@@ -133,6 +137,7 @@ export default function RegimeView() {
               '대책은 발표 날 대통령 임기로 묶었습니다. 탄핵 소추로 직무가 정지된 기간은 그 대통령 임기 안에, 파면 뒤 선거까지는 권한대행으로 둡니다.',
             ]}
           />
+          <ChartLink id="policy" />
         </h2>
         <div className="rg-after">
           {data.policy_aftermath.map((a) => (
@@ -498,6 +503,7 @@ function Reflect({ r }) {
             '같이 움직인 크기이지 원인의 크기가 아닙니다. 설명 안 된 몫은 이 요인들 밖의 것(지역 사정·기대·정책 등)입니다.',
           ]}
         />
+        <ChartLink id="reflect" />
       </h2>
       {/* 이론 방향은 막대 색(초록·빨강 — '그만큼 올렸나·내렸나')과 다른 색으로 이름 앞에 둔다.
           같은 초록·빨강을 쓰면 '비례인데 지금은 끌어내림' 이 한 색으로 겹쳐 읽힌다. */}

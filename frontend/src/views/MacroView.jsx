@@ -13,6 +13,7 @@ import QuadrantScatter from '../components/QuadrantScatter'
 import { MultiLine } from '../topics/RegionMetric'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 매크로 — 한국부동산원 공표 통계를 경기 남부 17개 시군구로 묶어 본다.
@@ -104,6 +105,7 @@ export default function MacroView() {
               'KB 등 다른 기관 수치와 다를 수 있습니다 — 조사 주체와 표본이 다릅니다.',
             ]}
           />
+          <ChartLink id="metrics" />
         </h2>
 
         <div className="filters">
@@ -124,6 +126,7 @@ export default function MacroView() {
           title="지금 어느 국면인가"
           sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월 · 점 색은 역대 위치` : '불러오는 중'}
           onOpen={() => setOpen('cycle')}
+          linkId="cycle"
           ready={!!ins}
         >
           {ins && <CycleChart ins={ins} compact />}
@@ -133,6 +136,7 @@ export default function MacroView() {
           title="그 상승을 전세가 받쳐 줬나"
           sub="12개월 매매 × 전세가율 변화"
           onOpen={() => setOpen('rally')}
+          linkId="rally"
           ready={!!ins}
         >
           {ins && <RallyChart ins={ins} compact />}
@@ -146,6 +150,7 @@ export default function MacroView() {
               : '거래량 적재가 필요합니다'
           }
           onOpen={() => setOpen('volume')}
+          linkId="volume"
           ready={!!ins?.volume?.items?.length}
         >
           {ins?.volume?.items?.length > 0 && <VolumeChart ins={ins} compact />}
@@ -161,6 +166,7 @@ export default function MacroView() {
               : '거래량 적재가 필요합니다'
           }
           onOpen={() => setOpen('depth')}
+          linkId="depth"
           ready={!!ins?.depth?.items?.length}
         >
           {ins?.depth?.items?.length > 0 && <DepthBars ins={ins} compact />}
@@ -174,6 +180,7 @@ export default function MacroView() {
               : '불러오는 중'
           }
           onOpen={() => setOpen('spread')}
+          linkId="spread"
           ready={!!ins?.spread?.items?.length}
         >
           {ins?.spread?.items?.length > 0 && <SpreadBars ins={ins} compact />}
@@ -187,6 +194,7 @@ export default function MacroView() {
               : '적합이 필요합니다'
           }
           onOpen={() => setOpen('gap')}
+          linkId="gap"
           ready={!!ins && ins.has_fit}
         >
           {ins && ins.has_fit && <GapChart ins={ins} compact />}
@@ -206,6 +214,7 @@ export default function MacroView() {
                   : '불러오는 중'
               }
               onOpen={() => setOpen(m.key)}
+              linkId={m.key}
               ready={!!d}
             >
               {d && <MultiLine data={d} hidden={hidden} compact />}

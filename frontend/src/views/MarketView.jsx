@@ -7,6 +7,7 @@ import FactorCurve from '../components/FactorCurve'
 import Hint from '../components/Hint'
 import Modal from '../components/Modal'
 import WalkDetail from '../components/WalkDetail'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 시장 분석 — **요인별 보정계수만** 보여 준다.
@@ -34,6 +35,7 @@ export default function MarketView({ filters, setFilters }) {
               '다른 요인을 고정했을 때의 순효과라, 단지 상세의 실제 평당가 분포와는 숫자가 다릅니다 — 그쪽은 다른 요인이 섞인 관측값입니다.',
             ]}
           />
+          <ChartLink id="factors" />
         </h2>
         <div className="filters">
           <div className="field">

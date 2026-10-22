@@ -1,4 +1,5 @@
 import Hint from './Hint'
+import ChartLink from './ChartLink'
 
 /**
  * 이 계수가 **어느 화면의 어느 숫자**를 만드는지.
@@ -52,6 +53,7 @@ export default function CoefUsage() {
             '두 방법은 서로 다른 질문에 답하고 서로의 검산이 됩니다 — 회귀는 “펀더멘털 대비 얼마여야 하나”, 비교표본은 “그 단지 같은 평형이 실제로 얼마에 팔리나”.',
           ]}
         />
+        <ChartLink id="usage" />
       </h2>
       <ul className="usage">
         {rows.map((r) => (
