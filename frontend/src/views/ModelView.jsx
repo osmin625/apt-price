@@ -6,6 +6,7 @@ import CoefUsage from '../components/CoefUsage'
 import FitLoading from '../components/FitLoading'
 import Hint from '../components/Hint'
 import ModelFormula from '../components/ModelFormula'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 분해 모델 — 계수 자체를 읽는 탭. 맨 위는 수식(`ModelFormula`)이고, 항을 누르면 그
@@ -67,6 +68,7 @@ export default function ModelView({ months }) {
               'M3은 같은 법정동 안에서 역에 더 가까운 단지끼리만 비교한 값이라 학군·상권 교란이 사라지는 대신 표본이 적은 동에서 불안정해집니다. 헤드라인은 균형점인 M2입니다.',
             ]}
           />
+          <ChartLink id="controls" />
         </h2>
         <div className="table-wrap">
           <table>
@@ -158,6 +160,7 @@ function GroupCompare({ months }) {
             '생활권(법정동 × 노선)은 같은 법정동에 두 노선이 걸치는 곳을 노선별로 나눕니다 — 그 차이는 구 FE 로도 법정동 FE 로도 구분되지 않습니다.',
           ]}
         />
+        <ChartLink id="groups" />
       </h2>
 
       <div className="seg" role="tablist" aria-label="묶는 기준">

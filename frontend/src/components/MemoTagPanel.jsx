@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../api'
 import Hint from './Hint'
+import ChartLink from './ChartLink'
 
 /**
  * 메모 사전 — 중개사 메모에서 뽑는 키워드를 **무엇까지 비고에 띄울지** 고른다.
@@ -87,6 +88,7 @@ export default function MemoTagPanel() {
             `비고 칸이 좁아 켜 둔 것 중 앞 ${data.max_badges}개만 배지로 나가고 나머지는 +N 으로 접힙니다 — 앞 순서일수록 가격에 걸리는 키워드입니다.`,
           ]}
         />
+        <ChartLink id="memo" />
       </h2>
       {err && <p className="paste-warn">{err}</p>}
 

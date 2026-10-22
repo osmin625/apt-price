@@ -5,6 +5,7 @@ import { eok, fmt } from '../components/Charts'
 import Hint from '../components/Hint'
 import MemoTagPanel from '../components/MemoTagPanel'
 import BulkPaste from './BulkPaste'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 호가 입력 — 붙여넣은 매물을 적정가로 진단하고, 메모 사전을 관리한다.
@@ -46,6 +47,7 @@ export default function CompareView({ months: initialMonths, incoming }) {
               '쌓인 매물은 호가 분석 탭에서 한 표로 볼 수 있습니다. 기간을 바꾸면 그 기간의 실거래로 전부 다시 계산됩니다.',
             ]}
           />
+          <ChartLink id="paste" />
         </h2>
         <div className="filters">
           <div className="field">

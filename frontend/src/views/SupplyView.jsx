@@ -10,6 +10,7 @@ import { heatVars, histZ, zText } from '../components/heat'
 import { GapLines, isShort } from '../topics/SupplyTables'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
+import ChartLink from '../components/ChartLink'
 
 /**
  * 공급 분석 — 적정 공급량과 실제 공급을 견준다.
@@ -94,6 +95,7 @@ export default function SupplyView() {
               data.note,
             ]}
           />
+          <ChartLink id="adequacy" />
         </h2>
         <div className="macro-grid">
           {data.regions.map((r) => (
@@ -146,6 +148,7 @@ export default function SupplyView() {
               '짝이 되는 가구 증가도 경기도기본통계에서 시 단위로 받아 나란히 두지만 빼지 않습니다 — 가구 증가는 모든 주택 유형의 수요이고, 위 값은 아파트만입니다.',
             ]}
           />
+          <ChartLink id="south" />
         </h2>
         <div className="macro-grid">
           <PanelCard
@@ -174,6 +177,7 @@ export default function SupplyView() {
               data.unsold.note,
             ]}
           />
+          <ChartLink id="unsold" />
         </h2>
         <HeatLegend>
           카드 색은 지금 미분양이 그 지역의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
+import { scrollToChart, TabContext } from './components/ChartLink'
 import Hint from './components/Hint'
 import MacroView from './views/MacroView'
 import MarketView from './views/MarketView'
@@ -26,30 +27,37 @@ import TenureView from './views/TenureView'
  * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/engineering/deploy.md.
  *
  * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
+ *
+ * ## 순서 — 큰 틀에서 상세로
+ *
+ * 2026-10-22 요청으로 다시 줄 세웠다: 거시 분석이 첫째, 탭을 넘길수록 범위가 좁아져 호가 분석이 마지막.
+ * 전국·경기의 거시 요인 → 공급 → 경기 남부 평균의 매매·전세·월세 → 시군구별 공표 가격 → 단지 가격을 움직이는
+ * 요인(매물 분석·분해 모델) → 단지 하나하나(지도) → 매물 하나하나(호가 입력·분석). 예전에는 매물 분석이
+ * 첫 탭이라, 무엇을 보는 사이트인지 알기 전에 단지 요인부터 나왔다. 첫 화면은 이 목록의 첫 탭이다.
  */
 const TABS = [
-  // 한 탭 안에 섹션으로 합쳐 봤다가 **되돌렸다.** 둘은 같은 질문의 두 축이지만,
-  // 각자 카드가 예닐곱 장이라 한 화면에 올리면 좌우 2단으로 쪼개도 빽빽했다.
-  // 겹쳐 봐야 하는 것은 '모델과 어긋나는 곳' 한 장뿐이고, 그건 거시 쪽에 이미 있다.
-  // 이름을 두 번 바꿨다. '시장 분석' → '미시 분석' → '매물 분석' 이고,
-  // '매크로' → '거시 분석' → '가격 분석' 이다. 바꾼 이유는 같다 — '미시/거시' 가
-  // 무엇을 보는 탭인지 말해 주지 않았다. 지금 이름은 **대상**을 가리킨다.
-  { id: 'micro', label: '매물 분석', static: true },
-  { id: 'macro', label: '가격 분석', static: true },
-  // 공급은 2~3년 전에 정해져 지금 나타난다. 가격 추이와 같은 축에 놓으면
-  // 둘 다 안 읽혀서 탭을 따로 뒀다.
-  { id: 'supply', label: '공급 분석', static: true },
   // 공급은 여섯 요인 중 하나다. 나머지(수요·통화량·금리·정책·세금)까지 한 화면에
   // 놓고 **어느 쪽으로 미는지**를 본다. 공급 탭과 겹치는 것은 준공·미분양뿐이고,
   // 거기서는 '얼마나 모자라나', 여기서는 '그래서 어느 쪽인가' 를 묻는다.
   { id: 'regime', label: '거시 분석', static: true },
+  // 공급은 2~3년 전에 정해져 지금 나타난다. 가격 추이와 같은 축에 놓으면
+  // 둘 다 안 읽혀서 탭을 따로 뒀다.
+  { id: 'supply', label: '공급 분석', static: true },
   // 거시 탭이 '가격을 어느 쪽으로 미나' 라면, 여기는 '수요가 어느 점유 형태로 옮겨 가나' 다.
   // 같은 금리가 매매·전세·월세에 다르게 닿는 것을 보려면 세 가격이 한 화면에 있어야 한다.
   { id: 'tenure', label: '매매·전세·월세', static: true },
-  { id: 'map', label: '지도', static: STATIC_MAP },
+  // 한 탭 안에 섹션으로 합쳐 봤다가 **되돌렸다.** 둘(가격 분석·매물 분석)은 같은 질문의 두 축이지만,
+  // 각자 카드가 예닐곱 장이라 한 화면에 올리면 좌우 2단으로 쪼개도 빽빽했다.
+  // 겹쳐 봐야 하는 것은 '모델과 어긋나는 곳' 한 장뿐이고, 그건 가격 분석 쪽에 이미 있다.
+  // 이름을 두 번 바꿨다. '시장 분석' → '미시 분석' → '매물 분석' 이고,
+  // '매크로' → '거시 분석' → '가격 분석' 이다. 바꾼 이유는 같다 — '미시/거시' 가
+  // 무엇을 보는 탭인지 말해 주지 않았다. 지금 이름은 **대상**을 가리킨다.
+  { id: 'macro', label: '가격 분석', static: true },
+  { id: 'micro', label: '매물 분석', static: true },
   // 정적 사이트에도 싣는다. 적합 결과(`/model/fit`)는 이미 내보내고 있었고, 묶어 보기
   // (`/model/groups`)만 더하면 됐다. 맨 위 수식(`ModelFormula`)이 탭의 입구다.
   { id: 'model', label: '분해 모델', static: true },
+  { id: 'map', label: '지도', static: STATIC_MAP },
   // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
   // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
   // 둘은 짝이다 — 한쪽에 붙여넣고 다른 쪽에서 본다. 이름도 짝으로 맞췄다.
@@ -59,12 +67,19 @@ const TABS = [
 
 const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
 
+/** 주소 `#탭/그림` → { tab, chart }. 모르는 탭이면 첫 탭(링크가 옛 탭 이름이어도 빈 화면이 아니게). */
+function readHash() {
+  const [t, c] = decodeURIComponent(window.location.hash.replace(/^#/, '')).split('/')
+  const ok = VISIBLE_TABS.some((x) => x.id === t)
+  return { tab: ok ? t : VISIBLE_TABS[0].id, chart: ok ? c || null : null }
+}
+
 // 단지 비교 탭을 없애면서 구·면적대·입지 같은 필터를 읽는 곳이 사라졌다.
 // 남은 화면은 전부 분석 기간만 쓴다.
 const DEFAULT_FILTERS = { months: 12 }
 
 export default function App() {
-  const [tab, setTab] = useState('micro')
+  const [tab, setTab] = useState(() => readHash().tab)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [meta, setMeta] = useState(null)
   const [health, setHealth] = useState(null)
@@ -94,6 +109,7 @@ export default function App() {
       const text = e.clipboardData?.getData('text') || ''
       if (!/^\s*(매매|전세|월세)\s*[\d억]/m.test(text)) return
       e.preventDefault()
+      window.history.pushState(null, '', '#compare')
       setTab('compare')
       setDetailId(null)
       setPasted({ text, at: Date.now() })
@@ -101,6 +117,31 @@ export default function App() {
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
   }, [])
+
+  // 주소가 바뀌면(링크로 들어옴·뒤로 가기) 그 탭을 열고 그림까지 내려 준다. 탭을 누를 때는 주소에
+  // 기록만 남긴다(pushState) — 뒤로 가기가 앞 탭으로 돌아가게.
+  useEffect(() => {
+    let stop = scrollToChart(readHash().chart)
+    const onHash = () => {
+      const h = readHash()
+      setTab(h.tab)
+      setDetailId(null)
+      stop()
+      stop = scrollToChart(h.chart)
+    }
+    window.addEventListener('hashchange', onHash)
+    window.addEventListener('popstate', onHash)
+    return () => {
+      stop()
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('popstate', onHash)
+    }
+  }, [])
+  const goTab = (id) => {
+    if (readHash().tab !== id || window.location.hash !== `#${id}`) window.history.pushState(null, '', `#${id}`)
+    setTab(id)
+    setDetailId(null)
+  }
 
   const openDetail = (id) => {
     setDetailId(id)
@@ -163,16 +204,14 @@ export default function App() {
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => {
-              setTab(t.id)
-              setDetailId(null)
-            }}
+            onClick={() => goTab(t.id)}
           >
             {t.label}
           </button>
         ))}
       </nav>
 
+      <TabContext.Provider value={tab}>
       {detailId ? (
         <ComplexDetail
           complexId={detailId}
@@ -202,6 +241,7 @@ export default function App() {
       ) : (
         <CompareView months={Math.max(filters.months, 12)} incoming={pasted} />
       )}
+      </TabContext.Provider>
     </div>
   )
 }

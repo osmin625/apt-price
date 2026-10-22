@@ -120,6 +120,13 @@ header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .tabs button:hover { color: var(--accent); }
+/* 그림 링크(#) — 제목 옆에 옅게, 카드에 올리면 진하게. 링크로 들어온 카드는 잠깐 테두리를 칠한다. */
+.chart-link { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--text-muted); text-decoration: none;
+  opacity: 0.45; }
+.card:hover .chart-link, .macro-card:hover .chart-link, .chart-link:focus-visible, .chart-link.is-copied { opacity: 1; }
+.chart-link:hover { color: var(--accent); }
+.chart-link.is-copied { color: var(--accent); font-size: 11.5px; }
+.card.is-target, .macro-card.is-target { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color 0.3s; }
 .tabs button[aria-selected='true'] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
 /* 넓은 화면에서 문장이 1500px 로 뻗으면 눈이 줄을 잃는다. 숫자·격자는 폭을 다
    쓰고 글줄만 묶는다. 90ch 는 한글 기준 한 줄 45자 안팎이다. */
