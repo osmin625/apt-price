@@ -35,6 +35,10 @@ import { fmt, niceTicks, useMeasure } from './Charts'
  * 정권처럼 기간이 빈틈없이 이어지는 띠(2026-10-21)는 `tone: 'alt'` 로 한 칸 걸러 무채색으로 칠하고
  * `edge` 로 시작 달에 경계선을 긋고, `label` 을 그림 위 한 줄에 적는다(칸이 좁으면 생략 — 권한대행
  * 두어 달은 글자가 안 들어간다). 마우스를 올린 달의 띠 이름(`tip`, 없으면 `label`)은 툴팁 제목에 붙는다.
+ *
+ * `fill` 은 색을 직접 준다(정당 색, 2026-10-22). `row: 'strip'` 인 띠는 그림 안이 아니라 이름 줄 아래
+ * 얇은 한 줄에 칠한다 — 바탕(정부)과 띠(국회)를 한눈에 견주게. 칠하지 않고 툴팁 이름만 주는 띠
+ * (`fill: 'none'`)도 된다. `rowLabels` 는 이름 줄·띠 줄 왼쪽 여백에 적는 이름이다.
  */
 /* 축 범위 안의 눈금. 0 선을 맞추려고 범위를 늘리면 눈금 계산에서 -0 이 나와 축에
    '-0' 이 찍혔다(미분양 창 오른쪽 축) — 0 으로 바로잡는다. */
@@ -62,13 +66,20 @@ export default function TimeLines({
   rightDecimals = 0,
   rightZero = false,
   bands = [],
+  rowLabels = {},
 }) {
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState(null)
   const hasRight = series.some((s) => s.axis === 'right')
   // 띠 이름을 적을 한 줄을 그림 위에 둔다 — 그림 안에 적으면 선과 겹친다.
   const hasBandLabel = bands.some((b) => b.label)
-  const PAD = { t: hasBandLabel ? 26 : 12, r: hasRight ? 52 : 14, b: 26, l: 56 }
+  const hasStrip = bands.some((b) => b.row === 'strip')
+  const labelY = 11
+  const stripY = hasBandLabel ? 16 : 4
+  const PAD = {
+    t: hasStrip ? stripY + 12 : hasBandLabel ? 26 : 12,
+    r: hasRight ? 52 : 14, b: 26, l: 56,
+  }
   const W = Math.max(width || 640, 280)
 
   const g = useMemo(() => {
@@ -144,7 +155,8 @@ export default function TimeLines({
         if (!a || !z || a > z) return null
         const x0 = Math.max(PAD.l, xOf(a) - step / 2)
         const x1 = Math.min(PAD.l + iw, xOf(z) + step / 2)
-        return { key: `${b.from}-${b.to}`, x: x0, w: x1 - x0, label: b.label, tone: b.tone, edge: b.edge }
+        return { key: `${b.row || ''}${b.from}-${b.to}`, x: x0, w: x1 - x0, label: b.label, tone: b.tone,
+                 edge: b.edge, fill: b.fill, row: b.row }
       })
       .filter(Boolean)
 
@@ -183,10 +195,11 @@ export default function TimeLines({
         : s.color,
     }
   }
-  const bandAt = (ym) => {
-    const b = bands.find((x) => (x.tip || x.label) && x.from <= ym && ym <= x.to)
-    return b ? b.tip || b.label : null
-  }
+  // 그 달에 걸친 띠 이름을 모두 잇는다(정부 · 여대야소 · 국회).
+  const bandAt = (ym) => bands
+    .filter((x) => (x.tip || x.label) && x.from <= ym && ym <= x.to)
+    .map((x) => x.tip || x.label)
+    .join(' · ') || null
   const decOf = (s) => (s.axis === 'right' ? rightDecimals : decimals)
 
   return (
@@ -195,17 +208,25 @@ export default function TimeLines({
            onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         {g.shade.map((b) => (
           <g key={b.key}>
-            <rect x={b.x} y={PAD.t} width={b.w} height={g.ih}
-                  fill={b.tone === 'alt' ? 'var(--era)' : b.tone === 'plain' ? 'transparent' : 'var(--band)'} />
+            {b.fill !== 'none' && (b.row === 'strip'
+              ? <rect x={b.x} y={stripY} width={b.w} height={8} fill={b.fill} />
+              : <rect x={b.x} y={PAD.t} width={b.w} height={g.ih}
+                      fill={b.fill || (b.tone === 'alt' ? 'var(--era)' : b.tone === 'plain' ? 'transparent' : 'var(--band)')} />)}
             {b.edge && b.x > PAD.l + 1 && (
-              <line x1={b.x} x2={b.x} y1={PAD.t - 12} y2={PAD.t + g.ih} stroke="var(--axis)" />
+              <line x1={b.x} x2={b.x} y1={hasBandLabel ? 14 : PAD.t} y2={PAD.t + g.ih} stroke="var(--axis)" />
             )}
             {b.label && b.w >= b.label.length * 11 + 6 && (
-              <text x={b.x + b.w / 2} y={PAD.t - 8} textAnchor="middle" fontSize="11"
+              <text x={b.x + b.w / 2} y={labelY} textAnchor="middle" fontSize="11"
                     fill="var(--text-secondary)">{b.label}</text>
             )}
           </g>
         ))}
+        {rowLabels.label && hasBandLabel && (
+          <text x={PAD.l - 6} y={labelY} textAnchor="end" fontSize="10" fill="var(--text-muted)">{rowLabels.label}</text>
+        )}
+        {rowLabels.strip && hasStrip && (
+          <text x={PAD.l - 6} y={stripY + 8} textAnchor="end" fontSize="10" fill="var(--text-muted)">{rowLabels.strip}</text>
+        )}
         {g.ticksL.map((t) => (
           <g key={`l${t}`}>
             <line x1={PAD.l} x2={W - PAD.r} y1={g.yL(t)} y2={g.yL(t)}
@@ -271,10 +292,9 @@ export default function TimeLines({
       {hm && (
         <div className="chart-tooltip"
              style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
-          <div className="t-title">
-            {hm.slice(0, 4)}.{hm.slice(4)}
-            {bandAt(hm) && <span className="muted"> · {bandAt(hm)}</span>}
-          </div>
+          <div className="t-title">{hm.slice(0, 4)}.{hm.slice(4)}</div>
+          {/* 띠 이름은 제목 아래 줄로 — 정부·여대야소·국회를 한 줄에 이었더니 툴팁 밖으로 잘렸다. */}
+          {bandAt(hm) && <div className="t-band">{bandAt(hm)}</div>}
           {series.map((s, si) => {
             const v = g.lookup[si].get(hm)
             const u = unitOf(s)

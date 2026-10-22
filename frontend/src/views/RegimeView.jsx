@@ -104,11 +104,14 @@ export default function RegimeView() {
               '매매지수는 1년 변화율로 그립니다(굵은 선). 지수 수준은 추세로만 올라, 요인들(대개 증감)과 같은 결로 견주려면 변화율이어야 합니다.',
               '그룹마다 색이 같고 그룹 안에서는 선 모양이 다릅니다. 아래 단추로 그룹을 켜고 끕니다. 그림 위에 마우스를 올리면 그 달의 모든 값이 나옵니다.',
               '같이 움직였다고 원인이라는 뜻은 아닙니다 — 요인들도 서로 얽혀 움직입니다.',
-              '그림 위 이름과 세로선은 대통령 임기입니다(공식 임기 기준, 파면 뒤 선거까지는 권한대행). 마우스를 올리면 그 달이 누구 임기였는지 나옵니다.',
+              '그림 위 이름과 세로선은 대통령 임기입니다(공식 임기 기준, 파면 뒤 선거까지는 권한대행).',
+              '바탕색은 정부(대통령 소속 진영), 이름 아래 얇은 띠는 국회 단독 과반 정당입니다 — 민주당 계열 파랑, 보수 정당 빨강, 과반 정당이 없거나 권한대행이면 회색. 띠와 바탕이 같은 색이면 여대야소, 다르면 여소야대입니다. 마우스를 올리면 그 달의 정부·여대야소 여부·국회가 글로 나옵니다.',
+              '국회 과반은 의석 변동 기록으로 정했고, 몇 달 만에 되찾은 짧은 미달(국회의장 탈당 등)은 넣지 않았습니다.',
             ]}
           />
         </h2>
-        <Overlay factors={data.factors} price={data.price} governments={data.governments} />
+        <Overlay factors={data.factors} price={data.price} governments={data.governments}
+                 assemblies={data.assemblies} />
       </section>
 
       <section className="card">
@@ -192,7 +195,7 @@ function PolicyList({ rows, governments = [], source }) {
         // 최신이 위라 정권도 거꾸로 내려간다. 정권이 바뀌는 줄마다 머리를 한 번 둔다.
         const g = r.gov && r.gov !== rows[i - 1]?.gov ? byLabel[r.gov] : null
         const head = g ? (
-          <li key={`gov-${g.start}`} className="rg-tl-gov">
+          <li key={`gov-${g.start}`} className="rg-tl-gov" style={{ background: campFill(g.camp) }}>
             <strong>{g.label}</strong>
             <span className="muted small">{dotDate(g.start)} ~ {g.end ? dotDate(g.end) : ''}</span>
             <Hint notes={[g.note, source ? `임기: ${source}` : null]} />
@@ -346,23 +349,56 @@ const DASHES = [null, '6 3', '2 3']
 
 /** 모든 요인(z)과 매매지수 1년 변화율(z)을 한 그림에. 그룹 단추로 켜고 끈다. */
 /** 정권 띠 — 시작 달이 다음 정부 시작 달 앞까지. 파면 달처럼 한 달에 둘이 걸치면 새로 들어선 쪽이 갖는다. */
-function govBands(govs) {
-  const prev = (ym) => {
-    const y = Number(ym.slice(0, 4))
-    const m = Number(ym.slice(4))
-    return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`
-  }
-  return (govs || []).map((g, i, all) => ({
-    from: g.from,
-    to: all[i + 1] ? prev(all[i + 1].from) : '999912',
-    label: g.name,
-    tip: g.label,
-    tone: i % 2 ? 'alt' : 'plain',
-    edge: true,
-  }))
+const prevYm = (ym) => {
+  const y = Number(ym.slice(0, 4))
+  const m = Number(ym.slice(4))
+  return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`
+}
+/** 이어지는 구간 목록 → 띠. 끝 달은 다음 구간 시작 앞 달이다(한 달에 둘이 걸치면 새로 들어선 쪽). */
+const spans = (list) => (list || []).map((x, i, all) => ({
+  ...x, to: all[i + 1] ? prevYm(all[i + 1].from) : '999912',
+}))
+const campFill = (camp, strong) => `var(--camp-${camp || 'none'}${strong ? '-strong' : ''})`
+
+/**
+ * 정권 띠 — 바탕은 정부(대통령 진영), 이름 줄 아래 얇은 띠는 국회 과반 정당(2026-10-22 요청: 민주당 연한
+ * 파랑, 보수 연한 빨강). 띠와 바탕이 같은 색이면 여대야소, 다르면(과반 없음 회색 포함) 여소야대다.
+ *
+ * 위·아래 절반으로 나눠 칠하는 안도 있었다. 그러면 z 그림의 0 선 위·아래와 겹쳐 '위 절반이 빨강 = 높다'
+ * 처럼 읽힐 수 있어, 국회는 그림 밖 띠로 뺐다. 여대야소인지는 툴팁 제목에도 글로 붙인다.
+ */
+function partyBands(govs, asms) {
+  const G = spans(govs)
+  const A = spans(asms)
+  const at = (list, ym) => list.find((x) => x.from <= ym && ym <= x.to)
+  // 정부·국회 경계를 합쳐 구간마다 여대야소인지 판정한다.
+  const cuts = [...new Set([...G, ...A].map((x) => x.from))].sort()
+  const status = cuts.map((from, i) => {
+    const g = at(G, from)
+    const a = at(A, from)
+    const tip = !g || !g.camp ? '권한대행' : a && a.camp === g.camp ? '여대야소' : '여소야대'
+    return { from, to: cuts[i + 1] ? prevYm(cuts[i + 1]) : '999912', tip, fill: 'none' }
+  })
+  return [
+    ...G.map((g) => ({ from: g.from, to: g.to, label: g.name, tip: g.label, edge: true, fill: campFill(g.camp) })),
+    ...status,
+    ...A.map((a) => ({ from: a.from, to: a.to, row: 'strip', fill: campFill(a.camp, true),
+                       tip: `국회 ${a.label.replace(' · ', ' ')}` })),
+  ]
 }
 
-function Overlay({ factors, price, governments }) {
+function PartyLegend() {
+  return (
+    <div className="legend rg-party">
+      <span className="key"><span className="swatch" style={{ background: 'var(--camp-dem-strong)' }} />민주당 계열</span>
+      <span className="key"><span className="swatch" style={{ background: 'var(--camp-con-strong)' }} />보수 정당</span>
+      <span className="key"><span className="swatch" style={{ background: 'var(--camp-none-strong)' }} />과반 없음·권한대행</span>
+      <span className="key muted">바탕 = 정부 · 위 띠 = 국회 과반</span>
+    </div>
+  )
+}
+
+function Overlay({ factors, price, governments, assemblies }) {
   const groups = [...new Set(factors.map((f) => f.group))]
   const [on, setOn] = useState(() => new Set(groups))
   const toggle = (g) => setOn((prev) => {
@@ -406,9 +442,11 @@ function Overlay({ factors, price, governments }) {
         zero
         height={340}
         months={months}
-        bands={govBands(governments)}
-        ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림 — 위에 대통령 임기"
+        bands={partyBands(governments, assemblies)}
+        rowLabels={{ label: '정부', strip: '국회' }}
+        ariaLabel="모든 요인과 매매지수 1년 변화를 평균 대비 배수로 겹친 그림 — 바탕은 정부 진영, 위 띠는 국회 과반"
       />
+      <PartyLegend />
     </>
   )
 }

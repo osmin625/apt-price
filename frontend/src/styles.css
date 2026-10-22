@@ -39,6 +39,14 @@
   --band: rgba(139, 92, 246, 0.09);
   /* 정권처럼 빈틈없이 이어지는 기간을 한 칸 걸러 칠하는 무채색. 색을 넣으면 진영처럼 읽힌다. */
   --era: rgba(0, 0, 0, 0.04);
+  /* 정당 진영(2026-10-22 요청 — 민주당 연한 파랑, 보수 연한 빨강). 바탕은 선을 가리지 않게 아주 옅게,
+     -strong 은 얇은 띠·범례용. 둘이 같은 색상이어야 '띠와 바탕이 같은 색' 을 견줄 수 있다. */
+  --camp-dem: rgba(37, 99, 235, 0.09);
+  --camp-con: rgba(220, 38, 38, 0.08);
+  --camp-none: rgba(128, 128, 128, 0.07);
+  --camp-dem-strong: rgba(37, 99, 235, 0.42);
+  --camp-con-strong: rgba(220, 38, 38, 0.38);
+  --camp-none-strong: rgba(128, 128, 128, 0.35);
   --neg: #e34948;
   --good: #0ca30c;
   --warning: #fab219;
@@ -71,6 +79,12 @@
     --series-4: #a78bfa;
     --band: rgba(167, 139, 250, 0.12);
     --era: rgba(255, 255, 255, 0.045);
+    --camp-dem: rgba(96, 165, 250, 0.12);
+    --camp-con: rgba(248, 113, 113, 0.11);
+    --camp-none: rgba(160, 160, 160, 0.09);
+    --camp-dem-strong: rgba(96, 165, 250, 0.5);
+    --camp-con-strong: rgba(248, 113, 113, 0.48);
+    --camp-none-strong: rgba(160, 160, 160, 0.4);
     --neg: #ff6b6b;
   }
 }
@@ -247,6 +261,7 @@ tbody tr.clickable { cursor: pointer; }
 }
 .chart-tooltip .t-title { font-weight: 600; margin-bottom: 3px; }
 .chart-tooltip .t-row { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.chart-tooltip .t-band { color: var(--text-muted); white-space: normal; max-width: 280px; margin: -2px 0 4px; }
 .chart-tooltip .t-key { display: inline-block; width: 18px; margin-right: 6px; vertical-align: 3px; }
 .empty { color: var(--text-muted); font-size: 13px; padding: 24px 0; text-align: center; }
 .notice {
@@ -1014,8 +1029,8 @@ tr.is-deleting td { opacity: 0.4; }
 .rg-tl-foot .hint { margin-left: 0; }
 .rg-tl-after { margin-left: auto; font-variant-numeric: tabular-nums; }
 /* 정권 머리 — 대책 줄의 왼쪽 선 없이, 묶음 제목처럼. */
-.rg-timeline li.rg-tl-gov { border-left: 0; padding: 6px 0 0; font-size: 13px; display: flex; align-items: baseline; gap: 8px; }
-.rg-timeline li.rg-tl-gov:first-child { padding-top: 0; }
+.rg-timeline li.rg-tl-gov { border-left: 0; padding: 4px 8px; font-size: 13px; display: flex; align-items: baseline; gap: 8px; }
+.legend.rg-party { margin-top: 2px; }
 .rg-kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
 .rg-kind.is-tight { background: color-mix(in srgb, var(--neg) 16%, transparent); color: var(--neg); }
 .rg-kind.is-loose { background: color-mix(in srgb, var(--series-1) 16%, transparent); color: var(--series-1); }
