@@ -51,7 +51,8 @@ from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
 from ..models import RebStat
-from .policy import COVERS_FROM, GOV_SOURCE, GOVERNMENTS, POLICY, government_at
+from .policy import (ASSEMBLIES, ASSEMBLY_SOURCE, COVERS_FROM, GOV_SOURCE, GOVERNMENTS, POLICY,
+                     government_at)
 
 # '그때는' 의 '지금과 비슷한 자리'(±0.5, `SIMILAR_BAND`). 예전에는 과거 국면 표의 다섯 단계
 # (보통 ±0.5 · 매우 ±1.5) 경계이기도 했는데, 그 표가 글자를 빼고 배수만 적게 되며(2026-10-19)
@@ -794,10 +795,14 @@ def overview(db: Session) -> dict:
         # 시작 달이 같으면 늦게 시작한 쪽이 그 달을 갖는다(파면 달은 권한대행).
         "governments": [{"from": g["start"][:4] + g["start"][5:7],
                          "to": g["end"][:4] + g["end"][5:7] if g["end"] else None,
-                         "name": g["name"], "label": g["label"],
+                         "name": g["name"], "label": g["label"], "camp": g["camp"],
                          "start": g["start"], "end": g["end"], "note": g["note"]}
                         for g in GOVERNMENTS],
         "governments_source": GOV_SOURCE,
+        # 국회 과반 — 정부 진영과 같으면 여대야소, 다르면(과반 없음 포함) 여소야대.
+        "assemblies": [{"from": a["start"][:4] + a["start"][5:7], "camp": a["camp"], "label": a["label"],
+                        "start": a["start"], "end": a["end"], "note": a["note"]} for a in ASSEMBLIES],
+        "assemblies_source": ASSEMBLY_SOURCE,
         "history": history(db),
         "reflect": reflect(db),
         # '가장 센 것도 0.50 이라 어느 요인도 혼자서는 설명하지 못한다' 를 적었었다.
