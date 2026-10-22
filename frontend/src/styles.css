@@ -724,6 +724,11 @@ tr.is-deleting td { opacity: 0.4; }
 .tilt-now { white-space: nowrap; }
 .tilt-now b { font-variant-numeric: tabular-nums; }
 .tilt-now .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
+/* 임직원 보기 — 탭 맨 위 한 줄. 임직원 선은 점선이라 범례 표식도 점선. */
+.tn-emp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; }
+.tn-emp label { display: flex; align-items: center; gap: 6px; }
+.tn-emp select { font: inherit; }
+.swatch.is-dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 6px); height: 3px !important; vertical-align: 3px !important; }
 .tn-now .swatch, .tn-lows .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
 .rg-tile .rg-then { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
 
