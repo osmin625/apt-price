@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-10-24T06:31:27+09:00",
+  "git_head": "1338d99",
+  "months": [
+    12,
+    24,
+    36
+  ],
+  "tabs": [
+    "micro",
+    "macro",
+    "supply",
+    "regime",
+    "tenure",
+    "map",
+    "ranking"
+  ],
+  "includes_quotes": true,
+  "data": {
+    "trades": 120655,
+    "complexes": 2475,
+    "quotes": 1157,
+    "latest_deal_date": "2026-10-16"
+  },
+  "files": 2180,
+  "walk_paths_absent": 0,
+  "bytes": 21236917,
+  "export_seconds": 82.4,
+  "failures": []
+}
