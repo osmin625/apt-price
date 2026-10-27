@@ -85,6 +85,7 @@ backend/
     ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
     ingest_bldrgst.py       건축물대장 법정동 전수 — 멸실을 직접 관측하려고
     export_static.py        정적 사이트용 스냅샷
+    build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)
     ingest_trades.py        실거래 적재
@@ -104,6 +105,7 @@ frontend/
   src/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
   src/components/heat.js    평균 대비 위치(z)의 색·말 — 탭 공통의 자 (백엔드 regime.hist_z 와 같은 공식)
   src/topics/               같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
+  src/topics/RegionMap.jsx  시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가

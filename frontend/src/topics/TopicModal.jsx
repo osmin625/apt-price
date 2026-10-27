@@ -7,6 +7,7 @@ import TimeLines from '../components/TimeLines'
 import { heatVars, histZ, zText } from '../components/heat'
 import { FactorThen } from './FactorAnalysis'
 import { FullTable, Legend, MultiLine } from './RegionMetric'
+import { RegionMapPlayer } from './RegionMap'
 import { PRICE_METRIC } from './registry'
 import { BalanceTable, PipeTable, UnsoldTable } from './SupplyTables'
 import Hint from '../components/Hint'
@@ -22,8 +23,9 @@ import Hint from '../components/Hint'
  * `load` 가 응답을 기억하므로 두 번째부터는 다시 받지 않는다.
  *
  * `topic`: `topicFor()` 가 돌려준 것. `since`(가격 분석 기간)·`region`(공급 지역)은
- * 여는 쪽이 넘기는 초기값이다. `hidden`·`onToggle` 을 넘기면 가격 분석 카드와 숨긴
- * 시군구를 공유한다 — 창에서 끈 선이 카드에서도 꺼져야 한다(원래 그렇게 동작했다).
+ * 여는 쪽이 넘기는 초기값이다. `hidden`·`onToggle` 을 넘기면 숨긴 시군구를 여는 쪽이
+ * 들고 있다 — 창을 닫았다 다시 열어도 끈 선이 꺼져 있다. 예전에는 카드도 선 그림이라 카드의
+ * 선까지 같이 꺼졌는데, 카드가 지도가 된 뒤(2026-10-27)로는 창 안에서만 뜻이 있다.
  */
 export default function TopicModal({ topic, onClose, hidden, onToggle }) {
   const [title, setTitle] = useState(topic.title || '')
@@ -86,6 +88,8 @@ const SINCE = [
 function MetricSection({ topic, fallback = false, hidden: hiddenProp, onToggle, onLabel }) {
   const [since, setSince] = useState(topic.since || '202001')
   const [own, setOwn] = useState(() => new Set())
+  // 지도에서 가리킨 구 — 아래 선 그림의 그 선을 두드러지게 한다.
+  const [focus, setFocus] = useState(null)
   const hidden = hiddenProp || own
   const toggle =
     onToggle ||
@@ -118,7 +122,8 @@ function MetricSection({ topic, fallback = false, hidden: hiddenProp, onToggle, 
       {data && (
         <>
           <p className="muted small">{data.note}</p>
-          <MultiLine data={data} hidden={hidden} />
+          <RegionMapPlayer data={data} focus={focus} onFocus={setFocus} />
+          <MultiLine data={data} hidden={hidden} focus={focus} />
           <Legend data={data} hidden={hidden} onToggle={toggle} />
           {data.items.some((i) => i.partial) && (
             <p className="paste-warn" style={{ marginTop: 8 }}>
