@@ -65,13 +65,35 @@ const TABS = [
   { id: 'ranking', label: '호가 분석', static: true },
 ]
 
-const VISIBLE_TABS = STATIC_MODE ? TABS.filter((t) => t.static) : TABS
+/**
+ * 자산 — 제목 자리에서 고른다. 탭은 자산마다 따로 있다.
+ *
+ * 2026-10-27 요청으로 범위를 넓혔다: 이 사이트는 '경기 남부 아파트 적정 시세' 였고, 이제 그 전부가
+ * '부동산' 한 자산이다. 위 TABS 가 그대로 부동산의 탭이다. 새 자산은 여기 한 줄과 그 탭 목록을 더한다.
+ *
+ * 탭이 없는 자산도 고를 수 있게 둔다. 위의 '눌리는데 실패하는 탭을 두지 않는다' 와 부딪히는 것 같지만,
+ * 그 규칙이 막는 것은 **눌렀더니 틀린 답이나 오류가 나오는 것**이다. 탭이 없는 자산은 그렇다고 말하는
+ * 빈 화면만 낸다 — 무엇을 넓히려는지가 제목에서 보이는 편이 낫다고 봤다.
+ */
+const ASSETS = [
+  { id: 'realestate', label: '부동산', tabs: TABS },
+  { id: 'stock', label: '주식', tabs: [] },
+].map((a) => ({ ...a, tabs: STATIC_MODE ? a.tabs.filter((t) => t.static) : a.tabs }))
 
-/** 주소 `#탭/그림` → { tab, chart }. 모르는 탭이면 첫 탭(링크가 옛 탭 이름이어도 빈 화면이 아니게). */
+/** 탭 id 는 자산을 건너 겹치지 않는다 — 그래서 주소에 자산을 따로 적지 않아도 탭에서 자산이 나온다. */
+const assetOfTab = (id) => ASSETS.find((a) => a.tabs.some((t) => t.id === id))
+
+/**
+ * 주소 `#탭/그림` → { asset, tab, chart }. 탭이 없는 자산은 `#자산`(`#stock`).
+ * 모르는 이름이면 첫 자산의 첫 탭(링크가 옛 탭 이름이어도 빈 화면이 아니게). 예전 링크(`#regime/overlay`)는
+ * 그대로 부동산으로 열린다.
+ */
 function readHash() {
   const [t, c] = decodeURIComponent(window.location.hash.replace(/^#/, '')).split('/')
-  const ok = VISIBLE_TABS.some((x) => x.id === t)
-  return { tab: ok ? t : VISIBLE_TABS[0].id, chart: ok ? c || null : null }
+  const byTab = assetOfTab(t)
+  if (byTab) return { asset: byTab.id, tab: t, chart: c || null }
+  const a = ASSETS.find((x) => x.id === t) || ASSETS[0]
+  return { asset: a.id, tab: a.tabs[0]?.id ?? null, chart: null }
 }
 
 // 단지 비교 탭을 없애면서 구·면적대·입지 같은 필터를 읽는 곳이 사라졌다.
@@ -79,6 +101,7 @@ function readHash() {
 const DEFAULT_FILTERS = { months: 12 }
 
 export default function App() {
+  const [asset, setAsset] = useState(() => readHash().asset)
   const [tab, setTab] = useState(() => readHash().tab)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [meta, setMeta] = useState(null)
@@ -110,6 +133,7 @@ export default function App() {
       if (!/^\s*(매매|전세|월세)\s*[\d억]/m.test(text)) return
       e.preventDefault()
       window.history.pushState(null, '', '#compare')
+      setAsset('realestate')
       setTab('compare')
       setDetailId(null)
       setPasted({ text, at: Date.now() })
@@ -124,6 +148,7 @@ export default function App() {
     let stop = scrollToChart(readHash().chart)
     const onHash = () => {
       const h = readHash()
+      setAsset(h.asset)
       setTab(h.tab)
       setDetailId(null)
       stop()
@@ -142,6 +167,17 @@ export default function App() {
     setTab(id)
     setDetailId(null)
   }
+  // 자산을 바꾸면 그 자산의 첫 탭으로 간다. 탭이 없으면 주소에 자산 이름만 남긴다.
+  const goAsset = (id) => {
+    if (id === asset) return
+    const first = ASSETS.find((x) => x.id === id).tabs[0]?.id
+    setAsset(id)
+    if (first) return goTab(first)
+    window.history.pushState(null, '', `#${id}`)
+    setTab(null)
+    setDetailId(null)
+  }
+  const cur = ASSETS.find((a) => a.id === asset)
 
   const openDetail = (id) => {
     setDetailId(id)
@@ -152,14 +188,26 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div className="top-main">
-          <h1>경기 남부 아파트 적정 시세</h1>
-          <p>
-            국토교통부 실거래가 기반 · <strong>전용면적</strong> 평당가로 비교 (공급면적 아님)
-          </p>
+          <div className="top-title">
+            <h1>자산 분석</h1>
+            <div className="seg asset-pick" role="tablist" aria-label="자산">
+              {ASSETS.map((a) => (
+                <button key={a.id} role="tab" aria-selected={asset === a.id} onClick={() => goAsset(a.id)}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {asset === 'realestate' && (
+            <p>
+              경기 남부 아파트 · 국토교통부 실거래가 기반 · <strong>전용면적</strong> 평당가로 비교 (공급면적 아님)
+            </p>
+          )}
         </div>
         {/* 매물을 찾아오는 곳. 이 앱은 붙여넣은 텍스트만 읽으므로, 실제 매물은
             여기서 보고 복사해 온다. rel 에 noopener 를 넣어 새 탭이 이 페이지의
-            window 를 건드리지 못하게 한다. */}
+            window 를 건드리지 못하게 한다. 부동산에서만 뜻이 있다. */}
+        {asset === 'realestate' && (
         <a
           className="ext-link"
           href="https://fin.land.naver.com/map?center=3zicav-2Azj62&zoom=14.2696839630405&tradeTypes=A1&realEstateTypes=A01&dealPrice=0-510000000&activeDevelopments=RAIL&layer=NobwRAlgJmBcYAsD2BbApmANGAzmghgE4DGCACkfijnCAL50C6QA"
@@ -168,6 +216,7 @@ export default function App() {
         >
           네이버페이 부동산 <span aria-hidden="true">↗</span>
         </a>
+        )}
       </header>
 
       {/* 정적 사이트는 **보고 있는 값이 언제 것인지 알 수 없다.** 로컬은 부를 때마다
@@ -190,7 +239,7 @@ export default function App() {
         </div>
       )}
 
-      {health && !health.molit_key_set && (
+      {asset === 'realestate' && health && !health.molit_key_set && (
         <div className="notice">
           국토교통부 API 키가 설정되지 않아 <strong>합성 데모 데이터</strong>로 동작 중입니다.
           실제 실거래가를 보려면 <code>backend/.env</code> 에 키를 넣고{' '}
@@ -198,8 +247,9 @@ export default function App() {
         </div>
       )}
 
+      {cur.tabs.length > 0 && (
       <nav className="tabs">
-        {VISIBLE_TABS.map((t) => (
+        {cur.tabs.map((t) => (
           <button
             key={t.id}
             role="tab"
@@ -210,9 +260,12 @@ export default function App() {
           </button>
         ))}
       </nav>
+      )}
 
       <TabContext.Provider value={tab}>
-      {detailId ? (
+      {!tab ? (
+        <div className="card empty asset-empty">{cur.label} 분석은 준비 중입니다.</div>
+      ) : detailId ? (
         <ComplexDetail
           complexId={detailId}
           months={filters.months}
