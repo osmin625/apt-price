@@ -10,7 +10,7 @@ import HeatLegend from '../components/HeatLegend'
 import Hint from '../components/Hint'
 import { heatColor, zText } from '../components/heat'
 import QuadrantScatter from '../components/QuadrantScatter'
-import { MultiLine } from '../topics/RegionMetric'
+import RegionMap from '../topics/RegionMap'
 import TopicModal from '../topics/TopicModal'
 import { topicFor } from '../topics/registry'
 import ChartLink from '../components/ChartLink'
@@ -201,7 +201,9 @@ export default function MacroView() {
         </PanelCard>
 
         {/* 지표마다 한 장. 순서는 `METRICS` 가 정한 순서 그대로다 — 지수·가율이
-            앞이고 금액이 뒤인데, 그게 '변화' 에서 '수준' 으로 가는 순서다. */}
+            앞이고 금액이 뒤인데, 그게 '변화' 에서 '수준' 으로 가는 순서다.
+            축소판은 선 17개가 아니라 **마지막 달 지도**다. 300px 칸에서 선 17개는 서로 감겨
+            어느 구인지 읽을 수 없었다. 추이는 눌러서 여는 창에 선 그림으로 있다. */}
         {metrics.map((m) => {
           const d = series[m.key]
           return (
@@ -210,14 +212,14 @@ export default function MacroView() {
               title={m.label}
               sub={
                 d
-                  ? `${d.unit} · ${d.months[0]}~${d.months[d.months.length - 1]}`
+                  ? `${d.unit} · ${d.months[d.months.length - 1]} 지도`
                   : '불러오는 중'
               }
               onOpen={() => setOpen(m.key)}
               linkId={m.key}
               ready={!!d}
             >
-              {d && <MultiLine data={d} hidden={hidden} compact />}
+              {d && <RegionMap data={d} compact />}
             </PanelCard>
           )
         })}

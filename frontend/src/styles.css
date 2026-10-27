@@ -780,6 +780,24 @@ tr.is-deleting td { opacity: 0.4; }
   border: 1px solid var(--border);
 }
 .macro-card .quad-chart, .macro-card .macro-chart { margin-top: 0; }
+/* 시군구 지도(topics/RegionMap). 경계선은 바탕색으로 그어 이웃 사이가 갈라져 보이게 한다. */
+.region-map { width: 100%; margin-top: 10px; }
+.region-map svg { width: 100%; height: auto; display: block; max-width: 760px; margin: 0 auto; }
+.region-map path { stroke: var(--surface-1); stroke-width: 2.5; stroke-linejoin: round; cursor: default; }
+.region-map path:hover, .region-map path.is-focus { stroke: var(--text-primary); stroke-width: 3; }
+.region-map-label { font-size: 16px; font-weight: 600; fill: var(--text-primary); pointer-events: none; }
+.region-map-label.is-empty { fill: var(--text-muted); font-weight: 400; }
+.region-map-scale { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;
+  font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.region-map-bar { width: 140px; height: 8px; border: 1px solid var(--border); flex: none; }
+.region-map.is-compact { margin-top: 0; }
+.region-map.is-compact path { stroke-width: 3; }
+.region-map.is-compact .region-map-bar { width: 90px; }
+.region-map-player { margin: 10px 0 14px; }
+.region-map-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.region-map-controls input[type='range'] { flex: 1 1 200px; min-width: 140px; accent-color: var(--accent); }
+.region-map-controls .ghost { padding: 5px 11px; min-width: 38px; }
+.region-map-ym { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 62px; }
 /* 설명문 툴팁 — 차트 값과 달리 줄바꿈이 필요하다 */
 .chart-tooltip.is-wide { white-space: normal; max-width: 320px; }
 .chart-tooltip.is-wide .t-row { color: var(--text-secondary); font-variant-numeric: normal; }

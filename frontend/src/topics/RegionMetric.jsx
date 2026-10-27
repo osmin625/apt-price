@@ -11,7 +11,7 @@ import { fmt, niceTicks, useMeasure, useTooltip } from '../components/Charts'
 
 /* 17개 선을 한 축에. 색은 순위로 돌린다 — 이름마다 고정색을 주면 17개를 구분할
    만큼 색이 없고, 어차피 범례에서 짚어 보게 된다. */
-export function MultiLine({ data, hidden, compact = false }) {
+export function MultiLine({ data, hidden, compact = false, focus }) {
   const [ref, width] = useMeasure()
   const tip = useTooltip()
   const H = compact ? 150 : 300
@@ -86,7 +86,8 @@ export function MultiLine({ data, hidden, compact = false }) {
             d={p.d}
             fill="none"
             stroke={colorAt(i, paths.length)}
-            strokeWidth={compact ? 1.2 : 1.8}
+            strokeWidth={focus === p.sgg_cd ? 3.2 : compact ? 1.2 : 1.8}
+            strokeOpacity={focus && focus !== p.sgg_cd ? 0.15 : 1}
             strokeLinejoin="round"
             onMouseEnter={(e) =>
               tip.show(e, (
