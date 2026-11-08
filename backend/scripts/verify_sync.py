@@ -816,8 +816,10 @@ _FILE_SUFFIX = {"dll", "exe", "log", "db", "env", "txt", "html", "local", "stati
 
 
 def _doc_files() -> list[Path]:
+    # 스킬도 에이전트가 처음 읽는 문서다. 이름·명령·경로가 썩는 길이 같다.
     return [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md")),
-            BACKEND / "data" / "manual" / "README.md"]
+            BACKEND / "data" / "manual" / "README.md",
+            *sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))]
 
 
 def _code_files() -> list[Path]:

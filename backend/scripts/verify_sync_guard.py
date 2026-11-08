@@ -208,7 +208,8 @@ def check_stray() -> bool:
                       f"{c}/worktrees/old", f"{c}/worktrees/gone"], wts, {"fix/done"})
     caught = (len(got) == 3 and "wt-old" in got[0] and "gone" in got[1]
               and "fix/done" in got[2])
-    clean = stray_dirs([f"{c}/worktrees", f"{c}/worktrees/live"],
+    # 커밋한 스킬 폴더(`skills`)는 작업 폴더가 아니다 — 잡으면 안 된다.
+    clean = stray_dirs([f"{c}/worktrees", f"{c}/worktrees/live", f"{c}/skills"],
                        {"e:/r": "main", f"{c}/worktrees/live": "feat/x"}, set()) == []
     print(f"  {'남은 작업 폴더 — 잡을 것만 잡나':<34} {'잡음' if caught and clean else '못 잡음'}")
     return caught and clean
