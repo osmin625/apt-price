@@ -22,8 +22,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import pricing  # noqa: E402
-from app.services.hedonic import _spline_cols  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.services.hedonic import _spline_cols  # noqa: E402
 
 TOL = 1e-12
 

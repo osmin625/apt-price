@@ -34,11 +34,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import func, select  # noqa: E402
 
-from app.db import SessionLocal  # noqa: E402
-from app.models import (  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import (  # noqa: E402
     Complex, ComplexAmenity, Quote, RebStat, Trade,
 )
-from app.services import hedonic  # noqa: E402
+from app.realestate.services import hedonic  # noqa: E402
 
 
 def data_section(db) -> list[str]:

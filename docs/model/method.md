@@ -14,7 +14,7 @@
 ## 모델 수식
 
 GitHub 은 마크다운에서 LaTeX 를 렌더링한다. 아래 기호는 코드와 1:1로 대응한다 —
-Stage 1·2 는 `services/hedonic.py`, 비교표본은 `services/analysis.py` + `pricing.py` 다.
+Stage 1·2 는 `realestate/services/hedonic.py`, 비교표본은 `realestate/services/analysis.py` + `pricing.py` 다.
 
 ### 헤도닉 회귀란 무엇이고 왜 쓰나
 

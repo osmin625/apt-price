@@ -45,10 +45,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert  # noqa: E402
 
-from app.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
-from app.clients.molit import DISTRICTS  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import KaptRun, KaptUnit  # noqa: E402
+from app.realestate.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import KaptRun, KaptUnit  # noqa: E402
 
 # 목록 한 페이지. K-apt 가 100을 넘겨도 받아 주지만 100으로 끊어 받는 쪽이
 # 끊겼을 때 다시 받는 양이 적다.

@@ -29,15 +29,15 @@ from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
-from app import pricing  # noqa: E402
-from app.clients.molit import DISTRICTS, MolitError, RawTrade, fetch_month  # noqa: E402
-from app.db import SessionLocal, engine  # noqa: E402
-from app.models import Base, Complex, Trade  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS, MolitError, RawTrade, fetch_month  # noqa: E402
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.realestate.models import Base, Complex, Trade  # noqa: E402
 
 
 def _pending_followups(db) -> list[tuple[str, int, str]]:
     """좌표·도보경로·입지가 빈 단지를 센다. 순서대로 돌려야 한다."""
-    from app.models import ComplexAmenity
+    from app.realestate.models import ComplexAmenity
 
     out = []
     n = db.scalar(

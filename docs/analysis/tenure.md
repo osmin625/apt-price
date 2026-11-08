@@ -1,7 +1,7 @@
 # 매매·전세·월세 — 같은 집의 월 비용과 수요의 이동
 
-'매매·전세·월세' 탭이 무엇을 재고 무엇을 안 재나. 코드는 `backend/app/services/tenure.py`
-(재료), `frontend/src/views/TenureView.jsx`(곱셈과 그림)다.
+'매매·전세·월세' 탭이 무엇을 재고 무엇을 안 재나. 코드는 `backend/app/realestate/services/tenure.py`
+(재료), `frontend/src/realestate/views/TenureView.jsx`(곱셈과 그림)다.
 
 ## 보려는 연쇄
 

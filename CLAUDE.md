@@ -135,7 +135,7 @@
   별표가 글자 그대로 보이는 것을 네 번 겪고 나서 넣었다. 화면 문구에 **그때 잰 값**
   (0.352 같은 상관, 14,509호 같은 건수)이 얼어 있는지도 본다 — 아래 '화면 문구에는
   시간이 지나도 맞는 것만'. 문서가 가르치는 **명령·플래그와 코드 이름·경로**
-  (`python -m scripts.checkup --fast`, `regime.hist_z`, `components/Modal.jsx`)가 아직
+  (`python -m scripts.checkup --fast`, `regime.hist_z`, `shared/Modal.jsx`)가 아직
   있는지도 본다 — 이름을 바꾸면 코드는 따라가도 문서는 옛 이름을 가르치고, 다음에
   읽는 사람은 그 이름으로 새것을 만든다. 예외 목록이 사라진 것을 가리키는지도.
 - `scripts/verify_sync_guard.py` — 그 검사가 일부러 깨뜨렸을 때 걸리는지.
@@ -177,7 +177,7 @@
 | 군살 | 죽은 CSS·적합 캐시·저장소 임시 파일·남은 작업 폴더 | 뺀 기능의 잔재가 쌓이고, 이름이 겹쳐 멀쩡한 것을 망가뜨린다 |
 
 `[X]` 는 고쳐야 하고 종료 코드 1 이다. `[!]` 는 사람이 판단한다 — **군살은 전부
-`[!]`** 다. 지울지는 사람이 정한다(`services/aspect.py` 처럼 측정이 자산일 수 있다).
+`[!]`** 다. 지울지는 사람이 정한다(`realestate/services/aspect.py` 처럼 측정이 자산일 수 있다).
 
 **언제 도나**
 
@@ -262,10 +262,10 @@
 
 ### 순수 모듈을 지킨다
 
-`app/pricing.py` 는 의존성이 없다. 시드 생성기와 회귀 모델이 **같은 함수**를 써야 참값
+`app/realestate/pricing.py` 는 의존성이 없다. 시드 생성기와 회귀 모델이 **같은 함수**를 써야 참값
 복원 검증이 성립하기 때문이다. 여기에 DB·numpy 의존을 들이지 말 것.
 
-`app/services/hedonic.py` 는 numpy/statsmodels 를 쓰는 유일한 파일이고 지연 import 한다.
+`app/realestate/services/hedonic.py` 는 numpy/statsmodels 를 쓰는 유일한 파일이고 지연 import 한다.
 미설치 환경에서도 나머지 탭은 동작해야 한다.
 
 ### 스키마 변경

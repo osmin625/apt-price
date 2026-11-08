@@ -6,57 +6,59 @@
 
 ```
 backend/
-  app/
-    main.py                 FastAPI 앱 — 라우터 등록, 적합 예열(FIT_WARM), /api/health
-    config.py               설정(.env) — DATABASE_URL 로 DB 사본을 걸 수 있다
-    db.py                   엔진·세션
-    pricing.py              평당가·구간 분류·시점 보정·스플라인 기저·단지명 정규화
+  app/                      자산(asset)마다 패키지 하나 — 자산끼리는 서로 import 하지 않는다
+    main.py                 FastAPI 앱 — 자산 라우터 등록, 적합 예열(FIT_WARM), /api/health
+    core/config.py          설정(.env) — DATABASE_URL 로 DB 사본을 걸 수 있다
+    core/db.py              엔진·세션
+
+    realestate/             부동산
+    realestate/pricing.py   평당가·구간 분류·시점 보정·스플라인 기저·단지명 정규화
                             (의존성 없는 순수 모듈 — 시드와 모델이 공유하는 계약)
-    models.py               단지·거래·호가·역·입지·메모 등 테이블
+    realestate/models.py    단지·거래·호가·역·입지·메모 등 테이블
                             (Complex / ComplexDong / ComplexStation / ComplexAmenity /
-                             Station / Trade / Listing / Quote / QuoteNote /
+                             Station / Trade / Quote / QuoteNote /
                              MemoTagPref / DongTag / RebStat /
                              KaptUnit / KaptRun / BldUnit / BldRun)
 
-    routers/                HTTP 만 맡는다 — 입력 검증, 서비스 호출, 오류를 상태 코드로.
+    realestate/routers/     HTTP 만 맡는다 — 입력 검증, 서비스 호출, 오류를 상태 코드로.
                             해석 규칙·집계는 services 에 둔다(아래 '라우터는 얇게').
-    routers/complexes.py    단지 상세·동·민간임대 표시·필터 선택지
-    routers/analysis.py     향 프리미엄 측정만 남았다(화면 없음 — services/aspect.py)
-    routers/model.py        적합·요인·묶음·적합 상태·목록 붙여넣기
-    routers/quotes.py       쌓인 호가의 순위·삭제·비고·메모 사전
-    routers/map.py          지도 마커·역·도보 경로
-    routers/macro.py        한국부동산원 공표 통계
-    routers/supply.py       공급 분석
-    routers/regime.py       거시 국면
-    routers/tenure.py       매매·전세·월세
+    realestate/routers/complexes.py    단지 상세·동·민간임대 표시·필터 선택지
+    realestate/routers/analysis.py     향 프리미엄 측정만 남았다(화면 없음 — realestate/services/aspect.py)
+    realestate/routers/model.py        적합·요인·묶음·적합 상태·목록 붙여넣기
+    realestate/routers/quotes.py       쌓인 호가의 순위·삭제·비고·메모 사전
+    realestate/routers/map.py          지도 마커·역·도보 경로
+    realestate/routers/macro.py        한국부동산원 공표 통계
+    realestate/routers/supply.py       공급 분석
+    realestate/routers/regime.py       거시 국면
+    realestate/routers/tenure.py       매매·전세·월세
 
-    services/analysis.py    DB → 거래 점·단지 상세·실거래 기준 적정가(비교표본 중앙값)
-    services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
+    realestate/services/analysis.py    DB → 거래 점·단지 상세·실거래 기준 적정가(비교표본 중앙값)
+    realestate/services/hedonic.py     2단계 헤도닉 회귀 — numpy/statsmodels 를 쓰는 유일한 파일
                             (지연 import — 미설치여도 기존 탭은 정상 동작)
-    services/fit_worker.py  적합을 별도 프로세스에서 돌린다(FIT_IN_PROCESS=1 로 끈다)
-    services/model_view.py  적합 결과 → 지도 마커·요인 곡선·묶음·매물 요인 기준 적정가
-    services/listing_parse.py   붙여넣은 텍스트 → 단지명·면적·층·호가·메모 (글자만 읽는다)
-    services/listing_match.py   읽은 값 → 우리 단지·실제 거래 평형에 맞추고 순위·저장까지
-    services/ranking.py     여러 매물을 한꺼번에 평가·중복 합치기·쌓인 호가 순위
-    services/quotes.py      호가 누적·유닛 접기·이어 붙이기, 메모 원문과 끈 태그 조회
-    services/memo_tags.py   중개사 메모 → 키워드 (DB 를 모르는 순수 규칙)
-    services/aspect.py      향 프리미엄 측정 — 화면에서는 뺐지만 측정이 자산이라 남김
-    services/macro.py       공표 통계를 경기 남부 시군구로 묶기
-    services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
+    realestate/services/fit_worker.py  적합을 별도 프로세스에서 돌린다(FIT_IN_PROCESS=1 로 끈다)
+    realestate/services/model_view.py  적합 결과 → 지도 마커·요인 곡선·묶음·매물 요인 기준 적정가
+    realestate/services/listing_parse.py   붙여넣은 텍스트 → 단지명·면적·층·호가·메모 (글자만 읽는다)
+    realestate/services/listing_match.py   읽은 값 → 우리 단지·실제 거래 평형에 맞추고 순위·저장까지
+    realestate/services/ranking.py     여러 매물을 한꺼번에 평가·중복 합치기·쌓인 호가 순위
+    realestate/services/quotes.py      호가 누적·유닛 접기·이어 붙이기, 메모 원문과 끈 태그 조회
+    realestate/services/memo_tags.py   중개사 메모 → 키워드 (DB 를 모르는 순수 규칙)
+    realestate/services/aspect.py      향 프리미엄 측정 — 화면에서는 뺐지만 측정이 자산이라 남김
+    realestate/services/macro.py       공표 통계를 경기 남부 시군구로 묶기
+    realestate/services/supply.py      적정 공급(가구 증가+멸실)·파이프라인·착공 선행성
                             (docs/analysis/supply.md — 서울은 선행성이 없어 가늠하지 않는다)
-    services/regime.py      요인 위치(z)·그때는·기저율·과거 국면(월별)·반영 분해(방향 고정)
-    services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
-    services/tenure.py      매매·전세·월세 재료 — 빈 달 없는 구, 지수로 이은 가격, 금리, 인상기, 인상 뒤 경로
+    realestate/services/regime.py      요인 위치(z)·그때는·기저율·과거 국면(월별)·반영 분해(방향 고정)
+    realestate/services/policy.py      부동산 대책·세제 연표 (손으로 쓴 목록 + 출처)
+    realestate/services/tenure.py      매매·전세·월세 재료 — 빈 달 없는 구, 지수로 이은 가격, 금리, 인상기, 인상 뒤 경로
                             (월 비용 곱셈은 화면이 한다 — 대출 비율을 바꾸므로)
 
-    clients/molit.py        국토교통부 실거래가 API
-    clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
-    clients/tmap.py         보행자 경로안내
-    clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
-    clients/ecos.py         한국은행 ECOS — M2·기준금리·소비자물가 (키 없으면 sample 폴백)
-    clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
-    clients/kapt.py         K-apt 단지 세대수·동수
-    clients/reb.py          한국부동산원 R-ONE 공표 통계
+    realestate/clients/molit.py        국토교통부 실거래가 API
+    realestate/clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
+    realestate/clients/tmap.py         보행자 경로안내
+    realestate/clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
+    realestate/clients/ecos.py         한국은행 ECOS — M2·기준금리·소비자물가 (키 없으면 sample 폴백)
+    realestate/clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
+    realestate/clients/kapt.py         K-apt 단지 세대수·동수
+    realestate/clients/reb.py          한국부동산원 R-ONE 공표 통계
   scripts/
     seed_demo.py            합성 데이터 — 참값을 심어 생성 (하드코딩 아님)
     validate_model.py       참값 복원 + 커버리지 검증
@@ -85,7 +87,7 @@ backend/
     ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
     ingest_bldrgst.py       건축물대장 법정동 전수 — 멸실을 직접 관측하려고
     export_static.py        정적 사이트용 스냅샷
-    build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/topics/sgg_shapes.json)
+    build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
     route_walk.py           단지↔역 도보 경로 (TMap, 없으면 추정치)
     ingest_trades.py        실거래 적재
@@ -97,15 +99,18 @@ backend/
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
-  src/views/                매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 매매·전세·월세 / 단지 상세
+  src/App.jsx               머리말·자산 고르기·탭 — 자산마다의 화면을 조립만 한다
+  src/api.js                API 호출 + 정적 모드의 스냅샷 경로(snapshotPath — export_static 과 같은 규칙)
+  src/shared/               자산과 무관한 화면 부품 — 자산 폴더는 여기를 쓰고, 여기는 자산 폴더를 모른다
+  src/shared/Charts.jsx     IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
+  src/shared/heat.js        평균 대비 위치(z)의 색·말 — 탭 공통의 자 (백엔드 regime.hist_z 와 같은 공식)
+  src/realestate/views/     매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 매매·전세·월세 / 단지 상세
                             / 호가 입력 / 호가 분석 / 지도 / 분해 모델
-  src/components/Charts.jsx IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
-  src/components/ScatterFit.jsx  산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
-  src/components/KakaoMap.jsx    카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
-  src/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
-  src/components/heat.js    평균 대비 위치(z)의 색·말 — 탭 공통의 자 (백엔드 regime.hist_z 와 같은 공식)
-  src/topics/               같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
-  src/topics/RegionMap.jsx  시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
+  src/realestate/components/ScatterFit.jsx   산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
+  src/realestate/components/KakaoMap.jsx     카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
+  src/realestate/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
+  src/realestate/topics/    같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
+  src/realestate/topics/RegionMap.jsx        시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가
@@ -118,11 +123,11 @@ frontend/
 라우터는 **요청을 받아 서비스에 넘기고, 서비스의 실패를 상태 코드로 바꾼다.** 해석
 규칙·집계·여러 테이블을 엮는 조립은 서비스에 둔다.
 
-한 번 어긋났다. `routers/model.py` 가 붙여넣은 매물을 단지·평형에 맞추는 규칙 260줄을
-품고 있었고(`_resolve_area`·`_resolve_by_dong` 등), `routers/quotes.py` 는 쌓인 호가에
+한 번 어긋났다. `realestate/routers/model.py` 가 붙여넣은 매물을 단지·평형에 맞추는 규칙 260줄을
+품고 있었고(`_resolve_area`·`_resolve_by_dong` 등), `realestate/routers/quotes.py` 는 쌓인 호가에
 비고·메모 태그·민간임대 표시를 붙이는 조립 80줄을 품고 있었다. 면적 맞추는 규칙을
 고치려면 HTTP 파일을 열어야 했고, 같은 규칙을 스크립트에서 쓰려면 라우터를 import
-해야 했다. 지금은 `services/listing_match.py`·`ranking.rank_saved` 로 옮겼다 — 옮기기
+해야 했다. 지금은 `realestate/services/listing_match.py`·`ranking.rank_saved` 로 옮겼다 — 옮기기
 전후 응답 13종(붙여넣기 1,157건 포함)을 바이트 단위로 대조해 같았다.
 
 **한 행을 읽고 쓰는 단순한 CRUD 는 라우터에 둔다**(비고 쓰기, 태그 켜고 끄기, 민간임대

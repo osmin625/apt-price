@@ -35,9 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert  # noqa: E402
 
-from app.clients import reb  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import RebStat  # noqa: E402
+from app.realestate.clients import reb  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import RebStat  # noqa: E402
 
 
 def upsert(db, points: list[reb.RebPoint], base: str = "", source: str = "REB") -> int:

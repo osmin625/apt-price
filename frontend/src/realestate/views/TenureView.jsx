@@ -1,0 +1,726 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import { api } from '../../api'
+import { fmt, niceTicks, useMeasure } from '../../shared/Charts'
+import Hint from '../../shared/Hint'
+import TimeLines from '../../shared/TimeLines'
+import ChartLink from '../../shared/ChartLink'
+
+/**
+ * 매매 · 전세 · 월세 — 같은 집을 세 방법으로 살 때 매달 얼마가 드는지, 금리가 오를 때 세 가격이
+ * 어떤 순서로 움직였는지(2026-10-19 요청).
+ *
+ * 보려는 연쇄: 금리 인상 → 매매·전세 이자가 무거워져 그쪽 수요가 빠짐 → 월세로 몰려 월세·전환율
+ * 상승 → 월세 지출이 이자와 맞붙으면 매매·전세로 돌아감. 그림 넷이 한 단계씩 맡는다 — 비용(①),
+ * 금리와 세 가격의 1년 변화(②), 월세 쏠림(③), 인상 시작 달 기준의 순서(④).
+ *
+ * ## 계산은 화면이 한다
+ *
+ * 월 비용은 대출 비율에 따라 달라진다. 비율마다 응답을 내보내면 정적 사이트 파일이 비율 수만큼
+ * 늘어나므로, 백엔드는 재료(가격·전환율·금리)만 보내고 곱셈은 여기서 한다(`realestate/services/tenure.py`).
+ *
+ * ## 증명이 아니라 지켜보기
+ *
+ * 월세 통계가 2015년부터라 큰 인상기는 한 번뿐이고 그 뒤 인하와 겹친다. 그림이 연쇄와 맞아도
+ * 다른 까닭(대출 규제·전세 사기·입주 물량)이 같이 움직였을 수 있다 — 호버에 적는다.
+ */
+const C = { sale: 'var(--series-1)', jeonse: 'var(--series-3)', rent: 'var(--series-2)', rate: 'var(--series-4)' }
+const ymText = (ym) => `${ym.slice(0, 4)}.${ym.slice(4)}`
+
+/**
+ * 삼성전자 임직원 — 사내 주거지원 대출(`tenure.EMPLOYEE_LOAN`)로 매매·전세를 견준다(2026-10-22 요청).
+ *
+ * 실효 금리 = 본인 부담 + 회사 지원 × 세율(회사 지원분이 근로소득으로 과세된다). 대출 중 가격의
+ * `ltv`·`cap` 까지가 사내대출이고 넘는 몫은 시중 금리(매매는 주담대, 전세는 전세대출)다. 월세는 그대로다.
+ * 사내 금리 이력이 없어 임직원 선은 가정이고 점선으로 둔다.
+ *
+ * ## 사내 금리는 기준금리를 따라 움직인다고 본다(2026-10-22 요청)
+ *
+ * 처음에는 지금 조건(본인 부담 1.5%)을 모든 달에 그었다. 그러면 금리 인상기에도 사내 금리가 그대로라
+ * '인상이 임직원에게 안 닿는다' 가 가정에서 바로 나온다. 요청대로 본인 부담이 **마지막 달 기준금리와의
+ * 차이를 유지한 채 같은 폭으로** 움직인다고 본다 — 본인 부담(t) = 지금 본인 부담 + 기준금리(t) − 지금 기준금리.
+ * 회사 지원분(과세되는 몫)은 그대로 둔다. 기준금리가 지금보다 크게 낮던 달(2020~21 의 0.5% 등)은 이 식이
+ * 0 아래로 가므로 **0% 에서 멈춘다** — 금리가 음수일 수는 없다.
+ */
+const empOwn = (E, r) => (r && r.base != null && E.baseNow != null
+  ? Math.max(0, E.rate + r.base - E.baseNow) : E.rate)
+const empRate = (E, tax, r) => empOwn(E, r) + E.support * tax
+// kind: 'buy'(매매가·주담대) | 'jeonse'(전세가·전세대출)
+function empCost(r, kind, ltvShare, E, tax) {
+  const price = kind === 'buy' ? r.sale : r.jeonse
+  const market = kind === 'buy' ? r.mortgage : r.jeonse_loan
+  const lim = E[kind]
+  const loan = ltvShare * price
+  const inHouse = Math.min(loan, lim.ltv * price, lim.cap)
+  return (inHouse * empRate(E, tax, r) + (loan - inHouse) * market + (price - loan) * r.deposit) / 1200
+}
+const genCost = (r, kind, ltvShare) => (kind === 'buy'
+  ? r.sale * (ltvShare * r.mortgage + (1 - ltvShare) * r.deposit)
+  : r.jeonse * (ltvShare * r.jeonse_loan + (1 - ltvShare) * r.deposit)) / 1200
+const EMP_DASH = '6 3'
+
+/**
+ * 매물 가격 — 구 평균 대신 고른 값의 집으로 본다(2026-10-22 요청). 고른 값을 마지막 달 매매가로 놓고
+ * 모든 달의 매매가·전세가를 같은 비율로 늘이거나 줄인다 — 지수 흐름과 평균 전세가율은 그대로다.
+ * 금리끼리 견주는 그림(②·③)은 집값과 무관하고, 바뀌는 것은 월 비용(①)과 그 증가율(④)이다. 비용이 집값에
+ * 비례하지 않게 되는 것은 사내대출 상한(5억·3억) 때문이다 — 비싼 집일수록 상한을 넘는 몫이 시중 금리다.
+ */
+function scaleRows(rows, price) {
+  if (!price) return rows
+  const k = price / rows[rows.length - 1].sale
+  return rows.map((r) => ({ ...r, sale: r.sale * k, jeonse: r.jeonse * k }))
+}
+
+function PriceBar({ avg, price, setPrice }) {
+  const [text, setText] = useState(price ? String(price / 10000) : '')
+  const apply = (v) => {
+    setText(v)
+    const n = Number(v)
+    setPrice(v.trim() && n > 0 ? Math.round(n * 10000) : null)
+  }
+  return (
+    <label>
+      매물 매매가
+      <input className="tn-price" type="number" min="0.5" max="50" step="0.1" inputMode="decimal"
+             placeholder={fmt(avg / 10000, 2)} value={text} onChange={(e) => apply(e.target.value)} />
+      억 원
+      {price
+        ? <button type="button" className="link-btn" onClick={() => apply('')}>평균으로</button>
+        : <span className="muted small">(비우면 구 평균)</span>}
+    </label>
+  )
+}
+
+function EmpBar({ E, emp, setEmp, tax, setTax }) {
+  return (
+    <>
+      <label>
+        <input type="checkbox" checked={emp} onChange={(e) => setEmp(e.target.checked)} />
+        {E.label} — {E.loan} 기준으로도 보기
+      </label>
+      {emp && (
+        <>
+          <label>
+            회사 지원 이자 과세
+            <select value={tax} onChange={(e) => setTax(Number(e.target.value))}>
+              {E.tax.map((t) => <option key={t} value={t}>{fmt(t * 100, 1)}%</option>)}
+            </select>
+          </label>
+          <span className="muted small">지금 실효 금리 {fmt(empRate(E, tax), 2)}%</span>
+          <Hint
+            wide
+            notes={[
+              `${E.loan}: 매매는 매매가의 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억 원까지, 전세는 보증금의 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억 원까지. 본인 부담 연 ${E.rate}% · 회사 지원 연 ${E.support}%(근로소득으로 과세 — 소득세 구간 + 지방소득세 10%). 실효 금리 = ${E.rate} + ${E.support} × 세율.`,
+              '바뀌는 것은 매매와 전세입니다. 월세에는 사내 지원이 없어 그대로입니다. 대상은 무주택 임직원입니다.',
+              '전세에서 회사가 내는 보증보험료도 소득으로 잡히지만 금액을 알 수 없어 세지 않았습니다.',
+              '사내 금리 이력이 없어, 본인 부담 금리가 지금 기준금리와의 차이를 유지한 채 기준금리와 같은 폭으로 움직였다고 가정합니다. 0% 아래로는 내려가지 않게 했습니다(기준금리가 크게 낮던 달). 그래서 임직원 선은 점선입니다.',
+              '거치·상환 방식은 세지 않습니다. 이 탭은 이자만 견줍니다.',
+            ]}
+          />
+        </>
+      )}
+    </>
+  )
+}
+
+export default function TenureView() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [ltv, setLtv] = useState(null)
+  const [emp, setEmp] = useState(false)
+  const [tax, setTax] = useState(null)
+  const [price, setPrice] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    api
+      .tenureOverview()
+      .then((d) => {
+        if (!alive) return
+        setData(d)
+        setLtv(d.ltv)
+        setTax(d.employee?.tax?.[0] ?? 0)
+      })
+      .catch((e) => alive && setError(e))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (error || (data && !data.available)) {
+    return (
+      <section className="card">
+        <h2>매매·전세·월세</h2>
+        <p className="empty">{error ? error.message : data.note}</p>
+      </section>
+    )
+  }
+  if (!data || !ltv) {
+    return (
+      <section className="card">
+        <h2>매매·전세·월세</h2>
+        <p className="empty">불러오는 중…</p>
+      </section>
+    )
+  }
+
+  const bands = data.hikes.map((h) => ({ from: h.from, to: h.to }))
+  const region = (
+    <Hint
+      notes={[
+        `${data.region} 평균입니다 — 모든 달에 값이 있는 구만 씁니다: ${data.used.join(', ')}.`,
+        data.dropped.length
+          ? `빠진 구: ${data.dropped.map((d) => d.name).join(', ')} — ${data.dropped[0].why}. 섞으면 구성이 바뀌는 달에 평균이 튑니다.`
+          : null,
+        '옅은 띠는 기준금리 인상기입니다(첫 인상~마지막 인상, 1년 안에 이어진 인상은 한 번으로 묶음).',
+      ]}
+    />
+  )
+
+  // 임직원 보기는 네 그림이 같이 쓴다 — 켜면 매매에 사내대출 선이 더해진다.
+  // baseNow — 사내 금리를 기준금리에 잇는 기준점(마지막 달 기준금리).
+  const baseNow = [...data.rows].reverse().find((r) => r.base != null)?.base ?? null
+  const E = emp && data.employee ? { ...data.employee, taxRate: tax, baseNow } : null
+  // 고른 매물 가격으로 늘이거나 줄인 행 — 월 비용(①)과 그 증가율(④)이 쓴다.
+  const priced = price ? { ...data, rows: scaleRows(data.rows, price) } : data
+  return (
+    <>
+      <div className="tn-emp">
+        <PriceBar avg={data.rows[data.rows.length - 1].sale} price={price} setPrice={setPrice} />
+        {data.employee && <EmpBar E={data.employee} emp={emp} setEmp={setEmp} tax={tax} setTax={setTax} />}
+      </div>
+      <Cost data={priced} ltv={ltv} setLtv={setLtv} bands={bands} region={region} E={E} picked={!!price} />
+      <BuyVsJeonse data={priced} ltv={ltv} bands={bands} region={region} E={E} />
+      <Prices data={data} bands={bands} region={region} E={E} />
+      <RentTilt data={data} bands={bands} region={region} E={E} />
+      {data.events.length > 0 && <Order data={priced} region={region} E={E} ltv={ltv} />}
+    </>
+  )
+}
+
+/** ① 같은 집 월 주거비 — 매매·전세는 이자(대출 + 자기 돈의 예금 이자), 월세는 전세가 × 전환율. */
+function Cost({ data, ltv, setLtv, bands, region, E, picked }) {
+  const series = useMemo(() => {
+    const pts = (f) => data.rows.map((r) => ({ ym: r.ym, value: Math.round(f(r)) }))
+    const emp = E ? [
+      { key: 'saleEmp', label: `매매 · ${E.label}`, color: C.sale, dash: EMP_DASH, width: 2,
+        points: pts((r) => empCost(r, 'buy', ltv.buy, E, E.taxRate)) },
+      { key: 'jeonseEmp', label: `전세 · ${E.label}`, color: C.jeonse, dash: EMP_DASH, width: 2,
+        points: pts((r) => empCost(r, 'jeonse', ltv.jeonse, E, E.taxRate)) },
+    ] : []
+    return [
+      ...emp,
+      { key: 'sale', label: '매매', color: C.sale, width: 2.4,
+        points: pts((r) => (r.sale * (ltv.buy * r.mortgage + (1 - ltv.buy) * r.deposit)) / 1200) },
+      { key: 'jeonse', label: '전세', color: C.jeonse,
+        points: pts((r) => (r.jeonse * (ltv.jeonse * r.jeonse_loan + (1 - ltv.jeonse) * r.deposit)) / 1200) },
+      { key: 'rent', label: '월세', color: C.rent,
+        points: pts((r) => (r.jeonse * r.conv) / 1200) },
+    ]
+  }, [data, ltv, E])
+  const last = data.rows[data.rows.length - 1]
+  const now = Object.fromEntries(series.map((s) => [s.key, s.points[s.points.length - 1].value]))
+  const cheapest = series.reduce((a, s) => (now[s.key] < now[a.key] ? s : a))
+
+  return (
+    <section className="card">
+      <h2>
+        같은 집, 매달 드는 돈
+        <Hint
+          wide
+          notes={[
+            '같은 집을 세 방법으로 살 때의 한 달 비용(만원)입니다.',
+            '매매 = 매매가 × (대출 비율 × 주택담보대출 금리 + 나머지 × 정기예금 금리) ÷ 12. 전세 = 전세가 × (대출 비율 × 전세자금대출 금리 + 나머지 × 정기예금 금리) ÷ 12. 대출 아닌 몫은 그 돈을 예금에 넣었으면 받았을 이자로 셉니다.',
+            '월세 = 전세가 × 전월세 전환율 ÷ 12 — 같은 집의 전세 보증금을 전부 월세로 바꾼 값입니다. 실제 평균 월세는 소형 위주라 집 크기가 달라 쓰지 않습니다.',
+            '세지 않는 것: 집값이 오르내려 생기는 차익·손실, 취득세·보유세, 관리비, 원금 상환. 이자만 견주는 계산입니다.',
+            picked ? '매물 매매가를 고르면 그 값을 지금 매매가로 놓고, 과거 매매가·전세가를 구 평균과 같은 비율로 늘이거나 줄입니다 — 지수 흐름과 평균 전세가율은 그대로입니다.' : null,
+            '금리는 한국은행 예금은행 신규취급액 기준(전국), 가격·전세가율·전환율은 한국부동산원입니다.',
+            E ? `매매·전세 · ${E.label}(점선) = 대출 중 사내 한도(매매가 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억, 보증금 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억)까지 사내대출 실효 금리(지금 ${fmt(empRate(E, E.taxRate), 2)}%, 기준금리를 따라 움직인다고 가정), 넘는 몫은 시중 주담대·전세대출 금리, 나머지는 예금 이자로 셉니다.` : null,
+          ]}
+        />
+        {region}
+        <ChartLink id="cost" />
+      </h2>
+      <div className="tn-ctrl">
+        <label>
+          매매 대출 비율 <b>{Math.round(ltv.buy * 100)}%</b>
+          <input type="range" min="0" max="0.8" step="0.1" value={ltv.buy}
+                 onChange={(e) => setLtv({ ...ltv, buy: Number(e.target.value) })} />
+        </label>
+        <label>
+          전세 대출 비율 <b>{Math.round(ltv.jeonse * 100)}%</b>
+          <input type="range" min="0" max="0.9" step="0.1" value={ltv.jeonse}
+                 onChange={(e) => setLtv({ ...ltv, jeonse: Number(e.target.value) })} />
+        </label>
+      </div>
+      <div className="tn-now">
+        {series.map((s) => (
+          <span key={s.key} className={s.key === cheapest.key ? 'is-min' : ''}>
+            <span className={`swatch${s.dash ? ' is-dash' : ''}`} style={s.dash ? { color: s.color } : { background: s.color }} />
+            {s.label} <b>{fmt(now[s.key])}</b>만원
+          </span>
+        ))}
+        <span className="muted small">
+          {ymText(last.ym)} · {picked ? '고른 집' : '같은 집(구 평균)'} 매매가 {fmt(last.sale)} · 전세가 {fmt(last.jeonse)}만원
+        </span>
+      </div>
+      <TimeLines series={series} unit="만원" bands={bands} height={300}
+                 ariaLabel="매매·전세·월세의 같은 집 월 비용 추이" />
+    </section>
+  )
+}
+
+/**
+ * 매매 vs 전세 — 같은 집의 월 비용 차이(전세 − 매매, 만원). 2026-10-22 요청(임직원 매매 vs 임직원 전세).
+ *
+ * 금리끼리 견주면(③) 사내 금리가 매매·전세 같아 차이가 0 이다. 둘을 가르는 것은 **금액** — 매매가가
+ * 전세가보다 크고, 사내 한도(매매 70%·5억, 전세 80%·3억)와 시중 금리(주담대·전세대출)가 다르다. 그래서
+ * 맨 위 그림의 두 선을 빼서 한 줄로 둔다. 0 위면 매매가 덜 들고(파랑), 아래면 전세가 덜 든다(청록).
+ * 일반(시중 대출) 줄을 늘 두고, 임직원을 켜면 그 아래 한 줄을 더한다. 대출 비율·매물 가격은 맨 위 그림과 같다.
+ */
+function BuyVsJeonse({ data, ltv, bands, region, E }) {
+  const [hover, setHover] = useState(null)
+  const months = data.rows.map((r) => r.ym)
+  const rows = useMemo(() => {
+    const up = { k: 'sale', label: '매매 유리' }
+    const down = { k: 'jeonse', label: '전세 유리' }
+    const out = [{ key: 'bvj-gen', who: '일반', title: '매매 vs 전세', sub: '전세 월 비용 − 매매 월 비용', unit: '만원',
+                   up, down, vals: data.rows.map((r) => genCost(r, 'jeonse', ltv.jeonse) - genCost(r, 'buy', ltv.buy)) }]
+    if (E) {
+      out.push({ key: 'bvj-emp', who: E.label, title: '매매 vs 전세', sub: '사내대출 기준', unit: '만원', up, down,
+                 vals: data.rows.map((r) => empCost(r, 'jeonse', ltv.jeonse, E, E.taxRate)
+                   - empCost(r, 'buy', ltv.buy, E, E.taxRate)) })
+    }
+    return out
+  }, [data, ltv, E])
+  const all = rows.flatMap((g) => g.vals)
+  const span = Math.max(...all) - Math.min(...all)
+  // 0 아래·위를 모두 조금씩 남긴다 — 한쪽만 있던 기간에도 반대편이 있다는 것이 보이게.
+  const dom = [Math.min(-span * 0.15, Math.min(...all) - span * 0.06), Math.max(span * 0.15, Math.max(...all) + span * 0.06)]
+  const hi = hover == null ? null : hover.i
+  return (
+    <section className="card">
+      <h2>
+        매매 vs 전세 — 매달 드는 돈의 차이
+        <Hint
+          wide
+          notes={[
+            '같은 집을 사는 것과 전세로 사는 것의 한 달 비용 차이(만원)입니다 — 맨 위 그림의 전세 선에서 매매 선을 뺀 값. 0 위면 매매가 덜 들고, 0 아래면 전세가 덜 듭니다.',
+            '대출 비율과 매물 가격은 맨 위 그림과 같습니다. 집값의 오르내림·세금은 세지 않습니다 — 이자만 견줍니다.',
+            E ? `${E.label} 줄은 사내대출(매매 ${Math.round(E.buy.ltv * 100)}%·${fmt(E.buy.cap / 10000)}억, 전세 ${Math.round(E.jeonse.ltv * 100)}%·${fmt(E.jeonse.cap / 10000)}억까지)로 센 차이입니다. 사내 금리가 매매·전세 같아도, 한도와 넘는 몫의 시중 금리가 달라 차이가 납니다.` : '탭 맨 위에서 임직원을 켜면 사내대출 기준 줄이 더해집니다.',
+          ]}
+        />
+        {region}
+        <ChartLink id="buy-vs-jeonse" />
+      </h2>
+      <div className="tilt" onMouseLeave={() => setHover(null)}>
+        <p className="muted small">{ymText(months[hi ?? months.length - 1])}</p>
+        {rows.map((g, gi) => (
+          <TiltRow key={g.key} g={g} months={months} dom={dom} bands={bands} hi={hi}
+                   last={gi === rows.length - 1} onHover={setHover} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** ② 금리와 세 가격 — 지수 1년 변화(왼쪽)와 금리(오른쪽). */
+function Prices({ data, bands, region, E }) {
+  const series = useMemo(() => {
+    const y = (k) => data.yoy[k].map((p) => ({ ym: p.ym, value: p.v }))
+    const r = (k) => data.rates[k].map((p) => ({ ym: p.ym, value: p.v }))
+    return [
+      { key: 'sale', label: '매매지수', color: C.sale, width: 2.4, points: y('sale_index') },
+      { key: 'jeonse', label: '전세지수', color: C.jeonse, points: y('jeonse_index') },
+      { key: 'rent', label: '월세지수', color: C.rent, points: y('rent_index') },
+      { key: 'base', label: '기준금리', color: C.rate, axis: 'right', dash: true, points: r('base_rate') },
+      { key: 'mort', label: '주택담보대출 금리', color: C.rate, axis: 'right', dash: '1 3', points: r('mortgage_rate') },
+      ...(E ? [{ key: 'emp', label: `사내대출 실효 금리(매매·전세 · ${E.label})`, color: C.sale, axis: 'right', dash: EMP_DASH,
+                 width: 2, points: data.rows.map((r) => ({ ym: r.ym, value: empRate(E, E.taxRate, r) })) }]
+         : []),
+    ]
+  }, [data, E])
+  const months = data.yoy.rent_index.map((p) => p.ym)
+  return (
+    <section className="card">
+      <h2>
+        금리와 세 가격
+        <Hint
+          wide
+          notes={[
+            '왼쪽 축은 매매·전세·월세 가격지수의 1년 변화율(%), 오른쪽 축은 금리(연%)입니다.',
+            '연쇄대로라면 인상기(띠)에 매매·전세 선은 내려가고 월세 선은 버티거나 오릅니다.',
+            '같이 움직였다고 원인은 아닙니다 — 같은 시기 대출 규제·입주 물량·전세 사기 같은 일도 겹쳤습니다.',
+            E ? `사내대출 실효 금리(점선)는 본인 부담이 지금 기준금리와의 차이를 유지하며 기준금리와 같은 폭으로 움직인다고 본 가정입니다(0% 아래로는 안 감). 시중 주담대와의 간격이 곧 사내대출의 이점입니다.` : null,
+          ]}
+        />
+        {region}
+        <ChartLink id="rates" />
+      </h2>
+      <TimeLines series={series} unit="%" decimals={1} zero rightUnit="%" rightDecimals={1}
+                 months={months} bands={bands} height={300}
+                 ariaLabel="매매·전세·월세 지수 1년 변화와 금리" />
+    </section>
+  )
+}
+
+/**
+ * ③ 월세 쏠림 — 전환율과 각 금리의 **차이**로, 누가 어느 쪽을 고를 유인이 있나.
+ *
+ * 처음에는 전환율과 금리 넷을 수준 그대로 겹쳤다. 선 넷이 2~5% 사이에서 얽혀 '어느 쪽이
+ * 유리한가' 를 읽으려면 두 선의 높낮이를 눈으로 빼야 했다(2026-10-21 요청 — 선호 변화가 더
+ * 잘 느껴지게). 그래서 고르는 사람마다 견주는 두 값의 차이를 한 줄씩 두고, 0 위·아래를 그때
+ * 유리한 쪽의 색으로 칠한다. 색은 탭 공통(매매 파랑 · 전세 청록 · 월세 주황)이다.
+ *
+ * 세 줄은 같은 %p 축이다 — 줄마다 축을 따로 잡으면 집주인 줄(폭이 큰)과 세입자 줄의 크기를
+ * 견줄 수 없다. 수준 그림은 '금리 수준' 단추로 남겼다.
+ */
+const TILT = [
+  { key: 'jeonse', who: '세입자', title: '전세 vs 월세', rate: 'jeonse_loan', rateLabel: '전세자금대출',
+    up: { k: 'jeonse', label: '전세 유리' }, down: { k: 'rent', label: '월세 유리' } },
+  { key: 'buy', who: '실수요', title: '매매 vs 월세', rate: 'mortgage', rateLabel: '주택담보대출',
+    up: { k: 'sale', label: '매매 유리' }, down: { k: 'rent', label: '월세 유리' } },
+  { key: 'owner', who: '집주인', title: '월세 vs 전세', rate: 'deposit', rateLabel: '정기예금',
+    up: { k: 'rent', label: '월세로 받기 유리' }, down: { k: 'jeonse', label: '전세로 받기 유리' } },
+]
+const signed = (v, d = 2) => `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}`
+
+function RentTilt({ data, bands, region, E }) {
+  const [view, setView] = useState('gap')
+  const [hover, setHover] = useState(null)
+  const months = data.rows.map((r) => r.ym)
+  const gaps = useMemo(() => {
+    const rows = [...TILT]
+    if (E) {
+      // 매매·전세가 같은 사내 금리라 '전환율 − 사내 실효 금리' 는 둘에 같은 한 줄이다.
+      rows.splice(2, 0, { key: 'emp', who: '임직원', title: '매매·전세 vs 월세', rate: (r) => empRate(E, E.taxRate, r),
+                          rateLabel: '사내대출 실효', up: { k: 'sale', label: '사내대출로 매매·전세 유리' },
+                          down: { k: 'rent', label: '월세 유리' } })
+    }
+    return rows.map((t) => ({
+      ...t, vals: data.rows.map((r) => r.conv - (typeof t.rate === 'function' ? t.rate(r) : r[t.rate])),
+    }))
+  }, [data, E])
+  const series = useMemo(() => {
+    const row = (k) => data.rows.map((r) => ({ ym: r.ym, value: r[k] }))
+    return [
+      { key: 'conv', label: '전월세 전환율', color: C.rent, width: 2.4, points: row('conv') },
+      { key: 'jl', label: '전세자금대출 금리', color: C.jeonse, dash: true, points: row('jeonse_loan') },
+      { key: 'mort', label: '주택담보대출 금리', color: C.sale, dash: true, points: row('mortgage') },
+      { key: 'dep', label: '정기예금 금리', color: C.rate, dash: '1 3', points: row('deposit') },
+      ...(E ? [{ key: 'emp', label: `사내대출 실효 금리(매매·전세 · ${E.label})`, color: C.sale, dash: EMP_DASH, width: 2,
+                 points: data.rows.map((r) => ({ ym: r.ym, value: empRate(E, E.taxRate, r) })) }] : []),
+    ]
+  }, [data, E])
+  const all = gaps.flatMap((g) => g.vals)
+  const pad = (Math.max(...all) - Math.min(...all)) * 0.08
+  // 0 아래를 최소 1.5%p 는 남긴다. 차이가 0 아래로 내려간 때가 드물어(2022년 말 몇 달) 값에만 맞추면
+  // 0 선이 바닥에 붙어 '반대쪽이 유리한 영역' 이 있다는 것 자체가 안 보였다.
+  const dom = [Math.min(-1.5, Math.min(...all) - pad), Math.max(0, ...all) + pad]
+  const hi = hover == null ? null : hover.i
+  const r = data.rows[hi ?? data.rows.length - 1]
+
+  return (
+    <section className="card">
+      <h2>
+        월세 쏠림 — 누가 어느 쪽을 고르나
+        <Hint
+          wide
+          notes={[
+            '전월세 전환율은 보증금을 월세로 바꿀 때 쓰는 연 이율입니다. 세 줄은 이 전환율에서, 고르는 사람이 견주는 금리를 뺀 값(%p)입니다.',
+            '세입자 — 전환율 − 전세자금대출 금리. 0 위면 대출을 받아서라도 전세가 월세보다 싸고(전세 유리), 0 아래면 월세가 쌉니다. 이 줄이 0 쪽으로 내려오는 것이 월세로 몰리는 신호입니다.',
+            '실수요 — 전환율 − 주택담보대출 금리. 0 위면 빌려서 사는 이자율이 월세 이율보다 낮습니다(매매 유리). 집값의 오르내림·세금은 빼고 이율만 견줍니다. 같은 집의 실제 월 금액은 맨 위 그림입니다.',
+            '집주인 — 전환율 − 정기예금 금리. 0 위면 보증금을 받아 예금에 넣는 것보다 월세로 받는 쪽이 더 법니다. 이 줄이 클수록 전세 매물이 월세로 돌아설 유인이 큽니다.',
+            '세 줄은 같은 축(%p)입니다. 칠한 색은 그때 유리한 쪽, 옅은 띠는 기준금리 인상기입니다. 그림 위에 마우스를 올리면 그 달 값이 머리에 나옵니다.',
+            E ? `임직원 — 전환율 − 사내대출 실효 금리(지금 ${fmt(empRate(E, E.taxRate), 2)}%). 매매·전세 사내대출 금리가 같아 한 줄입니다. 0 위면 사내대출로 사거나 전세를 얻는 쪽이 월세보다 이율이 낮습니다. 사내 금리는 기준금리를 따라 움직인다고 본 가정입니다.` : null,
+          ]}
+        />
+        {region}
+        <ChartLink id="tilt" />
+      </h2>
+      <div className="seg" role="tablist" aria-label="보기">
+        <button role="tab" aria-selected={view === 'gap'} onClick={() => setView('gap')}>유리한 쪽</button>
+        <button role="tab" aria-selected={view === 'level'} onClick={() => setView('level')}>금리 수준</button>
+      </div>
+      {view === 'level' ? (
+        <TimeLines series={series} unit="%" decimals={1} bands={bands} height={280}
+                   ariaLabel="전월세 전환율과 대출·예금 금리" />
+      ) : (
+        <div className="tilt" onMouseLeave={() => setHover(null)}>
+          <p className="muted small">
+            {ymText(r.ym)} 전환율 {fmt(r.conv, 2)}% · 전세대출 {fmt(r.jeonse_loan, 2)}% · 주담대 {fmt(r.mortgage, 2)}% · 예금 {fmt(r.deposit, 2)}%
+            {E && <> · 사내 {fmt(empRate(E, E.taxRate, r), 2)}%</>}
+          </p>
+          {gaps.map((g, gi) => (
+            <TiltRow key={g.key} g={g} months={months} dom={dom} bands={bands} hi={hi}
+                     last={gi === gaps.length - 1} onHover={setHover} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** 한 줄 — 0 위는 `up` 쪽 색, 아래는 `down` 쪽 색으로 칠한 차이 그림. 마우스는 세 줄이 같이 짚는다. */
+// g.unit · g.sub 가 있으면 %p·'전환율 − …' 대신 그것을 쓴다(매매 vs 전세의 만원 줄).
+function TiltRow({ g, months, dom, bands, hi, last, onHover }) {
+  const [ref, width] = useMeasure()
+  const W = Math.max(width || 640, 280)
+  const H = last ? 112 : 88
+  const P = { t: 6, r: 10, b: last ? 24 : 4, l: 40 }
+  const iw = W - P.l - P.r
+  const ih = H - P.t - P.b
+  const n = months.length
+  const x = (i) => P.l + (i / Math.max(n - 1, 1)) * iw
+  const y = (v) => P.t + ih - ((v - dom[0]) / (dom[1] - dom[0])) * ih
+  const y0 = y(0)
+  const line = g.vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(n - 1).toFixed(1)},${y0.toFixed(1)} L${x(0).toFixed(1)},${y0.toFixed(1)} Z`
+  const i = hi ?? n - 1
+  const v = g.vals[i]
+  const side = v >= 0 ? g.up : g.down
+  const step = iw / Math.max(n - 1, 1)
+  const shade = bands
+    .map((b) => {
+      const a = months.findIndex((m) => m >= b.from)
+      const z = months.map((m) => m <= b.to).lastIndexOf(true)
+      if (a < 0 || z < a) return null
+      const x0 = Math.max(P.l, x(a) - step / 2)
+      return { key: b.from, x: x0, w: Math.min(P.l + iw, x(z) + step / 2) - x0 }
+    })
+    .filter(Boolean)
+  const years = months.map((m, k) => [m, k]).filter(([m]) => m.endsWith('01'))
+  const every = Math.ceil(years.length / Math.max(Math.floor(iw / 56), 1))
+  const ticks = g.unit
+    ? niceTicks(dom[0], dom[1], 4).filter((t) => t > dom[0] && t < dom[1])
+    : [-2, -1, 0, 2, 4].filter((t) => t > dom[0] && t < dom[1])
+
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    const k = Math.round(((px - P.l) / iw) * (n - 1))
+    onHover({ i: Math.min(Math.max(k, 0), n - 1) })
+  }
+
+  return (
+    <div className="tilt-row" ref={ref}>
+      <div className="tilt-head">
+        <span><b>{g.who}</b> {g.title} <span className="muted">· {g.sub ?? `전환율 − ${g.rateLabel}`}</span></span>
+        <span className="tilt-now">
+          <span className="swatch" style={{ background: C[side.k] }} />
+          {side.label} <b>{g.unit ? `${signed(v, 0)}${g.unit}` : `${signed(v)}%p`}</b>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" onMouseMove={onMove}
+           aria-label={`${g.who} ${g.title} — ${g.sub ?? `전환율에서 ${g.rateLabel} 금리를 뺀 값`}. 0 위는 ${g.up.label}, 아래는 ${g.down.label}`}>
+        <defs>
+          <clipPath id={`tilt-up-${g.key}`}><rect x={P.l} y={0} width={iw} height={y0} /></clipPath>
+          <clipPath id={`tilt-dn-${g.key}`}><rect x={P.l} y={y0} width={iw} height={H - y0} /></clipPath>
+        </defs>
+        {/* 영역 바탕 — 위·아래가 각각 누구 편인지 선보다 먼저 보이게 아주 옅게 깐다. */}
+        <rect x={P.l} y={P.t} width={iw} height={y0 - P.t} fill={C[g.up.k]} fillOpacity="0.06" />
+        <rect x={P.l} y={y0} width={iw} height={P.t + ih - y0} fill={C[g.down.k]} fillOpacity="0.08" />
+        {shade.map((b) => <rect key={b.key} x={b.x} y={P.t} width={b.w} height={ih} fill="var(--band)" />)}
+        {ticks.map((t) => (
+          <g key={t}>
+            {t !== 0 && <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeDasharray="2 3" />}
+            <text x={P.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{t > 0 ? `+${t}` : t}</text>
+          </g>
+        ))}
+        <path d={area} fill={C[g.up.k]} fillOpacity="0.3" clipPath={`url(#tilt-up-${g.key})`} />
+        <path d={area} fill={C[g.down.k]} fillOpacity="0.45" clipPath={`url(#tilt-dn-${g.key})`} />
+        <line x1={P.l} x2={W - P.r} y1={y0} y2={y0} stroke="var(--text-secondary)" />
+        <path d={line} fill="none" stroke="var(--text-secondary)" strokeWidth="1.4" strokeLinejoin="round" />
+        {/* 영역 이름은 오른쪽 끝, 바탕색 테를 둘러 선과 겹쳐도 읽히게 한다. 왼쪽에 두었더니 2015년 값이
+            높아 위쪽 이름이 선에 묻혔다. */}
+        <text x={W - P.r - 4} y={P.t + 11} textAnchor="end" fontSize="10.5" fill="var(--text-secondary)"
+              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">▲ {g.up.label}</text>
+        <text x={W - P.r - 4} y={P.t + ih - 4} textAnchor="end" fontSize="10.5" fill="var(--text-secondary)"
+              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">▼ {g.down.label}</text>
+        {hi != null && (
+          <g pointerEvents="none">
+            <line x1={x(hi)} x2={x(hi)} y1={P.t} y2={P.t + ih} stroke="var(--text-muted)" strokeDasharray="3 3" />
+            <circle cx={x(hi)} cy={y(v)} r="4" fill={C[side.k]} stroke="var(--surface-1)" strokeWidth="2" />
+          </g>
+        )}
+        {last && years.filter((_, k) => k % every === 0).map(([m, k]) => (
+          <text key={m} x={x(k)} y={H - 7} textAnchor="middle" fontSize="10.5" fill="var(--text-muted)">
+            {m.slice(0, 4)}
+          </text>
+        ))}
+        <rect x={P.l} y={P.t} width={iw} height={ih} fill="transparent" />
+      </svg>
+    </div>
+  )
+}
+
+/**
+ * ④ 순서 확인 — 인상 시작 달을 100 으로 놓고 세 지수가 그 앞뒤로 어떻게 갔나.
+ *
+ * 연쇄의 '순서' 는 달력이 아니라 **인상 뒤 몇 달째** 로 봐야 인상기끼리 견줄 수 있다. 저점은
+ * 시작 뒤 가장 낮았던 달이다 — 그 달이 시작 달이면 '내리지 않음' 이다(월세처럼 계속 오른 선).
+ */
+function Order({ data, region, E, ltv }) {
+  const [pick, setPick] = useState(() => {
+    const full = data.events.filter((e) => e.paths.rent_index.length > 24)
+    return (full[full.length - 1] || data.events[data.events.length - 1]).start
+  })
+  const ev = data.events.find((e) => e.start === pick) || data.events[0]
+  const lines = [
+    { key: 'sale_index', label: '매매지수', color: C.sale, width: 2.4 },
+    { key: 'jeonse_index', label: '전세지수', color: C.jeonse },
+    { key: 'rent_index', label: '월세지수', color: C.rent },
+  ].map((l) => {
+    const pts = ev.paths[l.key]
+    const after = pts.filter((p) => p.k >= 0)
+    const low = after.reduce((a, p) => (p.v < a.v ? p : a), after[0])
+    const lastK = pts[pts.length - 1].k
+    return { ...l, pts, low: low && low.k > 0 && low.k < lastK ? low : null, lastK }
+  })
+  const endK = gapMonths(ev.start, ev.end)
+  // 임직원 — 그림은 가격지수라 대출 조건과 무관하다. 대신 인상 시작 달 → 마지막 인상 달 사이 같은 집
+  // 매매 월 비용이 일반 대출과 사내대출에서 각각 얼마나 늘었나를 적는다(인상이 누구에게 닿았나).
+  const rowAt = (ym) => data.rows.find((r) => r.ym === ym)
+  const a = rowAt(ev.start)
+  const b = rowAt(ev.end)
+  const grow = (f) => (f(b) / f(a) - 1) * 100
+  const empGrow = E && a && b && ev.end !== ev.start ? [['buy', '매매'], ['jeonse', '전세']].map(([k, label]) => ({
+    k, label,
+    gen: grow((r) => genCost(r, k, ltv[k])),
+    emp: grow((r) => empCost(r, k, ltv[k], E, E.taxRate)),
+  })) : null
+
+  return (
+    <section className="card">
+      <h2>
+        순서 확인 — 인상 뒤 몇 달째에
+        <Hint
+          wide
+          notes={[
+            '기준금리 인상 시작 달을 100 으로 놓고, 그 12개월 전부터 48개월 뒤까지 세 지수가 어떻게 갔는지입니다.',
+            '세로 실선은 인상 시작, 점선은 마지막 인상 달입니다. 점은 시작 뒤 가장 낮았던 달(저점)입니다.',
+            '연쇄대로라면 매매·전세가 먼저 꺾여 저점을 찍고, 월세는 그동안 버티거나 오르며, 시차를 두고 매매·전세가 다시 오릅니다.',
+            '인상기가 몇 번 안 됩니다 — 한 번의 경로를 법칙으로 읽지 마세요. 인상 뒤에 인하가 이어지면 반등은 인하 몫과 섞입니다.',
+            E ? `그림은 가격지수라 ${E.label} 여부와 무관합니다. 아래 줄은 인상 시작 달에서 마지막 인상 달까지 같은 집 매매·전세 월 비용(맨 위 그림, 같은 대출 비율)이 일반 대출과 사내대출에서 각각 얼마나 늘었는지입니다 — 사내 금리는 기준금리를 따라 움직인다고 본 가정입니다.` : null,
+          ]}
+        />
+        {region}
+        <ChartLink id="order" />
+      </h2>
+      <div className="seg" role="tablist" aria-label="인상기 고르기">
+        {data.events.map((e) => (
+          <button key={e.start} role="tab" aria-selected={e.start === ev.start} onClick={() => setPick(e.start)}>
+            {ymText(e.start)} (+{fmt(e.rise, 2)}%p)
+          </button>
+        ))}
+      </div>
+      <EventChart lines={lines} span={data.event_span} endK={endK} />
+      <div className="tn-lows">
+        {lines.map((l) => (
+          <span key={l.key}>
+            <span className="swatch" style={{ background: l.color }} />
+            {l.label}{' '}
+            {l.low
+              ? <>저점 <b>{l.low.k}개월째</b> ({fmt(l.low.v - 100, 1)}%)</>
+              : l.lastK < 24 ? <span className="muted">진행 중</span> : <span className="muted">시작 뒤 내리지 않음</span>}
+          </span>
+        ))}
+      </div>
+      {empGrow && empGrow.map((g) => (
+        <div className="tn-lows" key={g.k}>
+          <span>
+            {g.label} 월 비용, 인상 시작 → 마지막 인상({ymText(ev.end)}) ·
+            일반 대출 <b>{signed(g.gen, 1)}%</b>
+          </span>
+          <span>
+            <span className="swatch is-dash" style={{ color: g.k === 'buy' ? C.sale : C.jeonse }} />
+            {E.label} <b>{signed(g.emp, 1)}%</b>
+          </span>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function gapMonths(a, b) {
+  return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(4)) - Number(a.slice(4))
+}
+
+/** 상대 달(k) 축의 선 그래프. TimeLines 는 달력 축(ym)이라 따로 둔다. */
+function EventChart({ lines, span, endK }) {
+  const [ref, width] = useMeasure()
+  const [hover, setHover] = useState(null)
+  const W = Math.max(width || 640, 280)
+  const H = 280
+  const P = { t: 12, r: 14, b: 26, l: 48 }
+  const iw = W - P.l - P.r
+  const ih = H - P.t - P.b
+  const vals = lines.flatMap((l) => l.pts.map((p) => p.v))
+  let lo = Math.min(100, ...vals)
+  let hi = Math.max(100, ...vals)
+  const pad = (hi - lo) * 0.06 || 1
+  lo -= pad
+  hi += pad
+  const x = (k) => P.l + ((k - span[0]) / (span[1] - span[0])) * iw
+  const y = (v) => P.t + ih - ((v - lo) / (hi - lo)) * ih
+  const ticks = niceTicks(lo, hi, 5).filter((t) => t >= lo && t <= hi)
+  const kTicks = []
+  for (let k = span[0]; k <= span[1]; k += 12) kTicks.push(k)
+
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    const k = Math.round(span[0] + ((px - P.l) / iw) * (span[1] - span[0]))
+    setHover({ k: Math.min(Math.max(k, span[0]), span[1]), cx: e.clientX, cy: e.clientY })
+  }
+
+  return (
+    <div className="macro-chart" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="인상 시작 달 기준 세 지수 경로"
+           onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <rect x={x(0)} y={P.t} width={Math.max(x(endK) - x(0), 2)} height={ih} fill="var(--band)" />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="var(--grid)"
+                  strokeDasharray={t === 100 ? undefined : '2 3'} />
+            <text x={P.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{fmt(t)}</text>
+          </g>
+        ))}
+        {kTicks.map((k, i) => (
+          <text key={k} x={x(k)} y={H - 8} textAnchor={i === kTicks.length - 1 ? 'end' : 'middle'} fontSize="10.5" fill="var(--text-muted)">
+            {k > 0 ? `+${k}` : k}개월
+          </text>
+        ))}
+        <line x1={x(0)} x2={x(0)} y1={P.t} y2={P.t + ih} stroke="var(--text-secondary)" />
+        <line x1={x(endK)} x2={x(endK)} y1={P.t} y2={P.t + ih} stroke="var(--text-secondary)" strokeDasharray="4 3" />
+        {lines.map((l) => (
+          <path key={l.key} fill="none" stroke={l.color} strokeWidth={l.width ?? 1.9} strokeLinejoin="round"
+                d={l.pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.k).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')} />
+        ))}
+        {lines.map((l) => l.low && (
+          <circle key={l.key} cx={x(l.low.k)} cy={y(l.low.v)} r="4" fill={l.color} stroke="var(--surface-1)" />
+        ))}
+        {hover && (
+          <line x1={x(hover.k)} x2={x(hover.k)} y1={P.t} y2={P.t + ih} stroke="var(--text-muted)"
+                strokeDasharray="3 3" pointerEvents="none" />
+        )}
+        <rect x={P.l} y={P.t} width={iw} height={ih} fill="transparent" />
+      </svg>
+      <div className="legend">
+        {lines.map((l) => (
+          <span className="key" key={l.key}><span className="swatch" style={{ background: l.color }} />{l.label}</span>
+        ))}
+      </div>
+      {hover && (
+        <div className="chart-tooltip"
+             style={{ left: Math.min(hover.cx + 14, window.innerWidth - 220), top: Math.max(hover.cy - 12, 8) }}>
+          <div className="t-title">인상 시작 {hover.k > 0 ? `${hover.k}개월 뒤` : hover.k < 0 ? `${-hover.k}개월 전` : '달'}</div>
+          {lines.map((l) => {
+            const p = l.pts.find((q) => q.k === hover.k)
+            return <div className="t-row" key={l.key}>{l.label} {p ? fmt(p.v, 1) : '—'}</div>
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -38,10 +38,10 @@ import time
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from app.clients import reb
-from app.clients.molit import DISTRICTS
-from app.db import SessionLocal
-from app.models import RebStat
+from app.realestate.clients import reb
+from app.realestate.clients.molit import DISTRICTS
+from app.core.db import SessionLocal
+from app.realestate.models import RebStat
 
 
 def upsert(db, points: list[reb.RebPoint], base: str = "") -> int:

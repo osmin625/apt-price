@@ -5,7 +5,7 @@
 
 입력은 vuski/admdongkor 의 행정동 경계(통계청 경계를 버전별로 정리한 것)다.
     https://github.com/vuski/admdongkor  →  ver<날짜>/HangJeongDong_ver<날짜>.geojson
-출력은 `frontend/src/topics/sgg_shapes.json` 하나다. 커밋해 두고 화면은 그것만 읽는다 —
+출력은 `frontend/src/realestate/topics/sgg_shapes.json` 하나다. 커밋해 두고 화면은 그것만 읽는다 —
 정적 사이트에서도 돌아야 하고, 35MB 원본을 매번 받을 이유가 없다.
 
 ## 왜 행정동을 직접 녹이나
@@ -38,9 +38,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.clients.molit import DISTRICTS  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
 
-OUT = Path(__file__).resolve().parents[2] / "frontend" / "src" / "topics" / "sgg_shapes.json"
+OUT = Path(__file__).resolve().parents[2] / "frontend" / "src" / "realestate" / "topics" / "sgg_shapes.json"
 WIDTH = 1000  # viewBox 폭. 높이는 위도 범위에서 나온다
 TOL = 1.4  # 단순화 허용 오차(viewBox 단위). 카드에서는 300px 안팎이라 0.4px 쯤이다
 MIN_ISLAND = 40.0  # 이보다 작은 섬(viewBox 면적)은 버린다 — 카드에서는 점으로도 안 보인다

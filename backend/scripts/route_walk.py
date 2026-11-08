@@ -37,10 +37,10 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import pricing  # noqa: E402
-from app.clients import tmap  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Complex, ComplexStation, Station  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.clients import tmap  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Complex, ComplexStation, Station  # noqa: E402
 
 NEAREST_N = 3
 RADIUS_M = 2500.0

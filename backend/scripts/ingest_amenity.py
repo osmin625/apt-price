@@ -44,9 +44,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import httpx  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
-from app.clients import kakao, sdsc  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Complex, ComplexAmenity  # noqa: E402
+from app.realestate.clients import kakao, sdsc  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Complex, ComplexAmenity  # noqa: E402
 
 RADIUS_STORE = 500      # 상가를 세는 반경
 RADIUS_SCHOOL = 1500    # 학교를 찾는 반경

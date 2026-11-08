@@ -16,9 +16,9 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
-from app.clients.kakao import KakaoError, geocode, nearest_station  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Complex  # noqa: E402
+from app.realestate.clients.kakao import KakaoError, geocode, nearest_station  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Complex  # noqa: E402
 
 
 def build_address(cx: Complex) -> str:

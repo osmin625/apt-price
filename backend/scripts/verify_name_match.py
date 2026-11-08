@@ -35,11 +35,11 @@ import sys
 
 from sqlalchemy import select
 
-from app import pricing
-from app.clients.molit import DISTRICTS
-from app.db import SessionLocal
-from app.models import Complex, ComplexDong
-from app.services import listing_parse as LP
+from app.realestate import pricing
+from app.realestate.clients.molit import DISTRICTS
+from app.core.db import SessionLocal
+from app.realestate.models import Complex, ComplexDong
+from app.realestate.services import listing_parse as LP
 
 def _pick(line: str, complexes: list, *, old: bool) -> Complex | None:
     """그 첫 줄로 **실제로 어느 단지가 선택되는지**. `parse_listing` 과 같은 길이다.

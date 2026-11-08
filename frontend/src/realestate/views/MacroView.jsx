@@ -1,0 +1,763 @@
+import { useEffect, useState } from 'react'
+
+import { api } from '../../api'
+import { fmt } from '../../shared/Charts'
+import Loading from '../../shared/Loading'
+import Modal from '../../shared/Modal'
+import MacroBars from '../components/MacroBars'
+import PanelCard from '../../shared/PanelCard'
+import HeatLegend from '../../shared/HeatLegend'
+import Hint from '../../shared/Hint'
+import { heatColor, zText } from '../../shared/heat'
+import QuadrantScatter from '../components/QuadrantScatter'
+import RegionMap from '../topics/RegionMap'
+import TopicModal from '../topics/TopicModal'
+import { topicFor } from '../topics/registry'
+import ChartLink from '../../shared/ChartLink'
+
+/**
+ * 매크로 — 한국부동산원 공표 통계를 경기 남부 17개 시군구로 묶어 본다.
+ *
+ * ## 왜 만들었나
+ *
+ * KB부동산 데이터허브에도 같은 통계가 있다. 그런데 거기서 경기 남부만 모아 보려
+ * 하면 **차트에 5개까지만 그려지고**, 무엇보다 지역 선택이 URL 에도 공유링크에도
+ * 남지 않아 열 때마다 17번을 다시 골라야 했다. 여기서는 17개가 기본이다.
+ *
+ * ## 이 탭의 성격
+ *
+ * 다른 탭은 전부 **우리 모델**이 낸 값이다. 이 탭만 바깥에서 가져온 **공표 통계**다.
+ * 그래서 모델이 맞는지 보는 바깥 기준이 된다 — 예를 들어 평당 매매가격 순위가
+ * 분해 모델의 구 계수 순서와 어긋나면 둘 중 하나를 의심해야 한다.
+ *
+ * 숫자가 KB 와 다른 것은 정상이다. 조사 주체와 표본이 다르다.
+ */
+export default function MacroView() {
+  const [meta, setMeta] = useState(null)
+  const [since, setSince] = useState('202001')
+  /* 지표를 **칩으로 고르게 하지 않는다.** 몇 개 안 되고 카드 축소판은 한 장이
+     작으므로, 고르는 수고를 시키느니 전부 깔고 눈으로 훑게 하는 쪽이 빠르다.
+     선택식일 때는 '전세가율이 어떻더라' 를 보려면 칩을 누르고 기다려야 했다.
+
+     `series` 는 지표 키 -> 응답. 기간을 바꾸면 전부 한꺼번에 다시 받는다. */
+  const [series, setSeries] = useState({})
+  const [error, setError] = useState(null)
+  const [hidden, setHidden] = useState(() => new Set())
+
+  const [ins, setIns] = useState(null)
+  // 어떤 카드를 창으로 띄웠나. null 이면 격자만 보인다.
+  const [open, setOpen] = useState(null)
+
+  useEffect(() => {
+    api.macroMetrics().then(setMeta).catch(() => setMeta(null))
+    api.macroInsights().then(setIns).catch(() => setIns(null))
+  }, [])
+
+  // 카드를 두는 지표만. `card: False` 인 것(평균·중위 매매가격)은 '구 안의 가격 편차'
+  // 카드가 둘을 직접 견주므로 따로 그리지 않는다 — 데이터 하나에 카드 하나.
+  const metrics = (meta?.metrics || []).filter((m) => m.card !== false)
+
+  useEffect(() => {
+    if (!metrics.length) return
+    let alive = true
+    setError(null)
+    setSeries({})
+    /* 지표마다 따로 받고 **오는 대로 그린다.** 전부 Promise.all 로 묶으면 제일
+       느린 하나가 전부를 잡는데, 정적 사이트에서는 지표마다 파일 하나라 그럴 이유가 없다.
+       하나가 실패해도 나머지는 그려야 한다 — 그래서 실패를 모아 오류로 올리지 않고
+       그 카드만 비운다. */
+    for (const m of metrics) {
+      api
+        .macroSeries({ metric: m.key, since })
+        .then((d) => alive && setSeries((prev) => ({ ...prev, [m.key]: d })))
+        .catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+    // metrics 는 meta 에서 한 번 오고 바뀌지 않는다. 길이로만 의존한다.
+  }, [metrics.length, since])
+
+  const toggle = (sgg) =>
+    setHidden((h) => {
+      const n = new Set(h)
+      n.has(sgg) ? n.delete(sgg) : n.add(sgg)
+      return n
+    })
+
+  if (error) {
+    return (
+      <div className="card">
+        <h2>매크로</h2>
+        <p className="empty">{error}</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="card">
+        <h2>
+          경기 남부 시군구를 한 화면에
+          <Hint
+            notes={[
+              '한국부동산원이 공표하는 아파트 통계입니다. 다른 탭은 우리 모델이 낸 값이지만 이 탭만 바깥에서 가져온 공표 통계라, 모델을 견주어 볼 바깥 기준이 됩니다.',
+              'KB 등 다른 기관 수치와 다를 수 있습니다 — 조사 주체와 표본이 다릅니다.',
+            ]}
+          />
+          <ChartLink id="metrics" />
+        </h2>
+
+        <div className="filters">
+          <div className="field">
+            <label htmlFor="mc-since">기간</label>
+            <select id="mc-since" value={since} onChange={(e) => setSince(e.target.value)}>
+              <option value="202401">최근 3년</option>
+              <option value="202001">최근 7년</option>
+              <option value="201201">전체(2012~)</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="macro-grid">
+        <PanelCard
+          title="지금 어느 국면인가"
+          sub={ins ? `시군구 ${ins.cycle.items.length}곳 · 전고점 대비 × 최근 3개월 · 점 색은 역대 위치` : '불러오는 중'}
+          onOpen={() => setOpen('cycle')}
+          linkId="cycle"
+          ready={!!ins}
+        >
+          {ins && <CycleChart ins={ins} compact />}
+        </PanelCard>
+
+        <PanelCard
+          title="그 상승을 전세가 받쳐 줬나"
+          sub="12개월 매매 × 전세가율 변화"
+          onOpen={() => setOpen('rally')}
+          linkId="rally"
+          ready={!!ins}
+        >
+          {ins && <RallyChart ins={ins} compact />}
+        </PanelCard>
+
+        <PanelCard
+          title="거래가 받쳐 준 상승인가"
+          sub={
+            ins?.volume?.items?.length
+              ? `시군구 ${ins.volume.items.length}곳 · 가격 × 거래량`
+              : '거래량 적재가 필요합니다'
+          }
+          onOpen={() => setOpen('volume')}
+          linkId="volume"
+          ready={!!ins?.volume?.items?.length}
+        >
+          {ins?.volume?.items?.length > 0 && <VolumeChart ins={ins} compact />}
+        </PanelCard>
+
+        <PanelCard
+          title="지수가 몇 건으로 만들어졌나"
+          sub={
+            ins?.depth?.items?.length
+              ? `중위 ${fmt(ins.depth.median, 0)}건/월 · 얇은 곳 ${
+                  ins.depth.items.filter((i) => i.thin).length
+                }곳`
+              : '거래량 적재가 필요합니다'
+          }
+          onOpen={() => setOpen('depth')}
+          linkId="depth"
+          ready={!!ins?.depth?.items?.length}
+        >
+          {ins?.depth?.items?.length > 0 && <DepthBars ins={ins} compact />}
+        </PanelCard>
+
+        <PanelCard
+          title="구 안의 가격 편차"
+          sub={
+            ins?.spread?.items?.length
+              ? `시군구 ${ins.spread.items.length}곳 · 평균 ÷ 중위`
+              : '불러오는 중'
+          }
+          onOpen={() => setOpen('spread')}
+          linkId="spread"
+          ready={!!ins?.spread?.items?.length}
+        >
+          {ins?.spread?.items?.length > 0 && <SpreadBars ins={ins} compact />}
+        </PanelCard>
+
+        <PanelCard
+          title="모델과 어긋나는 곳"
+          sub={
+            ins?.model_gap?.spearman != null
+              ? `순위상관 ${fmt(ins.model_gap.spearman, 3)}`
+              : '적합이 필요합니다'
+          }
+          onOpen={() => setOpen('gap')}
+          linkId="gap"
+          ready={!!ins && ins.has_fit}
+        >
+          {ins && ins.has_fit && <GapChart ins={ins} compact />}
+        </PanelCard>
+
+        {/* 지표마다 한 장. 순서는 `METRICS` 가 정한 순서 그대로다 — 지수·가율이
+            앞이고 금액이 뒤인데, 그게 '변화' 에서 '수준' 으로 가는 순서다.
+            축소판은 선 17개가 아니라 **마지막 달 지도**다. 300px 칸에서 선 17개는 서로 감겨
+            어느 구인지 읽을 수 없었다. 추이는 눌러서 여는 창에 선 그림으로 있다. */}
+        {metrics.map((m) => {
+          const d = series[m.key]
+          return (
+            <PanelCard
+              key={m.key}
+              title={m.label}
+              sub={
+                d
+                  ? `${d.unit} · ${d.months[d.months.length - 1]} 지도`
+                  : '불러오는 중'
+              }
+              onOpen={() => setOpen(m.key)}
+              linkId={m.key}
+              ready={!!d}
+            >
+              {d && <RegionMap data={d} compact />}
+            </PanelCard>
+          )
+        })}
+      </div>
+
+      {open === 'cycle' && ins && (
+        <Modal title="지금 어느 국면인가" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.cycle.note}</p>
+          <ChartGuide
+            axes={[
+              ['가로 — 전고점 대비 (%)', '얼마나 회복했나. 0(맨 오른쪽)은 지금이 역대 최고가라는 뜻이고, 왼쪽으로 갈수록 과거 고점에서 멀다.'],
+              ['세로 — 최근 3개월 (%)', '지금 어느 방향인가. 0 위는 오르는 중, 아래는 내리는 중.'],
+            ]}
+            why="한 축만으로는 구분이 안 된다. 전고점 대비만 보면 '바닥에서 기어오르는 곳' 과 '고점에서 막 꺾인 곳' 이 섞이고, 최근 3개월만 보면 '신고가 경신 중' 인지 '낙폭 과대에서 반등 중' 인지 알 수 없다."
+            quadrants={[
+              ['오른쪽 위 · 신고가 경신 중', '지금이 고점인데 계속 오른다. 비교할 과거 고점이 없어 과거로는 싸다·비싸다를 판단할 수 없는 구간이다.'],
+              ['오른쪽 아래 · 고점 부근에서 꺾임', '고점을 찍은 지 얼마 안 됐는데 최근 3개월이 마이너스다.'],
+              ['왼쪽 위 · 바닥에서 반등', '과거 고점에서 크게 빠졌다가 올라오는 중.'],
+              ['왼쪽 아래 · 정체·하락', '많이 빠졌는데 회복도 느리고 지금도 거의 안 움직인다.'],
+            ]}
+            tips={[
+              '가로축은 "싸다" 가 아니다. 전고점 대비 -18% 는 저평가라는 뜻이 아니라, 그때 그 값을 찍었는데 지금은 거기 못 미친다는 사실일 뿐이다. 그때가 과열이었을 수도 있다.',
+              '세로축은 짧은 창이라 흔들린다. 점에 마우스를 올리면 12개월 변화와 가속도(직전 3개월 대비)가 같이 나온다. 많이 올랐지만 속도는 붙지 않는 곳과, 덜 올랐지만 가팔라지는 곳이 갈린다.',
+              '왼쪽 아래에서 오른쪽 위로 가는 대각선으로 읽으면 "덜 회복·정체" → "신고가·가속" 이 된다. 경기 남부가 하나의 시장이 아니라 서로 다른 국면이 섞여 있다는 것이 이 그림의 요점이다.',
+            ]}
+            caveat="월간 매매가격지수 기준이다. 어디가 어느 국면인지까지만 말하고, 거기서 투자 판단으로 넘어가는 것은 이 데이터 밖이다."
+          />
+          <HeatLegend>
+            점 색은 지금 지수가 그 구의 자기 평균보다 얼마나 위·아래인지입니다. 좋고 나쁨이 아닙니다
+          </HeatLegend>
+          <CycleChart ins={ins} />
+          {ins.cycle.excluded.length > 0 && (
+            <p className="paste-warn" style={{ marginTop: 8 }}>
+              {ins.cycle.excluded.join(' · ')}는 공표 기간이 24개월이 안 돼 사이클을
+              판단할 수 없어 뺐습니다. 분구 시점에 통계가 새로 시작했기 때문입니다.
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {open === 'rally' && ins && (
+        <Modal title="그 상승을 전세가 받쳐 줬나" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.rally.note}</p>
+          <ChartGuide
+            axes={[
+              ['가로 — 12개월 매매 변화 (%)', '지난 1년 동안 얼마나 올랐나.'],
+              ['세로 — 전세가율 12개월 변화 (%p)', '매매가 대비 전세가의 거리가 좁아졌나 벌어졌나. 위로 갈수록 전세가 따라붙었다는 뜻이다.'],
+            ]}
+            why="'얼마나 올랐나' 보다 한 단계 깊은 질문에 답한다 — 그 상승을 전세(실수요)가 받쳐 줬는가. 매매가 전세보다 빨리 오르면 전세가율이 떨어진다."
+            quadrants={[
+              ['오른쪽 위 · 오르고 전세도 붙음', '실수요가 함께 움직인 상승.'],
+              ['오른쪽 아래 · 매매만 간 상승', '올랐지만 전세는 못 따라왔다.'],
+              ['왼쪽 위 · 안 올랐는데 전세는 붙음', '매매는 조용한데 전세가 올라와 갭이 좁아지는 중.'],
+              ['왼쪽 아래 · 안 오르고 전세도 빠짐', '양쪽 다 힘이 없다.'],
+            ]}
+            tips={[
+              '점들이 오른쪽 아래로 흐르는 모양이 보인다면, 많이 오른 곳일수록 전세가 못 따라왔다는 뜻이다.',
+              '전세가율은 매매가가 오르기만 해도 떨어진다. 인과가 아니라 같은 현상의 두 측면으로 읽어야 한다.',
+            ]}
+            caveat="전세가율이 떨어진 것 자체가 고평가라는 뜻은 아니다. 상승의 성격이 다르다는 것까지만 말해 준다."
+          />
+          <RallyChart ins={ins} />
+        </Modal>
+      )}
+
+      {open === 'volume' && ins?.volume?.items?.length > 0 && (
+        <Modal title="거래가 받쳐 준 상승인가" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.volume.note}</p>
+          <ChartGuide
+            axes={[
+              ['가로 — 12개월 매매가 변화 (%)', '지난 1년 동안 얼마나 올랐나. 다른 차트와 같은 축이다.'],
+              ['세로 — 거래량, 5년 평균 대비 (%)', '그 구의 최근 12개월 거래 건수를 직전 5년 연평균과 비교한 값. 0 은 평상시만큼, 위는 평상시보다 활발, 아래는 말랐다는 뜻이다.'],
+            ]}
+            why={
+              '이 탭의 가격 지표들은 서로 거의 같은 말을 한다. 거래량은 다른 말을 한다' +
+              (ins.volume.spearman != null
+                ? ` — 거래 배수와 12개월 가격 변화의 순위상관이 지금 ${fmt(ins.volume.spearman, 3)} 이다`
+                : '') +
+              ". 가격만 봐서는 '거래가 받쳐 준 상승' 과 '거래 없이 호가만 오른 상승' 이 구분되지 않는다."
+            }
+            quadrants={[
+              ['오른쪽 위 · 거래가 받쳐 준 상승', '올랐고 거래도 평상시보다 많다. 값이 실제로 손바뀜되면서 올라갔다는 뜻이다.'],
+              ['오른쪽 아래 · 거래 없이 오른 상승', '올랐는데 거래는 평상시보다 적다.'],
+              ['왼쪽 위 · 거래는 되는데 안 오름', '손바뀜은 활발한데 가격은 제자리다.'],
+              ['왼쪽 아래 · 거래도 가격도 조용함', '양쪽 다 움직이지 않는다.'],
+            ]}
+            tips={[
+              '세로축은 절대 건수가 아니라 그 구의 평상시 대비다. ' + depthSpan(ins.depth) + '건수로는 같은 축에 놓을 수 없다.',
+              '오른쪽 아래가 곧 거품이라는 뜻은 아니다. 매물이 안 나와서 거래가 없을 수도 있다. 이 그림은 상승의 종류가 다르다는 것까지만 말한다.',
+              '가로축 순서와 세로축 순서가 엇갈리는 것이 요점이다. 비슷하게 오른 두 구라도 거래가 받쳐 준 정도는 다를 수 있다 — 같은 크기의 상승이 아니다.',
+            ]}
+            caveat="거래량의 마지막 달은 신고 지연(계약 후 30일 안에 신고)으로 과소집계될 수 있다. 12개월 합이라 영향은 작지만, 배수가 경계에 걸린 구는 한두 달 뒤 위치가 조금 바뀔 수 있다."
+          />
+          <VolumeChart ins={ins} />
+          {ins.volume.excluded.length > 0 && (
+            <p className="paste-warn" style={{ marginTop: 8 }}>
+              {ins.volume.excluded.join(' · ')}는 비교할 과거 5년이 없어 뺐습니다.
+              분구 시점(2026-02)부터 공표가 시작됐기 때문입니다.
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {open === 'depth' && ins?.depth?.items?.length > 0 && (
+        <Modal title="지수가 몇 건으로 만들어졌나" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.depth.note}</p>
+          <ChartGuide
+            axes={[
+              ['막대 길이 — 월평균 매매 거래 건수', '최근 12개월 평균. 지수가 몇 건의 거래에서 나왔는지를 뜻한다.'],
+            ]}
+            why={
+              '이 탭은 구마다 지수를 같은 굵기의 선으로 나란히 그린다. 그런데 구마다 거래 규모가 크게 다르다' +
+              (depthSpan(ins.depth) ? ` — ${depthSpan(ins.depth).replace(/ $/, '')}` : '.') +
+              " 거래가 적은 구의 '전고점 대비 -5%' 와 많은 구의 같은 숫자는 무게가 다른데, 선만 봐서는 구분되지 않는다."
+            }
+            quadrants={null}
+            tips={[
+              '표본이 얇다고 값이 틀렸다는 뜻은 아니다. 다만 한두 건의 특이 거래에 지수가 더 흔들린다.',
+              "'얇다' 표시는 전체 구 중위값의 절반 미만이다. 절대 건수로 선을 그으면 지역 규모가 바뀔 때 거짓이 된다.",
+              '국면 차트에서 점에 마우스를 올리면 그 구의 월 거래 건수가 같이 나온다 — 그 점의 무게를 그 자리에서 알 수 있다.',
+            ]}
+            caveat="한국부동산원 지수의 실제 표본 설계는 공표 거래 건수와 다르다. 이것은 '그 구에서 한 달에 몇 건이 거래되는가' 라는 대리지표이고, 지수 산정에 쓰인 표본 수 그 자체는 아니다."
+          />
+          <MacroBars
+            items={ins.depth.items}
+            value={(d) => d.per_month}
+            decimals={0}
+            suffix="건"
+            mark={(d) => d.thin}
+            markLabel="얇다"
+            tip={(d) => (
+              <>
+                <div className="t-title">{d.name}</div>
+                <div className="t-row">월평균 {fmt(d.per_month, 0)}건 (최근 {d.window}개월)</div>
+                <div className="t-row">공표 자료 {d.months}개월 · 최신 {d.latest_ym}</div>
+                {d.thin && <div className="t-row">중위 {fmt(ins.depth.median, 0)}건의 절반 미만 — 지수가 더 흔들립니다</div>}
+              </>
+            )}
+          />
+        </Modal>
+      )}
+
+      {open === 'spread' && ins?.spread?.items?.length > 0 && (
+        <Modal title="구 안의 가격 편차" onClose={() => setOpen(null)} wide>
+          <p className="muted small">{ins.spread.note}</p>
+          <ChartGuide
+            axes={[
+              ['막대 길이 — 평균 ÷ 중위 (%)', '0 은 평균과 중위가 같다는 뜻. 오른쪽(플러스)은 평균이 중위보다 높고, 왼쪽은 낮다.'],
+            ]}
+            why="우리 모델은 구마다 계수 하나(`sgg_*`)를 둔다. 그것이 뜻을 가지려면 구가 어느 정도 균질해야 한다. 공표되는 평균과 중위를 나누면 그 가정을 검산할 수 있다 — 편차가 큰 구는 계수 하나로 묶기 어렵다는 신호다."
+            quadrants={null}
+            tips={[
+              '평균이 중위보다 크게 높으면 고가 단지 몇 곳이 평균을 끌어올렸다는 뜻이다 — 성격이 다른 동네(예: 신도시와 구도심)가 한 구에 섞여 있을 때 그렇다.' +
+                spreadEdge(ins.spread, 'max'),
+              '평균이 중위보다 낮으면 저가 쪽이 아니라 고가 쪽이 얇다는 말이다.' + spreadEdge(ins.spread, 'min'),
+              '마우스를 올리면 평균 평수(= 한 채 평균가 ÷ 평당가)가 같이 나온다. 평당가 순위와 한 채 가격 순위가 왜 다른지가 여기서 설명된다 — 큰 평형이 많은 구는 평당가가 낮아도 한 채 값은 비싸다.',
+            ]}
+            caveat="편차가 크다는 것이 그 구가 비싸다·싸다는 뜻은 아니다. 구 평균값을 그 구의 대표값으로 쓸 때 조심하라는 뜻이다."
+          />
+          <MacroBars
+            items={ins.spread.items}
+            value={(d) => d.spread_pct}
+            diverging
+            suffix="%"
+            tip={(d) => (
+              <>
+                <div className="t-title">{d.name}</div>
+                <div className="t-row">
+                  평균 {fmt(d.avg, 0)}만원 · 중위 {fmt(d.med, 0)}만원
+                </div>
+                <div className="t-row">
+                  평균이 중위보다 {d.spread_pct > 0 ? '+' : ''}
+                  {fmt(d.spread_pct, 1)}%
+                </div>
+                {d.pyeong != null && <div className="t-row">평균 평수 {fmt(d.pyeong, 1)}평</div>}
+              </>
+            )}
+          />
+        </Modal>
+      )}
+
+      {open === 'gap' && ins && (
+        <Modal title="모델과 어긋나는 곳" onClose={() => setOpen(null)} wide>
+          {!ins.has_fit ? (
+            <p className="empty">
+              적합이 아직 캐시에 없어 비교할 수 없습니다. <b>매물 분석</b> 탭을 한 번
+              열면 계산되고, 그 뒤 이 화면으로 돌아오면 보입니다.
+            </p>
+          ) : (
+            <>
+              <p className="muted small">{ins.model_gap.note}</p>
+              <ChartGuide
+                axes={[
+                  ['가로 — 부동산원 평당가 순위', '공표되는 ㎡당 평균가격 기준. 오른쪽일수록 비싸다.'],
+                  ['세로 — 모델 구 계수 순위', '면적·층·시점·연식 등을 통제한 뒤 남은 구 효과. 위일수록 높게 본다.'],
+                ]}
+                why="두 값은 서로 다른 데이터와 방법에서 나온다. 부동산원은 보정 없는 공표 평균이고, 우리 계수는 그것들을 통제한 뒤 남은 구 효과다. 그래서 순위가 맞는 것이 기본이고, 크게 벌어지는 지역이 눈여겨볼 곳이다."
+                quadrants={null}
+                tips={[
+                  '점선(45도)에 가까울수록 두 값이 같은 순서다. 선에서 멀리 떨어진 지역이 볼 곳이다.',
+                  '선 위쪽에 있으면 모델이 공표 평균보다 그 지역을 낮게 본다 — 평균가는 높은데 면적·연식 구성을 걷어내면 그만큼은 아니라는 뜻이다.',
+                  '선 아래쪽은 반대다. 공표 평균은 중간인데 통제하고 나면 높게 나온다.',
+                ]}
+                caveat="어느 쪽이 맞는지는 이 그림이 말해 주지 않는다. 그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나, 모델이 뭔가를 놓쳤거나다. 어디를 들여다볼지만 알려 준다."
+              />
+              <GapChart ins={ins} />
+              <GapTable gap={ins.model_gap} />
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* 지표 창 — 주제 창(`TopicModal`)으로 띄운다. 전세가율·거래량처럼 거시
+          분석에도 카드가 있는 지표는 거기서 열어도 같은 창이다(realestate/topics/registry.js). */}
+      {series[open] && (
+        <TopicModal
+          topic={topicFor('metric', open, { since, title: series[open].label })}
+          hidden={hidden}
+          onToggle={toggle}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </>
+  )
+}
+
+/* 안내 문구에 넣는 예시는 **응답에서 그 자리에서 뽑는다.** 예전에는 '과천 월 33건,
+   동탄 월 1,137건' · '영통구 +25%' 를 문구에 적어 두었는데, 데이터가 바뀌면 문구만
+   그날에 멈춘다. 숫자가 예시로 꼭 필요한 곳만 이렇게 계산하고, 나머지는 숫자 없이
+   읽는 법만 적는다. */
+function depthSpan(depth) {
+  const xs = (depth?.items || []).filter((d) => d.per_month > 0)
+  if (xs.length < 2) return ''
+  const lo = xs.reduce((a, b) => (b.per_month < a.per_month ? b : a))
+  const hi = xs.reduce((a, b) => (b.per_month > a.per_month ? b : a))
+  const k = Math.round(hi.per_month / lo.per_month)
+  // 지역 이름 뒤에 조사를 붙이지 않는다 — 받침이 이름마다 달라 '과천시은' 이 된다.
+  return `지금 거래가 가장 적은 곳은 ${lo.name}(월 ${fmt(lo.per_month, 0)}건), 가장 많은 곳은 ${hi.name}(월 ${fmt(hi.per_month, 0)}건)으로 ${k}배 차이라 `
+}
+
+function spreadEdge(spread, which) {
+  const xs = spread?.items || []
+  if (!xs.length) return ''
+  const pick = xs.reduce((a, b) =>
+    which === 'max' ? (b.spread_pct > a.spread_pct ? b : a) : (b.spread_pct < a.spread_pct ? b : a),
+  )
+  if (which === 'max' ? pick.spread_pct <= 0 : pick.spread_pct >= 0) return ''
+  return ` 지금 가장 ${which === 'max' ? '높은' : '낮은'} 곳: ${pick.name}(${pick.spread_pct > 0 ? '+' : ''}${fmt(pick.spread_pct, 1)}%).`
+}
+
+/* ── 카드 ──────────────────────────────────────────────────────────────
+   시장 분석의 요인 카드와 같은 규격(.factor)을 쓴다. 매크로 탭이 처음에는 전부
+   전폭이라 그림 하나 보려고 한참 스크롤해야 했다.
+
+   카드 안에는 **모양만** 둔다. 300px 폭에 이름표 17개를 적으면 읽을 수가 없고,
+   읽히지도 않는 글자를 그려 놓는 것은 자리만 먹는다. 자세한 것은 눌러서 띄운다. */
+function CycleChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.cycle.items}
+      color={(d) => heatColor(d.hist_z)}
+      x={(d) => d.from_peak}
+      y={(d) => d.m3}
+      xLabel={ins.cycle.x_label}
+      yLabel={ins.cycle.y_label}
+      quadrants={['신고가 경신 중', '바닥에서 반등', '전고점 아래 · 정체/하락', '고점 부근에서 꺾임']}
+      xDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            전고점({d.peak_ym}) 대비 {d.from_peak > 0 ? '+' : ''}
+            {fmt(d.from_peak, 1)}%
+          </div>
+          <div className="t-row">
+            저점({d.trough_ym})에서 +{fmt(d.from_trough, 1)}%
+          </div>
+          <div className="t-row">
+            3개월 {d.m3 > 0 ? '+' : ''}
+            {fmt(d.m3, 2)}% · 12개월 {d.m12 > 0 ? '+' : ''}
+            {fmt(d.m12, 2)}%
+          </div>
+          {d.hist_z != null && (
+            <div className="t-row">{zText(d.hist_z)}</div>
+          )}
+          {d.accel != null && (
+            <div className="t-row">
+              직전 3개월 대비 {d.accel > 0 ? '가속' : '감속'} {fmt(Math.abs(d.accel), 2)}%p
+            </div>
+          )}
+          {/* 이 점의 무게. 월 33건에서 나온 -5% 와 월 1,137건에서 나온 -5% 는 다르다. */}
+          {d.vol_pm != null && (
+            <div className="t-row">이 구의 거래 월평균 {fmt(d.vol_pm, 0)}건</div>
+          )}
+        </>
+      )}
+    />
+  )
+}
+
+function RallyChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.rally.items}
+      x={(d) => d.sale_12m}
+      y={(d) => d.ratio_12m}
+      xLabel={ins.rally.x_label}
+      yLabel={ins.rally.y_label}
+      quadrants={['오르고 전세도 붙음', '안 올랐는데 전세는 붙음', '안 오르고 전세도 빠짐', '매매만 간 상승']}
+      xDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            12개월 매매 {d.sale_12m > 0 ? '+' : ''}
+            {fmt(d.sale_12m, 1)}%
+          </div>
+          <div className="t-row">
+            전세가율 {fmt(d.ratio_now, 1)}% ({d.ratio_12m > 0 ? '+' : ''}
+            {fmt(d.ratio_12m, 1)}%p)
+          </div>
+        </>
+      )}
+    />
+  )
+}
+
+function VolumeChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.volume.items}
+      x={(d) => d.sale_12m}
+      y={(d) => d.vol_pct}
+      xLabel={ins.volume.x_label}
+      yLabel={ins.volume.y_label}
+      quadrants={[
+        '거래가 받쳐 준 상승',
+        '거래는 되는데 안 오름',
+        '거래도 가격도 조용함',
+        '거래 없이 오른 상승',
+      ]}
+      xDecimals={0}
+      yDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            12개월 매매 {d.sale_12m > 0 ? '+' : ''}
+            {fmt(d.sale_12m, 1)}%
+          </div>
+          <div className="t-row">
+            거래 {fmt(d.vol_12m, 0)}건 · 5년 평균 {fmt(d.vol_base, 0)}건 대비{' '}
+            {d.vol_pct > 0 ? '+' : ''}
+            {fmt(d.vol_pct, 0)}%
+          </div>
+          <div className="t-row">월평균 {fmt(d.vol_pm, 0)}건 · 최신 {d.latest_ym}</div>
+        </>
+      )}
+    />
+  )
+}
+
+/* 카드 축소판. 이름표가 없으면 '어디가 얇은가' 는 못 읽지만 **분포의 모양**은
+   읽힌다 — 맨 아래 한두 개가 유독 짧은 것이 과천이고, 그게 이 카드의 요점이다. */
+function DepthBars({ ins, compact }) {
+  return (
+    <MacroBars
+      items={ins.depth.items}
+      value={(d) => d.per_month}
+      decimals={0}
+      suffix="건"
+      mark={(d) => d.thin}
+      markLabel="얇다"
+      compact={compact}
+    />
+  )
+}
+
+function SpreadBars({ ins, compact }) {
+  return (
+    <MacroBars
+      items={ins.spread.items}
+      value={(d) => d.spread_pct}
+      diverging
+      suffix="%"
+      compact={compact}
+    />
+  )
+}
+
+function GapChart({ ins, compact }) {
+  return (
+    <QuadrantScatter
+      items={ins.model_gap.items}
+      x={(d) => d.rank_reb}
+      y={(d) => d.rank_coef}
+      xLabel={ins.model_gap.x_label}
+      yLabel={ins.model_gap.y_label}
+      xOrigin={null}
+      yOrigin={null}
+      invertX
+      invertY
+      diagonal
+      xDecimals={0}
+      yDecimals={0}
+      compact={compact}
+      height={compact ? 150 : 340}
+      tip={(d) => (
+        <>
+          <div className="t-title">{d.name}</div>
+          <div className="t-row">
+            부동산원 {d.rank_reb}위 · 평당 {fmt(d.reb, 0)}만원
+          </div>
+          <div className="t-row">
+            모델 {d.rank_coef}위 · 구 계수 {d.coef_pct > 0 ? '+' : ''}
+            {fmt(d.coef_pct, 1)}%{d.is_base ? ' (기준구)' : ''}
+          </div>
+          <div className="t-row">
+            순위 차 {d.rank_gap > 0 ? '+' : ''}
+            {d.rank_gap}
+          </div>
+        </>
+      )}
+    />
+  )
+}
+
+function GapTable({ gap }) {
+  const top = [...gap.items]
+    .sort((a, b) => Math.abs(b.rank_gap) - Math.abs(a.rank_gap))
+    .slice(0, 5)
+  return (
+    <>
+      <div className="table-wrap" style={{ marginTop: 10 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>시군구</th>
+              <th className="num">부동산원</th>
+              <th className="num">모델</th>
+              <th className="num">순위 차</th>
+            </tr>
+          </thead>
+          <tbody>
+            {top.map((d) => (
+              <tr key={d.sgg_cd}>
+                <td>{d.name}</td>
+                <td className="num">
+                  {d.rank_reb}위 <span className="muted small">{fmt(d.reb, 0)}만원/평</span>
+                </td>
+                <td className="num">
+                  {d.rank_coef}위{' '}
+                  <span className="muted small">
+                    {d.coef_pct > 0 ? '+' : ''}
+                    {fmt(d.coef_pct, 1)}%
+                  </span>
+                </td>
+                <td className={`num ${d.rank_gap > 0 ? 'tone-pos' : d.rank_gap < 0 ? 'tone-neg' : ''}`}>
+                  {d.rank_gap > 0 ? '+' : ''}
+                  {d.rank_gap}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small" style={{ marginTop: 6 }}><Hint pill wide label="설명">
+        가장 많이 벌어진 다섯 곳입니다. 어느 쪽이 맞는지는 이 표가 말해 주지 않습니다 —
+        그 지역의 평형·연식 구성이 특이해 단순 평균이 끌려갔거나, 모델이 뭔가를
+        놓쳤거나입니다. <b>어디를 들여다볼지</b>만 알려 줍니다.
+      </Hint></p>
+    </>
+  )
+}
+
+
+/* 그림 읽는 법.
+ *
+ * 사분면 이름만으로는 축이 무엇인지까지는 알 수 없다. 그렇다고 설명을 늘 펼쳐 두면
+ * 정작 그림이 아래로 밀린다 — 매크로 탭을 카드로 줄인 이유와 같다.
+ *
+ * 그래서 접어 둔다. 처음 보는 사람은 한 번 펼쳐 읽고, 아는 사람은 건드리지 않는다.
+ * 창 안에 두는 이유: 카드 축소판에는 축 눈금도 사분면 이름도 없어서 읽는 법을 적어
+ * 봐야 가리킬 것이 없다.
+ */
+function ChartGuide({ axes, why, quadrants, tips, caveat }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="chart-guide">
+      <button
+        className="linklike guide-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? '읽는 법 접기 ▴' : '읽는 법 ▾'}
+      </button>
+
+      {open && (
+        <div className="guide-body">
+          <dl className="guide-axes">
+            {axes.map(([k, v]) => (
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd>{v}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {why && <p className="guide-why">{why}</p>}
+
+          {quadrants && (
+            <ul className="guide-quad">
+              {quadrants.map(([k, v]) => (
+                <li key={k}>
+                  <b>{k}</b>
+                  <span>{v}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {tips?.length > 0 && (
+            <ul className="guide-tips">
+              {tips.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          )}
+
+          {caveat && <p className="guide-caveat">{caveat}</p>}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -36,9 +36,9 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from app.db import SessionLocal
-from app.services import hedonic
-from app.services.hedonic import FLOOR_REF, _knots, _spline_cols
+from app.core.db import SessionLocal
+from app.realestate.services import hedonic
+from app.realestate.services.hedonic import FLOOR_REF, _knots, _spline_cols
 
 
 class DummyPathFailed(RuntimeError):

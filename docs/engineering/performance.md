@@ -101,7 +101,7 @@ rows = {int(r["complex_id"]): r for _, r in fit["alpha"].iterrows()}
 
 적합은 14초쯤 걸리는데 대부분이 numpy/statsmodels 안에서 **GIL 을 쥔 채** 도는 연산이다.
 FastAPI 가 동기 엔드포인트를 스레드풀에 넘겨도 GIL 은 풀리지 않아, 적합이 도는 동안
-다른 모든 요청이 같이 멈춘다. `services/fit_worker.py` 가 `ProcessPoolExecutor`(워커 1개)
+다른 모든 요청이 같이 멈춘다. `realestate/services/fit_worker.py` 가 `ProcessPoolExecutor`(워커 1개)
 로 이를 분리한다.
 
 | | 적합 | 동시 `/api/complexes` 지연(최대/중앙) | 그동안 처리한 요청 |

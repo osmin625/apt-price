@@ -26,8 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import regime, supply  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import regime, supply  # noqa: E402
 
 ROUND_STEP = 0.5  # 호 — 해별 적정 반올림 한 번의 최대 오차
 

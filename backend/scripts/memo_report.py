@@ -2,7 +2,7 @@
 
 ## 왜 이 스크립트가 있나
 
-`services/memo_tags.py` 의 규칙은 실제 메모 50건을 재서 만들었다. 메모가 더 쌓이면
+`realestate/services/memo_tags.py` 의 규칙은 실제 메모 50건을 재서 만들었다. 메모가 더 쌓이면
 그 50건에 없던 말이 들어온다 — 그때 **눈으로 보고 규칙을 늘리지 말고 재서 늘린다.**
 이 저장소에서 추측이 틀린 적이 여러 번 있고 그때마다 잰 쪽이 맞았다.
 
@@ -29,9 +29,9 @@ from collections import Counter
 
 from sqlalchemy import select
 
-from app.db import SessionLocal
-from app.models import Quote
-from app.services import memo_tags
+from app.core.db import SessionLocal
+from app.realestate.models import Quote
+from app.realestate.services import memo_tags
 
 # 낱말 후보. 한글 2자 이상, 또는 'P3000' 같은 영문+숫자.
 _WORD = re.compile(r"[가-힣]{2,}|[A-Za-z]{1,3}\d{3,5}")
@@ -116,7 +116,7 @@ def main() -> int:
         print("   없습니다.")
     for w, n in common:
         print(f"   {n:>3}회  {w}")
-    print("\n규칙을 늘릴 때는 app/services/memo_tags.py 의 RULES 에 더하고"
+    print("\n규칙을 늘릴 때는 app/realestate/services/memo_tags.py 의 RULES 에 더하고"
           " 이 스크립트를 다시 돌려 적중 수를 주석에 남길 것.")
     return 0
 

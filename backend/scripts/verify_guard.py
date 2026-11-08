@@ -33,8 +33,8 @@ sys.path.insert(0, str(_HERE))
 
 import numpy as np  # noqa: E402
 
-from app.clients import sdsc  # noqa: E402
-from app.services import hedonic  # noqa: E402
+from app.realestate.clients import sdsc  # noqa: E402
+from app.realestate.services import hedonic  # noqa: E402
 
 # 페이징 경우는 가짜 클라이언트를 쓰지만 stores_in_radius 가 그보다 먼저 키를 본다.
 # 키가 없으면(backend/.env 가 없는 워크트리) 그 자리에서 SdscError 가 나서 '걸리지

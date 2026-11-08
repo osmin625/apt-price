@@ -32,7 +32,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 
-from app.services import listing_parse as LP
+from app.realestate.services import listing_parse as LP
 
 PY = 3.305785
 TODAY = date(2026, 10, 15)

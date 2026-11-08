@@ -36,11 +36,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app import pricing  # noqa: E402
-from app.clients.kakao import KakaoError, search_keyword  # noqa: E402
-from app.clients.molit import DISTRICTS  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Complex  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.clients.kakao import KakaoError, search_keyword  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Complex  # noqa: E402
 
 # 수원시 대략 bbox — 경계 밖은 주소 파싱 단계에서 걸러지므로 넉넉히 잡는다.
 SW = (37.208, 126.916)

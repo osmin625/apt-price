@@ -81,13 +81,13 @@ RANK_BASIS = ("market", "factor")
 # 앱 모듈은 이 파일의 다른 곳처럼 **쓸 때** import 한다(FIT_IN_PROCESS 를 먼저 정해야 한다).
 def group_bys() -> tuple[str, ...]:
     """분해 모델 탭 '노선·생활권으로 묶어 보기' 의 기준들. 화면의 버튼이 이 목록에서 나온다."""
-    from app.services.model_view import GROUP_BY
+    from app.realestate.services.model_view import GROUP_BY
 
     return tuple(GROUP_BY)
 
 
 def macro_metrics() -> tuple[str, ...]:
-    from app.services.macro import METRICS
+    from app.realestate.services.macro import METRICS
 
     return tuple(m["key"] for m in METRICS if m.get("card", True))
 MACRO_SINCE = ("202401", "202001", "201201")
@@ -112,8 +112,8 @@ def quote_complex_ids() -> list[int]:
     그 단지들의 상세만 내보내면 된다 — 2,469곳을 전부 내보낼 이유가 없다."""
     from sqlalchemy import select
 
-    from app.db import SessionLocal
-    from app.models import Quote
+    from app.core.db import SessionLocal
+    from app.realestate.models import Quote
 
     with SessionLocal() as db:
         ids = db.execute(select(Quote.complex_id).distinct()).scalars().all()
@@ -248,8 +248,8 @@ def git_head() -> str | None:
 def data_counts() -> dict:
     from sqlalchemy import func, select
 
-    from app.db import SessionLocal
-    from app.models import Complex, Quote, Trade
+    from app.core.db import SessionLocal
+    from app.realestate.models import Complex, Quote, Trade
 
     with SessionLocal() as db:
         return {
