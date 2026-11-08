@@ -27,7 +27,8 @@ description: 작업에 필요한 파일·코드·문서를 이 저장소에서 �
 
 - **엔드포인트** — 라우터 `APIRouter(prefix=…)` ↔ `frontend/src/api.js` ↔
   `backend/scripts/export_static.py` 의 `build_plan` ↔ 부르는 화면.
-- **탭 id** — `App.jsx` 의 `TABS`(정적에 실리는지는 `static`) ↔ `realestate/topics/registry.js`.
+- **탭** — 자산마다 `realestate/tabs.jsx` 의 `TABS` 가 이름·순서·정적 여부·화면을 다 든다. 정적에 싣는
+  탭은 그 응답이 `export_static.py` 의 `build_plan` 에도 있어야 한다.
 - **코드 → 문서** — 코드 주석의 `docs/…` 경로와 `'절 제목'`. 문서 → 코드는 백틱 안의 이름·경로.
 - **화면 문구** — 탭 이름을 바꾸면 조사까지 따라 바뀐다(받침).
 

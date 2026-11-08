@@ -179,7 +179,9 @@ def check_lists(r: Result) -> None:
 # ──────────────────────────────────────────────────────────
 def check_labels(r: Result) -> None:
     header("이름 — 폐기된 UI 이름이 문서에 남아 있나")
-    app = (FRONT / "App.jsx").read_text(encoding="utf-8")
+    # 자산 이름은 App.jsx 의 ASSETS 에, 탭 이름은 자산마다 src/<자산>/tabs.jsx 에 있다.
+    app = "\n".join(p.read_text(encoding="utf-8")
+                    for p in [FRONT / "App.jsx", *sorted(FRONT.glob("*/tabs.jsx"))])
     live = set(re.findall(r"label:\s*'([^']+)'", app))
     print(f"  지금 탭: {' · '.join(sorted(live))}")
 
