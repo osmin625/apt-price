@@ -13,6 +13,7 @@ import math
 import os
 import pickle
 from collections import OrderedDict
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
@@ -34,10 +35,19 @@ CACHE_SIZE = 4
 _cache: "OrderedDict[tuple, dict]" = OrderedDict()
 
 
-def _cache_key(db, months: int, spec: str) -> tuple:
-    # 거래가 추가되면 자동으로 무효화된다.
-    stamp = db.execute(select(func.max(Trade.id), func.count(Trade.id))).one()
-    return (months, spec, stamp[0], stamp[1])
+def _cache_key(db, months: int, spec: str, today: date | None = None) -> tuple:
+    """적합 캐시의 키. 표본을 정하는 것이 바뀌면 키도 바뀌어야 한다 — **입력과 날짜.**
+
+    - 입력: `hedonic.input_stamp` — `load_rows` 가 읽는 거래·단지·역·입지·동 도보의 요약.
+      예전에는 거래(max id·건수)만 봐서, 새 단지에 도보경로·입지를 채워도 그 단지가 빠진
+      옛 적합이 나갔다(자세한 것은 `input_stamp` 주석).
+    - 날짜: 표본은 `date.today() - 31*months` 로 자른다. 날짜가 키에 없어서 새 거래가 없는
+      날에는 **옛 창의 적합**이 나갔다. 실거래 적재가 멈춘 2026-10-16 ~ 11-08 동안 그랬고,
+      코드 이동 PR(#70)의 내보내기 대조에서 34개 파일이 달라 드러났다.
+
+    날짜를 넣으면 하루의 첫 요청은 새로 적합한다(수십 초). 매일 06:30 동기화가 그 몫을 낸다.
+    """
+    return (months, spec, hedonic.input_stamp(db), (today or date.today()).isoformat())
 
 
 def load_truth() -> dict | None:

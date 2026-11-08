@@ -98,6 +98,10 @@ def edit(rel: str, fn):
 
 
 CASES = [
+    # 실제로 빠져 있던 모양 — 검사가 늘었는데 CLAUDE.md 목록에는 안 적었다.
+    ("목록 — CLAUDE.md 검증 목록에서 하나 지움", "CLAUDE.md",
+     lambda s: s.replace("- `scripts/verify_fit_orphan.py`", "- `scripts/verify_fit_orphaN.py`", 1),
+     "verify_fit_orphan"),
     ("목록 — 테이블을 하나 지움", "docs/engineering/architecture.md",
      lambda s: s.replace("ComplexAmenity /", "/", 1), "ComplexAmenity"),
     # 실제로 빠져 있던 모양 그대로 — 이름이 다른 파일(`ingest_kapt.py`)의 꼬리와 겹친다.

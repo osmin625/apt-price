@@ -150,6 +150,17 @@ def check_lists(r: Result) -> None:
     )
     sweep("스크립트", scripts)
 
+    # 검증·교차검증 스크립트는 CLAUDE.md 의 목록에도 '무엇을 지키는지' 가 한 줄씩 있어야
+    # 한다. checkup 이 찾아서 돌리므로 실행에는 상관없지만, 목록이 둘 빠진 채로 있었다
+    # (verify_fit_orphan·cv_reflect) — 다음 사람은 그런 검사가 있는 줄 모른다.
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    guards = sorted(p.name for p in (BACKEND / "scripts").glob("*.py")
+                    if p.name.startswith(("verify_", "cv_")))
+    unlisted = [n for n in guards if f"`scripts/{n}`" not in claude]
+    print(f"  {'검증 목록':<10} 실물 {len(guards):>3}개 · 빠짐 {len(unlisted)}개")
+    for n in unlisted:
+        r.bad(f"CLAUDE.md 의 검증 목록에 `scripts/{n}` 가 없습니다 — 무엇을 지키는지 한 줄 적으세요")
+
     app = BACKEND / "app"
     sweep("앱", sorted(p.name for p in app.glob("*.py") if p.name not in ARCH_SKIP))
     # 하위 패키지는 **경로째** 찾는다. `quotes.py` 가 routers 와 services 에 둘 다

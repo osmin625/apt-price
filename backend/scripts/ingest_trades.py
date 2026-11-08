@@ -36,7 +36,13 @@ from app.realestate.models import Base, Complex, Trade  # noqa: E402
 
 
 def _pending_followups(db) -> list[tuple[str, int, str]]:
-    """좌표·도보경로·입지가 빈 단지를 센다. 순서대로 돌려야 한다."""
+    """좌표·도보경로·입지가 빈 단지를 센다. 순서대로 돌려야 한다.
+
+    **좌표가 없는 단지도 뒤 단계에 센다.** 예전에는 도보경로·입지를 '좌표가 있는 단지'
+    중에서만 세어, 새 단지는 좌표 단계에 가려 뒤 둘이 안내되지 않았다. 2026-11-09 적재에서
+    새 단지 8곳에 `geocode` 만 안내됐고, 돌리고 나서야 `verify_sync` 가 나머지 둘을 잡았다.
+    처음부터 세 단계를 다 보여 준다(순서는 그대로 지켜야 한다).
+    """
     from app.realestate.models import ComplexAmenity
 
     out = []
@@ -46,14 +52,12 @@ def _pending_followups(db) -> list[tuple[str, int, str]]:
     if n:
         out.append(("scripts.geocode", n, "좌표"))
     n = db.scalar(
-        select(func.count()).select_from(Complex)
-        .where(Complex.lat.isnot(None), Complex.walk_seconds.is_(None))
+        select(func.count()).select_from(Complex).where(Complex.walk_seconds.is_(None))
     ) or 0
     if n:
         out.append(("scripts.route_walk", n, "도보경로"))
     n = db.scalar(
         select(func.count()).select_from(Complex)
-        .where(Complex.lat.isnot(None))
         .where(~Complex.id.in_(select(ComplexAmenity.complex_id)))
     ) or 0
     if n:

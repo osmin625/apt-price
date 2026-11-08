@@ -109,7 +109,7 @@ def target_of(out: Path, path: str, params: dict) -> Path:
 
 def quote_complex_ids() -> list[int]:
     """호가가 하나라도 있는 단지. 매물 순위에서 단지명을 누르면 상세로 가므로,
-    그 단지들의 상세만 내보내면 된다 — 2,469곳을 전부 내보낼 이유가 없다."""
+    그 단지들의 상세만 내보내면 된다 — 단지 전부(2천여 곳)를 내보낼 이유가 없다."""
     from sqlalchemy import select
 
     from app.core.db import SessionLocal
@@ -159,8 +159,13 @@ def build_plan(with_quotes: bool) -> list[Req]:
     # 처음에 `months=12` 로만 내보냈다가 라이브에서 404 가 났다(그림 셋이 통째로
     # 비었다). 백엔드 기본값이 months=12 라 내용은 같지만 **파일 이름이 다르다.**
     # months 를 붙여 부를 수도 있으니 둘 다 내보낸다.
-    plan.append(Req("/api/macro/insights", {}))
-    plan.append(Req("/api/macro/insights", {"months": 12}))
+    #
+    # **적합 뒤에 부른다**(아래 기간 고리 다음). 인사이트는 적합이 이미 캐시에 있을 때만
+    # '모델과의 어긋남' 을 붙이고(`has_fit`), 없으면 그 그림을 비운다 — 화면을 수십 초
+    # 막지 않으려는 것이다. 예전에는 적합보다 먼저 불렀는데도 전날 캐시가 남아 있어 우연히
+    # 채워졌다. 적합 캐시 키에 날짜를 넣자(model_view._cache_key) 매일 첫 내보내기에서
+    # 캐시가 비어 그 그림이 빠졌다 — 캐시를 켠 내보내기 두 번이 이 파일만 달라 드러났다.
+    insights = [Req("/api/macro/insights", {}), Req("/api/macro/insights", {"months": 12})]
 
     # 매크로는 카드가 있는 지표 × 기간 셋. 화면의 선택지와 1:1 로 맞춘다.
     for m in macro_metrics():
@@ -179,6 +184,9 @@ def build_plan(with_quotes: bool) -> list[Req]:
         # 분해 모델 탭 — 묶는 기준마다 하나.
         for by in group_bys():
             plan.append(Req("/api/model/groups", {"months": m, "by": by}))
+
+    # 적합(months=12)이 위에서 데워진 뒤라 '모델과의 어긋남' 까지 담긴다.
+    plan += insights
 
     if with_quotes:
         for m in MONTHS:
@@ -299,7 +307,8 @@ def main() -> int:
         1단계 결과(지도 응답)를 읽어야 정해지므로 처음부터 알 수 없다."""
         nonlocal ok, absent, total_bytes
         say(f"{label} — 요청 {len(plan)}건 -> {out}")
-        # 도보 경로는 1,851건이라 한 줄씩 적으면 로그가 읽히지 않는다. 묶어서 적는다.
+        # 도보 경로는 지도 단지 수만큼(천 건대)이라 한 줄씩 적으면 로그가 읽히지 않는다.
+        # 백 건이 넘는 계획은 묶어서 적는다.
         verbose = len(plan) <= 120
         for i, req in enumerate(plan, 1):
             t0 = time.perf_counter()
@@ -344,6 +353,17 @@ def main() -> int:
         walks = walk_path_plan(out)
         run(walks, "2단계: 도보 경로")
 
+    # 인사이트가 적합 없이 나갔으면 실패로 센다. 그림 하나만 비고 나머지는 멀쩡해서
+    # 화면으로는 알 수 없다 — 부르는 순서가 바뀌면 다시 생긴다(build_plan 의 insights 주석).
+    from app.realestate.services import hedonic
+
+    if hedonic.available():
+        for name in ("default", "months=12"):
+            p = out / "macro" / "insights" / f"{name}.json"
+            if p.exists() and not json.loads(p.read_text(encoding="utf-8")).get("has_fit"):
+                failures.append({"path": "/api/macro/insights", "params": name,
+                                 "error": "has_fit=false — 적합보다 먼저 불렀다"})
+
     elapsed = time.perf_counter() - t_all
     attempted = len(base) + len(walks)
 
@@ -351,10 +371,9 @@ def main() -> int:
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "git_head": git_head(),
         "months": list(MONTHS),
-        # 지도 탭이 보이는지는 프론트의 VITE_STATIC_MAP 이 정한다. 데이터는 늘 있다.
-        # 프론트의 탭 id 와 같아야 한다. 합쳤다가 다시 나누면서 market -> micro 가 됐다.
-        "tabs": (["micro", "macro", "supply", "regime", "tenure", "map"]
-                 + (["ranking"] if with_quotes else [])),
+        # 예전에는 여기 탭 id 목록("tabs")을 손으로 적었다. 읽는 곳이 없는데 App.jsx 와
+        # 따로 유지돼, 분해 모델(model) 탭이 생긴 뒤에도 목록에 없었다 — 아무도 안 읽는
+        # 목록은 틀려도 아무도 모른다. 정적에 실리는 탭은 App.jsx 의 static 이 정한다.
         "includes_quotes": with_quotes,
         "data": data_counts(),
         "files": ok,
