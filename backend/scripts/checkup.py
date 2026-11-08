@@ -408,7 +408,8 @@ def stray_dirs(claude_dir_children: list[str], worktrees: dict[str, str | None],
     out = []
     known = set(worktrees)
     for d in claude_dir_children:
-        if d.endswith("/worktrees") or d in known:
+        # worktrees 는 git 이 관리하고, skills 는 저장소에 커밋한 스킬이다(.gitignore 예외).
+        if d.endswith(("/worktrees", "/skills")) or d in known:
             continue
         out.append(f"git 이 모르는 작업 폴더 {d.rsplit('/', 1)[-1]} — 옛 CLAUDE.md·코드 "
                    f"사본이 검색에 섞입니다. 쓰는 세션이 없으면 지우세요")

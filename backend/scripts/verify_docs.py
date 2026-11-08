@@ -140,7 +140,9 @@ def self_test() -> bool:
 
 def main() -> int:
     docs = sorted((ROOT / "docs").rglob("*.md"))
-    targets = [ROOT / "CLAUDE.md", ROOT / "README.md", *docs]
+    # 스킬(.claude/skills/*/SKILL.md)도 docs 를 가리킨다 — 문서를 옮기면 같이 깨진다.
+    skills = sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
+    targets = [ROOT / "CLAUDE.md", ROOT / "README.md", *docs, *skills]
     anchors = {p.resolve(): anchors_of(p) for p in targets}
 
     bad: list[str] = []
