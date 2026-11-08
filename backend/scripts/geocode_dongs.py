@@ -35,10 +35,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app import pricing  # noqa: E402
-from app.clients.kakao import KakaoError, search_keyword  # noqa: E402
-from app.db import SessionLocal, engine  # noqa: E402
-from app.models import Base, Complex, ComplexDong, Station, Trade  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.clients.kakao import KakaoError, search_keyword  # noqa: E402
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.realestate.models import Base, Complex, ComplexDong, Station, Trade  # noqa: E402
 
 
 def build_query(cx: Complex, dong: str) -> str:

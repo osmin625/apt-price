@@ -27,8 +27,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import tenure as T  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import tenure as T  # noqa: E402
 
 JUMP = 0.08
 

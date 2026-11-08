@@ -27,9 +27,9 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.clients.kakao import KakaoError, find_station  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Station  # noqa: E402
+from app.realestate.clients.kakao import KakaoError, find_station  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Station  # noqa: E402
 
 # (역명, 노선, 강남역까지 전철 소요시간(분), 환승 횟수)
 #

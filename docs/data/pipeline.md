@@ -123,7 +123,7 @@ python -m scripts.validate_model --coverage 40
 
 ## 대상 지역을 넓히기
 
-`app/clients/molit.py` 의 `DISTRICTS` 에 시군구 코드를 더하면 그대로 확장된다.
+`app/realestate/clients/molit.py` 의 `DISTRICTS` 에 시군구 코드를 더하면 그대로 확장된다.
 분석 로직에 특정 도시 전용 가정은 없다.
 
 ### 코드를 기억으로 적지 않는다

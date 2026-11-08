@@ -103,13 +103,13 @@ CASES = [
     # 실제로 빠져 있던 모양 그대로 — 이름이 다른 파일(`ingest_kapt.py`)의 꼬리와 겹친다.
     # 부분 문자열로 찾던 때는 이것이 통과했다.
     ("목록 — 다른 파일 꼬리와 겹치는 이름", "docs/engineering/architecture.md",
-     lambda s: s.replace("    clients/kapt.py ", "    clients/zzz.py ", 1), "clients/kapt.py"),
+     lambda s: s.replace("    realestate/clients/kapt.py ", "    realestate/clients/zzz.py ", 1), "realestate/clients/kapt.py"),
     # routers 와 services 에 같은 이름이 있다. 한쪽만 지워도 잡혀야 한다.
     ("목록 — 같은 이름의 서비스만 지움", "docs/engineering/architecture.md",
-     lambda s: s.replace("    services/quotes.py ", "    services/zzz.py ", 1), "services/quotes.py"),
+     lambda s: s.replace("    realestate/services/quotes.py ", "    realestate/services/zzz.py ", 1), "realestate/services/quotes.py"),
     ("이름 — 문서에 옛 탭 이름", "docs/engineering/performance.md",
      lambda s: s + "\n옛 이름 시장 분석 을 적어 본다.\n", "시장 분석"),
-    ("계약 — 프론트가 없는 키를 읽음", "frontend/src/components/FactorHint.jsx",
+    ("계약 — 프론트가 없는 키를 읽음", "frontend/src/realestate/components/FactorHint.jsx",
      # 순위 payload 를 단지/유닛 두 조각으로 나누면서 `premium_pct` 가 사라졌다.
      # 이 시험이 "못 바꿨다" 로 죽어서 알았다 — 시험도 같이 뒤처진다.
      lambda s: s.replace("p.complex", "p.없는키", 1), "없는키", True),
@@ -120,7 +120,7 @@ CASES = [
      lambda s: s.replace("/model/parse-bulk", "/model/parse-bulk_DISABLED", 1), "parse-bulk"),
     # api.js 에는 그대로 두고 **화면의 호출만** 지운다. 화면에서 기능을 빼면 실제로
     # 이 모양이 된다(A·B 비교를 뺀 뒤 `/model/compare` 가 2주를 살아 있는 척했다).
-    ("죽은 API — 화면의 호출만 지움", "frontend/src/views/BulkPaste.jsx",
+    ("죽은 API — 화면의 호출만 지움", "frontend/src/realestate/views/BulkPaste.jsx",
      lambda s: s.replace("api.parseBulk(", "api.parseBulkGone(", 1), "parseBulk"),
     # 경로 변수가 있는 엔드포인트. 첫 `{` 앞까지만 보던 때는 `/quotes/memo-tags` 가
     # 대신 살려 줘서 못 잡았다.
@@ -138,31 +138,31 @@ CASES = [
     # 준공선이 통째로 사라졌던 모양. 쓰는 쪽의 이름을 없는 것으로 바꿔 본다.
     # 처음에는 Charts.jsx 를 고쳤는데, 죽은 코드를 치우며(512bd50) 그 줄이 사라져
     # 시험이 "못 바꿨다" 로 죽었다. 지금 그 변수를 쓰는 곳으로 옮겼다.
-    ("CSS 변수 — 없는 것을 쓴다", "frontend/src/views/SupplyView.jsx",
+    ("CSS 변수 — 없는 것을 쓴다", "frontend/src/realestate/views/SupplyView.jsx",
      lambda s: s.replace("var(--series-1)", "var(--없는변수)", 1), "없는변수"),
     # 화면 문구에 그때 잰 값을 얼린 모양 — 실제로 있던 것 그대로('순위상관이 0.352').
-    ("문구 — 화면 문구에 얼린 상관", "frontend/src/views/MacroView.jsx",
+    ("문구 — 화면 문구에 얼린 상관", "frontend/src/realestate/views/MacroView.jsx",
      lambda s: s.replace("'올랐는데 거래는 평상시보다 적다.'",
                          "'순위상관이 0.352 밖에 안 된다.'", 1),
      "얼린 값"),
-    ("문구 — note 에 얼린 건수", "backend/app/routers/supply.py",
+    ("문구 — note 에 얼린 건수", "backend/app/realestate/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "미분양 14,509호. 적정 공급량은 가구", 1), "얼린 값"),
     # **걸리지 말아야 할 때** — 템플릿에서 계산해 넣는 값은 얼린 것이 아니다.
-    ("문구 — 계산해 넣는 값은 둔다(통과해야 함)", "frontend/src/views/MacroView.jsx",
+    ("문구 — 계산해 넣는 값은 둔다(통과해야 함)", "frontend/src/realestate/views/MacroView.jsx",
      lambda s: s.replace("'올랐는데 거래는 평상시보다 적다.'",
                          "`순위상관 ${fmt(0.352, 3)} 이다.`", 1),
      None),
     # 설명은 호버로 접는다. 카드 아래에 긴 문단을 펼치면 걸린다.
-    ("문구 — 긴 설명을 펼쳐 둠", "frontend/src/views/MarketView.jsx",
+    ("문구 — 긴 설명을 펼쳐 둠", "frontend/src/realestate/views/MarketView.jsx",
      lambda s: s.replace("      <FactorPanel months={filters.months} />",
                          "      <p className=\"sub\">이 문단은 일부러 길게 적은 설명입니다. 카드 아래에 이렇게 두세 줄씩 펼쳐 두면 그림보다 글이 먼저 보이고, 같은 말이 탭마다 되풀이됩니다.</p>\n      <FactorPanel months={filters.months} />", 1),
      "펼쳐 둔 설명"),
     # **걸리지 말아야 할 때** — 같은 문단이라도 Hint 안에 접혀 있으면 괜찮다.
-    ("문구 — 긴 설명을 Hint 로 접음(통과해야 함)", "frontend/src/views/MarketView.jsx",
+    ("문구 — 긴 설명을 Hint 로 접음(통과해야 함)", "frontend/src/realestate/views/MarketView.jsx",
      lambda s: s.replace("      <FactorPanel months={filters.months} />",
                          "      <p className=\"muted small\">요약 <Hint notes={[]}>이 문단은 일부러 길게 적은 설명입니다. 카드 아래에 이렇게 두세 줄씩 펼쳐 두면 그림보다 글이 먼저 보이고, 같은 말이 탭마다 되풀이됩니다.</Hint></p>\n      <FactorPanel months={filters.months} />", 1),
      None),
-    ("문구 — note 에 마크다운", "backend/app/routers/supply.py",
+    ("문구 — note 에 마크다운", "backend/app/realestate/routers/supply.py",
      lambda s: s.replace("적정 공급량은 가구", "**적정 공급량**은 가구", 1), "마크다운"),
     ("조사 — 받침에 안 맞는 조사", "docs/engineering/performance.md",
      lambda s: s.replace("**호가 분석**은 쌓인", "**호가 분석**는 쌓인", 1),
@@ -184,10 +184,10 @@ CASES = [
     ("이름 — 문서가 없는 함수를 부름", "docs/engineering/performance.md",
      lambda s: s + "\n바뀐 이름 `_no_such_helper()` 를 적어 본다.\n", "_no_such_helper"),
     ("이름 — 문서가 없는 파일을 부름", "docs/engineering/performance.md",
-     lambda s: s + "\n`components/NoSuchPanel.jsx` 를 적어 본다.\n", "NoSuchPanel.jsx"),
+     lambda s: s + "\n`realestate/components/NoSuchPanel.jsx` 를 적어 본다.\n", "NoSuchPanel.jsx"),
     ("이름 — 있는 이름은 둔다(통과해야 함)", "docs/engineering/performance.md",
      lambda s: s + "\n`regime.hist_z` · `_undo_ytd()` · `DATABASE_URL` · "
-                   "`components/Modal.jsx` · `clr.dll` 을 적어 본다.\n", None),
+                   "`shared/Modal.jsx` · `clr.dll` 을 적어 본다.\n", None),
     # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
     ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
      lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),

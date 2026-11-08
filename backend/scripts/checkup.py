@@ -31,7 +31,7 @@
     [!]  살펴볼 것. 사람이 판단한다 — 종료 코드에 영향 없음.
     [OK] 통과.
 
-군살은 **전부 [!]** 다. 지울지는 사람이 정한다 — `services/aspect.py` 처럼 측정이
+군살은 **전부 [!]** 다. 지울지는 사람이 정한다 — `realestate/services/aspect.py` 처럼 측정이
 자산이라 남기는 것이 있다.
 """
 
@@ -206,8 +206,8 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     print("\n== 신선도 ==")
     from sqlalchemy import func, select
 
-    from app.db import SessionLocal
-    from app.models import BldRun, ComplexAmenity, KaptRun, RebStat, Trade
+    from app.core.db import SessionLocal
+    from app.realestate.models import BldRun, ComplexAmenity, KaptRun, RebStat, Trade
 
     with SessionLocal() as db:
         last_trade = db.scalar(select(func.max(Trade.deal_date)))
@@ -236,7 +236,7 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     say("최신 공표통계", days_since(reb_date, today), STALE["reb_days"],
         "python -m scripts.ingest_reb")
 
-    from app.clients import ecos
+    from app.realestate.clients import ecos
 
     with SessionLocal() as db:
         last_ecos = dict(db.execute(

@@ -17,8 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import regime as R  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import regime as R  # noqa: E402
 
 
 def show(name: str, o: dict) -> None:

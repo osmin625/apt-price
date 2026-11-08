@@ -39,10 +39,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app.clients.molit import DISTRICTS  # noqa: E402
-from app.clients.reb import SOUTH_GG_CODE  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import RebStat  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
+from app.realestate.clients.reb import SOUTH_GG_CODE  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import RebStat  # noqa: E402
 from scripts.ingest_supply import upsert  # noqa: E402
 
 DEFAULT = Path(__file__).resolve().parent.parent / "data" / "manual"

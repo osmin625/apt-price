@@ -201,10 +201,10 @@ python -m scripts.ingest_supply        # 서울·경기 × 6지표
 
 | 무엇 | 어디 |
 |---|---|
-| 표 선택·CLS_ID·YTD 되돌리기 | `backend/app/clients/reb.py` |
-| 적정 공급·파이프라인·선행성·노후 압력 | `backend/app/services/supply.py` |
-| API | `backend/app/routers/supply.py` (`/api/supply/overview` 하나) |
-| 화면 | `frontend/src/views/SupplyView.jsx` |
+| 표 선택·CLS_ID·YTD 되돌리기 | `backend/app/realestate/clients/reb.py` |
+| 적정 공급·파이프라인·선행성·노후 압력 | `backend/app/realestate/services/supply.py` |
+| API | `backend/app/realestate/routers/supply.py` (`/api/supply/overview` 하나) |
+| 화면 | `frontend/src/realestate/views/SupplyView.jsx` |
 | 적재 | `backend/scripts/ingest_supply.py` |
 
 엔드포인트가 하나인 이유: 카드 여섯 장이 전부 같은 적재를 본다. 나눠 부르면 화면이

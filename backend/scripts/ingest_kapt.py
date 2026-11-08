@@ -30,11 +30,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app import pricing  # noqa: E402
-from app.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
-from app.clients.molit import DISTRICTS  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import Complex  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.realestate.clients.kapt import KaptError, KaptNotSubscribed, basis_info, list_complexes  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import Complex  # noqa: E402
 
 
 def check() -> int:

@@ -50,8 +50,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import regime as R  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import regime as R  # noqa: E402
 
 # 운영 모델의 '준공 물량' 정의(2026-10-18 에 '공급' 으로 바뀌기 전). 비교용으로만 둔다.
 DONE = R.Factor("done", "공급", "준공 물량", "done", "41", "경기", "roll12_log", "",

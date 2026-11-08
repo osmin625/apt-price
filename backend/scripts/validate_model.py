@@ -41,8 +41,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import hedonic  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import hedonic  # noqa: E402
 from scripts import seed_demo  # noqa: E402
 
 PASS = "PASS"

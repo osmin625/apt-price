@@ -42,10 +42,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app import pricing  # noqa: E402
-from app.config import BASE_DIR  # noqa: E402
-from app.db import SessionLocal, engine  # noqa: E402
-from app.models import (  # noqa: E402
+from app.realestate import pricing  # noqa: E402
+from app.core.config import BASE_DIR  # noqa: E402
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.realestate.models import (  # noqa: E402
     Base,
     Complex,
     ComplexStation,

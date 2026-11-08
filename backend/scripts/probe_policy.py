@@ -29,7 +29,7 @@ import sys
 import time
 import urllib.request
 
-from app.services.policy import POLICY
+from app.realestate.services.policy import POLICY
 
 UA = {"User-Agent": "Mozilla/5.0"}
 GONE = "삭제되었거나 조회가 되지 않는 자료"

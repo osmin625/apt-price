@@ -31,8 +31,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("FIT_IN_PROCESS", "1")
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import model_view as mv  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import model_view as mv  # noqa: E402
 
 MONTHS = 24
 

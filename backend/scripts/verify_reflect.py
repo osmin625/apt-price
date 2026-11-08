@@ -29,8 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 from scipy.optimize import nnls  # noqa: E402
 
-from app.db import SessionLocal  # noqa: E402
-from app.services import regime  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.services import regime  # noqa: E402
 
 TOL = 1e-6
 

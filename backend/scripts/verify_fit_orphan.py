@@ -5,7 +5,7 @@
 
 ## 왜
 
-`services/fit_worker.py` 의 워커는 부모가 강제 종료되면 고아로 남았다. 2026-10-18 에
+`realestate/services/fit_worker.py` 의 워커는 부모가 강제 종료되면 고아로 남았다. 2026-10-18 에
 부모 없는 워커 8개가 잡혔고, 각자 `.claude/wt-*/backend` 를 작업 디렉터리로 쥐고 있어
 워크트리를 지울 수 없었다. 지금은 워커가 부모의 센티널을 기다리다 스스로 끝난다
 (`fit_worker._watch_parent`).
@@ -44,7 +44,7 @@ PARENT = r"""
 import multiprocessing, os, sys, time
 from concurrent.futures import ProcessPoolExecutor
 sys.path.insert(0, sys.argv[2])
-from app.services import fit_worker
+from app.realestate.services import fit_worker
 if sys.argv[1] == "bare":
     pool = ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
 else:

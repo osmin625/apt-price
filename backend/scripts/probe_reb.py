@@ -29,8 +29,8 @@ import argparse
 import sys
 import time
 
-from app.clients import reb
-from app.clients.molit import DISTRICTS
+from app.realestate.clients import reb
+from app.realestate.clients.molit import DISTRICTS
 
 
 def main() -> int:

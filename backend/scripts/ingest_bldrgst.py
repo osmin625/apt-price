@@ -49,10 +49,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert  # noqa: E402
 
-from app.clients import bldrgst as br  # noqa: E402
-from app.clients.molit import DISTRICTS  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.models import BldRun, BldUnit  # noqa: E402
+from app.realestate.clients import bldrgst as br  # noqa: E402
+from app.realestate.clients.molit import DISTRICTS  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
+from app.realestate.models import BldRun, BldUnit  # noqa: E402
 
 MANUAL = Path(__file__).resolve().parent.parent / "data" / "manual"
 

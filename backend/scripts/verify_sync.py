@@ -28,7 +28,7 @@
 
 ## 무엇을 하지 않나
 
-- **죽은 코드를 지우지 않는다.** 보고만 한다. `services/aspect.py` 는 쓰이지 않지만
+- **죽은 코드를 지우지 않는다.** 보고만 한다. `realestate/services/aspect.py` 는 쓰이지 않지만
   측정이 자산이라 남겼다. 지울지는 사람이 정한다.
 - **싱크 0 을 목표로 하지 않는다.** 변경과 파급 사이에는 늘 틈이 생긴다. 목표는
   **틈이 조용하지 않게** 하는 것이다.
@@ -123,7 +123,7 @@ def check_lists(r: Result) -> None:
 
     def listed(name: str) -> bool:
         # **부분 문자열로 찾지 않는다.** 예전에는 `n in arch` 였는데, 그러면
-        # `clients/kapt.py` 가 빠져 있어도 `ingest_kapt.py` 가 있어서 통과했다.
+        # `realestate/clients/kapt.py` 가 빠져 있어도 `ingest_kapt.py` 가 있어서 통과했다.
         # `reb.py`(ingest_reb)·`macro.py`(ingest_macro) 도 같은 식으로 빠진 채였다.
         # 앞이 글자·`_`·`.` 이면 다른 파일 이름의 꼬리다.
         return re.search(r"(?<![\w.])" + re.escape(name) + r"(?!\w)", arch) is not None
@@ -135,9 +135,10 @@ def check_lists(r: Result) -> None:
             r.bad(f"architecture.md 에 {label} '{n}' 가 없습니다")
 
     # 테이블: models.py 의 Base 상속 클래스
-    src = (BACKEND / "app" / "models.py").read_text(encoding="utf-8")
     tables = [
-        n.name for n in ast.parse(src).body
+        n.name
+        for mp in sorted((BACKEND / "app").glob("*/models.py"))
+        for n in ast.parse(mp.read_text(encoding="utf-8")).body
         if isinstance(n, ast.ClassDef)
         and any(getattr(b, "id", "") == "Base" for b in n.bases)
     ]
@@ -153,10 +154,12 @@ def check_lists(r: Result) -> None:
     sweep("앱", sorted(p.name for p in app.glob("*.py") if p.name not in ARCH_SKIP))
     # 하위 패키지는 **경로째** 찾는다. `quotes.py` 가 routers 와 services 에 둘 다
     # 있어서, 이름만 보면 한쪽이 빠져도 다른 쪽이 대신 통과시킨다.
-    for pkg, label in (("routers", "라우터"), ("services", "서비스"), ("clients", "클라이언트")):
-        sweep(label, sorted(
-            f"{pkg}/{p.name}" for p in (app / pkg).glob("*.py")
-            if p.name not in ARCH_SKIP
+    # 자산 패키지(core·realestate·stock …)마다, 하위 패키지까지 **경로째** 찾는다 —
+    # 자산이 늘면 같은 파일 이름이 자산마다 생긴다.
+    for pkg in sorted(d for d in app.iterdir() if (d / "__init__.py").exists()):
+        sweep(pkg.name, sorted(
+            p.relative_to(app).as_posix() for p in pkg.rglob("*.py")
+            if p.name not in ARCH_SKIP and "__pycache__" not in p.parts
         ))
 
 
@@ -297,7 +300,7 @@ def check_endpoints(r: Result) -> None:
           if p.exists() and p.name != "api.js"),
     ])
     found: list[tuple[str, str]] = []
-    for p in sorted((BACKEND / "app" / "routers").glob("*.py")):
+    for p in sorted((BACKEND / "app").glob("*/routers/*.py")):
         src = p.read_text(encoding="utf-8")
         m = re.search(r'APIRouter\(prefix="([^"]+)"', src)
         if not m:
@@ -330,12 +333,12 @@ def check_endpoints(r: Result) -> None:
 # ──────────────────────────────────────────────────────────
 # (프론트 파일, 접근자 변수, 페이로드를 만드는 함수 이름)
 CONTRACTS = [
-    ("views/MarketView.jsx", "f", "factor_payload.factors[]"),
+    ("realestate/views/MarketView.jsx", "f", "factor_payload.factors[]"),
     # 변수는 `parts` 가 아니라 **합친 `p`** 다. 순위 payload 를 단지/유닛 두 조각으로
     # 나누면서 컴포넌트가 `parts.xxx` 를 더는 읽지 않게 됐고, 그래서 이 검사가
     # **읽는 키 0개**로 조용히 비어 있었다. 계약 검사가 아무것도 안 보고 통과하는
     # 것이 제일 나쁘다 — verify_sync_guard 가 "못 잡음" 을 내서 알았다.
-    ("components/FactorHint.jsx", "p", "ranking.factor_parts"),
+    ("realestate/components/FactorHint.jsx", "p", "ranking.factor_parts"),
 ]
 
 
@@ -352,8 +355,8 @@ def strip_comments(src: str) -> str:
 
 def payload_keys(months: int = 12):
     """실제 페이로드에서 키를 뽑는다. 적합이 필요하므로 실패하면 None."""
-    from app.db import SessionLocal
-    from app.services import hedonic, model_view as mv
+    from app.core.db import SessionLocal
+    from app.realestate.services import hedonic, model_view as mv
 
     if not hedonic.available():
         return None
@@ -412,8 +415,8 @@ def check_data(r: Result) -> None:
     try:
         from sqlalchemy import func, select
 
-        from app.db import SessionLocal
-        from app.models import Complex, ComplexAmenity
+        from app.core.db import SessionLocal
+        from app.realestate.models import Complex, ComplexAmenity
     except Exception as exc:  # noqa: BLE001
         print(f"  건너뜀 ({type(exc).__name__})")
         return
@@ -754,8 +757,10 @@ def check_dead_components(r: Result) -> None:
     시세는 중개거래 N건에 기반합니다' 안내를 넣었다. **한 번도 렌더링되지 않았다.**
     """
     header("프론트 — 아무 데서도 import 하지 않는 컴포넌트")
-    comps = sorted((FRONT / "components").glob("*.jsx")) + \
-        sorted((FRONT / "views").glob("*.jsx"))
+    # 공용(shared)과 자산마다의 components·views. topics 는 registry 가 부른다.
+    comps = (sorted((FRONT / "shared").glob("*.jsx"))
+             + sorted(FRONT.glob("*/components/*.jsx"))
+             + sorted(FRONT.glob("*/views/*.jsx")))
     body = "\n".join(
         p.read_text(encoding="utf-8")
         for p in FRONT.rglob("*.jsx")
@@ -898,7 +903,7 @@ def _looks_like_code(tok: str) -> bool:
 def check_doc_names(r: Result) -> None:
     """문서가 백틱으로 부르는 코드 이름·파일 경로가 아직 있나.
 
-    `_undo_ytd()`·`HH_SCALE`·`regime.hist_z`·`components/Modal.jsx` 같은 것이다. 함수나
+    `_undo_ytd()`·`HH_SCALE`·`regime.hist_z`·`shared/Modal.jsx` 같은 것이다. 함수나
     파일 이름을 바꾸면 코드는 전부 따라가는데 문서는 따라가지 않는다 — 그리고 다음에
     그 문서를 읽은 사람(에이전트)은 없는 이름을 찾아 헤매거나, 더 나쁘면 **옛 이름으로
     새것을 만든다.** 2026-10-18 에 재 보니 걸린 것 다섯이 전부 거짓 양성이었다
@@ -928,7 +933,7 @@ def check_doc_names(r: Result) -> None:
             tok = tok.strip()
             if tok in NAME_OK:
                 continue
-            # 경로: `components/Modal.jsx`, `backend/scripts/ingest_supply.py`
+            # 경로: `shared/Modal.jsx`, `backend/scripts/ingest_supply.py`
             if "/" in tok and tok.endswith(_PATH_EXT) and not re.search(r"[*<>{}$ ]", tok):
                 n += 1
                 if not any((b / tok).exists() for b in [*bases, d.parent]):
@@ -969,7 +974,7 @@ def check_exemptions(r: Result) -> None:
     header("예외 — 예외 목록이 아직 있는 것을 가리키나")
     stale: list[str] = []
     routers = "\n".join(p.read_text(encoding="utf-8")
-                        for p in (BACKEND / "app" / "routers").glob("*.py"))
+                        for p in (BACKEND / "app").glob("*/routers/*.py"))
     for key in DEAD_OK:
         if key.startswith("/api/"):
             tail = key[len("/api"):]
@@ -980,7 +985,8 @@ def check_exemptions(r: Result) -> None:
         elif not (FRONT / key).exists():
             stale.append(f"DEAD_OK 의 `{key}` — 그런 컴포넌트가 없습니다")
     for name in ARCH_SKIP:
-        if not any((BACKEND / sub / name).exists() for sub in ("scripts", "app")):
+        if (not any((BACKEND / sub / name).exists() for sub in ("scripts", "app"))
+                and not any((BACKEND / "app").glob(f"*/{name}"))):
             stale.append(f"ARCH_SKIP 의 `{name}` — 그런 파일이 없습니다")
     docs = {p.name for p in (ROOT / "docs").rglob("*.md")}
     for name in {*LABEL_EXEMPT, *HISTORY_DOCS}:

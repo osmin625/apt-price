@@ -1,9 +1,9 @@
 # 붙여넣은 매물 — 우리 단지에 맞추고 메모를 읽는다
 
 붙여넣은 매물 텍스트를 **우리 데이터에 잇는** 규칙과 그 함정. 글자를 읽는 것
-(`services/listing_parse.py`)은 코드 주석이 사례와 함께 들고 있고, 여기는 읽은 값을
-어느 단지·어느 평형으로 볼지(`services/listing_match.py`), 중개사 메모를 어떻게 읽는지
-(`services/memo_tags.py`), 한 번에 얼마나 붙여넣을 수 있는지를 다룬다. 읽힌 매물이
+(`realestate/services/listing_parse.py`)은 코드 주석이 사례와 함께 들고 있고, 여기는 읽은 값을
+어느 단지·어느 평형으로 볼지(`realestate/services/listing_match.py`), 중개사 메모를 어떻게 읽는지
+(`realestate/services/memo_tags.py`), 한 번에 얼마나 붙여넣을 수 있는지를 다룬다. 읽힌 매물이
 화면에서 어떻게 값이 매겨지고 줄 서는지는 [호가 다루기](../screens/quotes.md) 에 있다.
 
 [데이터 파이프라인](pipeline.md) 에서 나왔다. 그 문서는 공공 API 에서 **우리가 모으는**
@@ -121,7 +121,7 @@ S-클래스는 실거래가 1건뿐이고 그마저 84.66㎡인데, 매물에는
 잘못 붙이면 남의 거래가 섞여 시세가 통째로 망가지지만, 안 붙이면 줄이 하나 비는 것뿐이다.
 
 거절된 매물은 **사용자가 고른다.** 일괄 붙여넣기의 `skipped` 에 후보가 실리고, 화면이
-이름 단위로 고르게 한다(`components/UnresolvedPicker.jsx`). 고른 '이름 → 단지' 는 서버가
+이름 단위로 고르게 한다(`realestate/components/UnresolvedPicker.jsx`). 고른 '이름 → 단지' 는 서버가
 이름 매칭보다 먼저 쓴다(`BulkRequest.name_map`).
 
 ## 중개사 메모 — 울타리가 있어서 추측하지 않아도 된다

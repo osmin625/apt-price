@@ -33,8 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import inspect, text  # noqa: E402
 
-from app.db import engine  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.core.db import engine  # noqa: E402
+from app.realestate.models import Base  # noqa: E402
 
 
 def sqlite_type(col) -> str:

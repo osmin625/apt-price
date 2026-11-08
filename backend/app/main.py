@@ -6,10 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
-from .config import settings
-from .db import SessionLocal, engine
-from .models import Base, Complex, ComplexStation, Station, Trade
-from .routers import (
+from .core.config import settings
+from .core.db import SessionLocal, engine
+from .realestate.models import Base, Complex, ComplexStation, Station, Trade
+from .realestate.routers import (
     analysis,
     complexes,
     macro,
@@ -20,7 +20,7 @@ from .routers import (
     supply,
     tenure,
 )
-from .services import fit_worker, hedonic, model_view
+from .realestate.services import fit_worker, hedonic, model_view
 
 # 주의: create_all 은 없는 '테이블'만 만들고 기존 테이블에 '컬럼'은 추가하지 않는다.
 # 스키마를 바꿨다면 `python -m scripts.seed_demo --recreate-schema` 로 재생성해야 한다.
