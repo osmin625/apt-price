@@ -1,82 +1,24 @@
 import { useEffect, useState } from 'react'
 
-import { api, snapshotMeta, STATIC_MAP, STATIC_MODE } from './api'
+import { api, snapshotMeta, STATIC_MODE } from './api'
 import { scrollToChart, TabContext } from './shared/ChartLink'
 import Hint from './shared/Hint'
-import MacroView from './realestate/views/MacroView'
-import MarketView from './realestate/views/MarketView'
 import ComplexDetail from './realestate/views/ComplexDetail'
-import MapView from './realestate/views/MapView'
-import ModelView from './realestate/views/ModelView'
-import CompareView from './realestate/views/CompareView'
-import RankingView from './realestate/views/RankingView'
-import RegimeView from './realestate/views/RegimeView'
-import SupplyView from './realestate/views/SupplyView'
-import TenureView from './realestate/views/TenureView'
-
-/**
- * `static: true` 인 탭만 정적 사이트에 실린다.
- *
- * 나머지는 서버가 필요해서 빼는 것이 아니라, **서버 없이는 틀린 답을 내기 때문에**
- * 뺀다. 매물 분석은 붙여넣은 텍스트를 파싱하고 그 자리에서 평가하므로 미리 파일로
- * 만들어 둘 수가 없다. 분해 모델은 만들 수는 있지만 아직 안 넣었다 —
- * export_static.py 의 목록에 넣고 여기 `static: true` 만 켜면 된다.
- *
- * 지도는 데이터가 아니라 **키 때문에** 조건부다. 응답은 늘 내보내지만, 카카오 JS
- * 키가 공개 번들에 들어가야 하므로 켜는 것을 의도적인 행위로 만들었다
- * (`VITE_STATIC_MAP=1`). 자세한 것은 api.js 의 STATIC_MAP 주석과 docs/engineering/deploy.md.
- *
- * 눌리는데 실패하는 탭을 두지 않는다. 없는 기능은 아예 안 보이는 쪽이 낫다.
- *
- * ## 순서 — 큰 틀에서 상세로
- *
- * 2026-10-22 요청으로 다시 줄 세웠다: 거시 분석이 첫째, 탭을 넘길수록 범위가 좁아져 호가 분석이 마지막.
- * 전국·경기의 거시 요인 → 공급 → 경기 남부 평균의 매매·전세·월세 → 시군구별 공표 가격 → 단지 가격을 움직이는
- * 요인(매물 분석·분해 모델) → 단지 하나하나(지도) → 매물 하나하나(호가 입력·분석). 예전에는 매물 분석이
- * 첫 탭이라, 무엇을 보는 사이트인지 알기 전에 단지 요인부터 나왔다. 첫 화면은 이 목록의 첫 탭이다.
- */
-const TABS = [
-  // 공급은 여섯 요인 중 하나다. 나머지(수요·통화량·금리·정책·세금)까지 한 화면에
-  // 놓고 **어느 쪽으로 미는지**를 본다. 공급 탭과 겹치는 것은 준공·미분양뿐이고,
-  // 거기서는 '얼마나 모자라나', 여기서는 '그래서 어느 쪽인가' 를 묻는다.
-  { id: 'regime', label: '거시 분석', static: true },
-  // 공급은 2~3년 전에 정해져 지금 나타난다. 가격 추이와 같은 축에 놓으면
-  // 둘 다 안 읽혀서 탭을 따로 뒀다.
-  { id: 'supply', label: '공급 분석', static: true },
-  // 거시 탭이 '가격을 어느 쪽으로 미나' 라면, 여기는 '수요가 어느 점유 형태로 옮겨 가나' 다.
-  // 같은 금리가 매매·전세·월세에 다르게 닿는 것을 보려면 세 가격이 한 화면에 있어야 한다.
-  { id: 'tenure', label: '매매·전세·월세', static: true },
-  // 한 탭 안에 섹션으로 합쳐 봤다가 **되돌렸다.** 둘(가격 분석·매물 분석)은 같은 질문의 두 축이지만,
-  // 각자 카드가 예닐곱 장이라 한 화면에 올리면 좌우 2단으로 쪼개도 빽빽했다.
-  // 겹쳐 봐야 하는 것은 '모델과 어긋나는 곳' 한 장뿐이고, 그건 가격 분석 쪽에 이미 있다.
-  // 이름을 두 번 바꿨다. '시장 분석' → '미시 분석' → '매물 분석' 이고,
-  // '매크로' → '거시 분석' → '가격 분석' 이다. 바꾼 이유는 같다 — '미시/거시' 가
-  // 무엇을 보는 탭인지 말해 주지 않았다. 지금 이름은 **대상**을 가리킨다.
-  { id: 'macro', label: '가격 분석', static: true },
-  { id: 'micro', label: '매물 분석', static: true },
-  // 정적 사이트에도 싣는다. 적합 결과(`/model/fit`)는 이미 내보내고 있었고, 묶어 보기
-  // (`/model/groups`)만 더하면 됐다. 맨 위 수식(`ModelFormula`)이 탭의 입구다.
-  { id: 'model', label: '분해 모델', static: true },
-  { id: 'map', label: '지도', static: STATIC_MAP },
-  // '매물 분석' 이었다. 붙여넣어 읽는 것만 하던 탭에 **메모 사전 관리**가
-  // 들어오면서, 하는 일이 분석보다 관리에 가까워졌다.
-  // 둘은 짝이다 — 한쪽에 붙여넣고 다른 쪽에서 본다. 이름도 짝으로 맞췄다.
-  { id: 'compare', label: '호가 입력' },
-  { id: 'ranking', label: '호가 분석', static: true },
-]
+import { TABS as REALESTATE_TABS } from './realestate/tabs'
 
 /**
  * 자산 — 제목 자리에서 고른다. 탭은 자산마다 따로 있다.
  *
  * 2026-10-27 요청으로 범위를 넓혔다: 이 사이트는 '경기 남부 아파트 적정 시세' 였고, 이제 그 전부가
- * '부동산' 한 자산이다. 위 TABS 가 그대로 부동산의 탭이다. 새 자산은 여기 한 줄과 그 탭 목록을 더한다.
+ * '부동산' 한 자산이다. 탭과 그 화면은 자산마다 `src/<자산>/tabs.jsx` 가 정한다 — 이 파일은 조립만 한다.
+ * 새 자산은 여기 한 줄과 그 자산의 tabs.jsx 를 더한다. 탭이 아직 없는 자산(주식)은 빈 목록이다.
  *
- * 탭이 없는 자산도 고를 수 있게 둔다. 위의 '눌리는데 실패하는 탭을 두지 않는다' 와 부딪히는 것 같지만,
+ * 탭이 없는 자산도 고를 수 있게 둔다. tabs.jsx 의 '눌리는데 실패하는 탭을 두지 않는다' 와 부딪히는 것 같지만,
  * 그 규칙이 막는 것은 **눌렀더니 틀린 답이나 오류가 나오는 것**이다. 탭이 없는 자산은 그렇다고 말하는
  * 빈 화면만 낸다 — 무엇을 넓히려는지가 제목에서 보이는 편이 낫다고 봤다.
  */
 const ASSETS = [
-  { id: 'realestate', label: '부동산', tabs: TABS },
+  { id: 'realestate', label: '부동산', tabs: REALESTATE_TABS },
   { id: 'stock', label: '주식', tabs: [] },
 ].map((a) => ({ ...a, tabs: STATIC_MODE ? a.tabs.filter((t) => t.static) : a.tabs }))
 
@@ -271,28 +213,8 @@ export default function App() {
           months={filters.months}
           onClose={() => setDetailId(null)}
         />
-      ) : tab === 'micro' ? (
-        <MarketView filters={filters} setFilters={setFilters} meta={meta} />
-      ) : tab === 'macro' ? (
-        <MacroView />
-      ) : tab === 'supply' ? (
-        <SupplyView />
-      ) : tab === 'regime' ? (
-        <RegimeView />
-      ) : tab === 'tenure' ? (
-        <TenureView />
-      ) : tab === 'map' ? (
-        <MapView months={Math.max(filters.months, 12)} onSelect={openDetail} />
-      ) : tab === 'model' ? (
-        <ModelView months={Math.max(filters.months, 12)} onSelect={openDetail} />
-      ) : tab === 'ranking' ? (
-        <RankingView
-          months={Math.max(filters.months, 12)}
-          setMonths={(m) => setFilters({ ...filters, months: m })}
-          onSelect={openDetail}
-        />
       ) : (
-        <CompareView months={Math.max(filters.months, 12)} incoming={pasted} />
+        cur.tabs.find((t) => t.id === tab)?.render({ filters, setFilters, meta, onSelect: openDetail, pasted })
       )}
       </TabContext.Provider>
     </div>

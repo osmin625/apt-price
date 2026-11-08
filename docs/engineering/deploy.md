@@ -71,7 +71,7 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 
 ## 정적 사이트에 실리는 것
 
-`App.jsx` 의 `TABS` 에서 `static: true` 인 것만 보인다.
+자산마다 `src/<자산>/tabs.jsx` 의 `TABS` 에서 `static: true` 인 것만 보인다.
 
 | 탭 | 정적 | 이유 |
 |---|---|---|
@@ -91,7 +91,7 @@ cd frontend; npm run preview:static   # http://localhost:4173/apt-price/
 없어 한 개, 도보 경로는 어차피 내보낸다. 그래서 지도를 켜도 **데이터가 늘지 않는다.**
 막는 것은 **카카오 JS 키 하나**다.
 
-지도를 띄우려면 키가 번들에 들어가야 한다. `App.jsx` 가 `MapView` 를 정적
+지도를 띄우려면 키가 번들에 들어가야 한다. `realestate/tabs.jsx` 가 `MapView` 를 정적
 import 하므로 `kakaoMap.js` 의 `import.meta.env.VITE_KAKAO_JS_KEY` 가 인라인된다 —
 **지도 탭을 숨겨 둔 상태에서도 그랬다.** 실제로 확인했고, 그래서 `.env.static` 에서
 비워 뺐다.

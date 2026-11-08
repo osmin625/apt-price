@@ -100,11 +100,12 @@ backend/
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/
-  src/App.jsx               머리말·자산 고르기·탭 — 자산마다의 화면을 조립만 한다
+  src/App.jsx               머리말·자산 고르기 — 자산마다의 탭을 조립만 한다(ASSETS)
   src/api.js                API 호출 + 정적 모드의 스냅샷 경로(snapshotPath — export_static 과 같은 규칙)
   src/shared/               자산과 무관한 화면 부품 — 자산 폴더는 여기를 쓰고, 여기는 자산 폴더를 모른다
   src/shared/Charts.jsx     IQR 범위+중앙값 점, 층 프리미엄 막대, 추이 선
   src/shared/heat.js        평균 대비 위치(z)의 색·말 — 탭 공통의 자 (백엔드 regime.hist_z 와 같은 공식)
+  src/realestate/tabs.jsx   부동산의 탭 — 이름·순서·정적 여부와 각 탭이 그리는 화면(render)이 한 곳에
   src/realestate/views/     매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 매매·전세·월세 / 단지 상세
                             / 호가 입력 / 호가 분석 / 지도 / 분해 모델
   src/realestate/components/ScatterFit.jsx   산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
