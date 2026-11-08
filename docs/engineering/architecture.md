@@ -78,6 +78,7 @@ backend/
     verify_name_match.py    단지명 매칭 규칙 변경 전후 전수 대조
     verify_listing_parse.py 매물 파서가 주석에 적은 사례를 주석대로 읽는지
     verify_fit_orphan.py    부모를 강제 종료하면 적합 워커도 끝나는지
+    verify_fit_cache_key.py 적합 캐시 키가 표본을 정하는 것(거래·날짜)을 다 담는지
     migrate.py              모델에 있는데 DB 에 없는 컬럼 추가
     ingest_reb.py           한국부동산원 공표 통계
     ingest_supply.py        공급 통계(인허가·착공·준공·멸실·가구수) — 시도 단위

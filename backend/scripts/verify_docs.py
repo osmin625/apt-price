@@ -171,18 +171,21 @@ def main() -> int:
     for b in bad:
         print(f"  [X] {b}")
 
-    # 라우팅 표가 모든 문서를 덮는가
-    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    listed = {m for _t, m in LINK.findall(claude) if m.startswith("docs/")}
-    missing = [
-        d.relative_to(ROOT).as_posix() for d in docs
-        if d.relative_to(ROOT).as_posix() not in listed
-    ]
-    if missing:
-        print(f"\n  [!] CLAUDE.md 라우팅 표에 없는 문서 {len(missing)}개 — "
-              f"나눠 놓고 표에 안 넣으면 아무도 못 찾습니다:")
-        for m in missing:
-            print(f"      {m}")
+    # 문서 표가 모든 문서를 덮는가. 표는 둘이다 — CLAUDE.md 라우팅 표(에이전트가 '무엇을
+    # 하려나' 로 고른다)와 README 표(사람이 '무엇이 있나' 로 고른다). 열이 달라 하나로
+    # 합치지 않았는데, README 쪽은 아무도 안 봐서 문서를 더할 때 뒤처질 수 있었다.
+    missing = []
+    for index in ("CLAUDE.md", "README.md"):
+        text = (ROOT / index).read_text(encoding="utf-8")
+        listed = {m for _t, m in LINK.findall(text) if m.startswith("docs/")}
+        miss = [d.relative_to(ROOT).as_posix() for d in docs
+                if d.relative_to(ROOT).as_posix() not in listed]
+        if miss:
+            print(f"\n  [!] {index} 문서 표에 없는 문서 {len(miss)}개 — "
+                  f"나눠 놓고 표에 안 넣으면 아무도 못 찾습니다:")
+            for m in miss:
+                print(f"      {m}")
+        missing += miss
 
     # 코드 → 문서 — 주석이 가리키는 경로와 절
     heads = {d.relative_to(ROOT).as_posix(): [m.group(1) for line in

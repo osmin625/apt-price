@@ -366,6 +366,60 @@ def load_rows(db, months: int = 24) -> list[dict]:
     return rows
 
 
+# `input_stamp` 가 일부러 담지 않는 `load_rows` 의 열. 이름·행정 표기는 값이 아니라
+# 꼬리표라 바뀌어도 계수가 달라지지 않거나(이름·구 이름), 바뀌는 일이 행정 개편 때뿐이다.
+# 여기 없는 열을 `load_rows` 에 더하고 도장에 안 넣으면 `verify_fit_cache_key` 가 잡는다.
+STAMP_SKIP = {
+    "Complex.name": "단지명 — 표시용 꼬리표",
+    "Complex.sgg_name": "구 이름 — sgg_cd 의 표시용 짝",
+    "Complex.umd_nm": "법정동 이름 — 행정 개편 때만 바뀐다",
+    "Trade.deal_ym": "거래 행은 지우거나 고치지 않는다(새 행은 max id·건수가 잡는다)",
+    "Trade.deal_date": "같은 이유",
+    "Trade.exclusive_area": "같은 이유", "Trade.floor": "같은 이유",
+    "Trade.deal_amount": "같은 이유", "Trade.build_year": "같은 이유",
+}
+
+
+def input_stamp(db) -> tuple:
+    """`load_rows` 가 읽는 입력의 요약 도장. 적합 캐시 키에 들어간다.
+
+    예전 키는 거래(max id·건수)만 봤다. 그런데 적합 표본은 단지의 좌표·도보시간·입지에도
+    달려 있어서(도보시간이 없는 단지는 빠진다), 새 단지에 도보경로·입지를 채워도 키가 같아
+    **그 단지가 빠진 옛 적합**이 나갔다. 2026-11-09 에 새 단지 8곳을 채운 뒤 캐시를 켠
+    내보내기와 끈 내보내기가 18개 파일에서 달라 드러났다(표본 67,504 vs 67,531).
+
+    행을 다 읽어 해시하면 정확하지만 요청마다 수 초가 든다. 그래서 읽는 열마다 건수·합을
+    SQL 로 모은다(수십 ms). 합이 우연히 같아지는 수정은 놓치지만, 적재가 하는 일 —
+    행이 생기거나 빈 값이 채워지는 것 — 은 전부 잡는다. `load_rows` 에 열을 더하면 여기도
+    더한다(`verify_fit_cache_key` 가 빠진 열을 잡는다).
+    """
+    from sqlalchemy import func, select
+
+    from ..models import Complex, ComplexAmenity, ComplexDong, Station, Trade
+
+    def agg(*cols):
+        return tuple(db.execute(select(*cols)).one())
+
+    t = func.total
+    return (
+        # deal_type 은 나중에 채운다(빈 문자열 → '중개거래'). 건수로는 안 보여 길이 합으로 본다.
+        agg(func.max(Trade.id), func.count(Trade.id), t(func.length(Trade.deal_type)),
+            t(func.length(Trade.apt_dong))),
+        agg(func.count(Complex.id), func.count(Complex.lat), t(Complex.lat), t(Complex.lng),
+            t(Complex.walk_seconds), t(Complex.household_count), t(Complex.max_floor),
+            t(Complex.build_year), t(Complex.best_access_station_id),
+            # sgg_cd 는 숫자 문자열이라 SQLite total() 이 수로 더한다
+            t(Complex.nearest_station_id), t(Complex.sgg_cd)),
+        # 노선은 글자다 — 길이와 첫 글자 코드의 합으로 바뀜을 본다
+        agg(func.count(Station.id), t(Station.minutes_to_gangnam), func.count(Station.line),
+            t(func.length(Station.line)), t(func.unicode(Station.line))),
+        agg(func.count(ComplexAmenity.complex_id), t(ComplexAmenity.elem_dist_m),
+            t(ComplexAmenity.mid_dist_m), t(ComplexAmenity.academy_500),
+            t(ComplexAmenity.adult_500)),
+        agg(func.count(ComplexDong.walk_seconds), t(ComplexDong.walk_seconds)),
+    )
+
+
 def _amenity_fields(row: tuple | None) -> dict:
     if row is None:
         return {"elem_dist": None, "mid_dist": None, "academy": None, "adult": None}

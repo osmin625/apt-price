@@ -103,7 +103,7 @@ def run(limit: int | None, force: bool, estimate_only: bool, sleep: float) -> No
             for cs in db.execute(select(ComplexStation)).scalars().all()
         }
 
-        routed = reused = skipped = 0
+        routed = reused = skipped = new = 0
         calls = 0
 
         for cx in complexes:
@@ -120,6 +120,7 @@ def run(limit: int | None, force: bool, estimate_only: bool, sleep: float) -> No
                 if cs is None:
                     cs = ComplexStation(complex_id=cx.id, station_id=st.id)
                     db.add(cs)
+                    new += 1
                     existing[(cx.id, st.id)] = cs
                 cs.straight_distance_m = straight
                 cs.rank = rank
@@ -167,7 +168,10 @@ def run(limit: int | None, force: bool, estimate_only: bool, sleep: float) -> No
         srcs: dict[str, int] = {}
         for cs in db.execute(select(ComplexStation)).scalars().all():
             srcs[cs.walk_source] = srcs.get(cs.walk_source, 0) + 1
-        print(f"\n쌍 {routed}건 적재 / 재사용 {reused} / 건너뜀 {skipped}")
+        # 추정치 쌍은 매번 전부 다시 계산한다(결정적이라 값은 같다). 예전 요약은 그 수를
+        # '적재' 로만 찍어, 새 단지 8곳을 채운 실행이 '8,794건 적재' 로 보였다 — 기존
+        # 경로를 갈아엎은 것처럼. 새로 생긴 쌍을 따로 센다.
+        print(f"\n쌍 {routed}건 계산(새 쌍 {new}) / TMap 재사용 {reused} / 건너뜀 {skipped}")
         print(f"출처별: {srcs}")
         print(f"TMap 호출 {calls}회")
 
