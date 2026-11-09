@@ -1,0 +1,45 @@
+# 머지 관문의 CI 쪽 — DB 없이 되는 검진과 프론트 빌드.
+#
+# 적재에 몇 시간 걸린 apt.db 는 저장소에 없다(gitignore). 그래서 여기서는
+# `checkup --no-db` 로 DB 가 필요 없는 검사만 돈다 — 각 verify_* 가 `NEEDS_DB` 로 선언한다.
+# DB 가 있어야 하는 검사는 머지 직전 로컬 훅(backend/scripts/merge_gate.py)이 돈다.
+# 훅은 이 CI 가 그 PR 에서 통과했는지도 본다 — 둘이 한 관문이다.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: checkup --no-db
+        working-directory: backend
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -m scripts.checkup --no-db
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

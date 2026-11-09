@@ -18,8 +18,12 @@ backend/data/*.db-journal
 # 같아야 해서 넣고, 나머지(워크트리·세션 임시 파일·launch.json)는 기기·세션마다 다르다.
 # launch.json 은 '임시 설정을 넣었다 되돌린다' 가 규칙이라 넣으면 그 사이 작업 트리가
 # 더러워지고, 그러면 푸시 연동 배포가 '미룸' 으로 멈춘다.
+# settings.json 도 넣는다 — 머지 관문 훅(backend/scripts/merge_gate.py)이 여기 걸려 있어서,
+# 빠지면 새 워크트리·다른 기기에서 관문 없이 머지된다. 기기마다 다른 설정은
+# settings.local.json 에 둔다(계속 무시된다).
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 *.log
 
 # 적합 디스크 캐시 — 데이터+코드 해시로 키를 잡으므로 언제든 다시 만들 수 있다

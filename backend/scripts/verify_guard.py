@@ -24,6 +24,8 @@ statsmodels 가 pinv 결과로 그냥 진행했고, 계수는 0 과 NaN 이 섞�
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 실패 모양을 메모리에서 만든다 — checkup --no-db(CI)가 이것으로 거른다
+
 import sys
 from pathlib import Path
 

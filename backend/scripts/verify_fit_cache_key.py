@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 메모리 SQLite 에 씨앗을 심어 본다 — checkup --no-db(CI)가 이것으로 거른다
+
 import inspect
 import re
 import sys

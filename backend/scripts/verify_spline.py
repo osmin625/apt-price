@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 합성 입력으로 두 구현을 견준다 — checkup --no-db(CI)가 이것으로 거른다
+
 import sys
 from pathlib import Path
 

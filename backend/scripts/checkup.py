@@ -4,6 +4,7 @@
     python -m scripts.checkup              # 전부
     python -m scripts.checkup --fast       # 느린 검사(적합·전수 대조)는 건너뛴다
     python -m scripts.checkup --only 신선도
+    python -m scripts.checkup --no-db      # DB 없이 되는 것만(CI). NEEDS_DB 선언으로 거른다
 
 ## 왜 이것이 따로 있나
 
@@ -148,6 +149,20 @@ SUITE_META = {
 SUITE_SKIP: dict[str, str] = {}
 
 
+# 검사마다 DB 가 있어야 하는지 **그 파일이 선언한다** — `NEEDS_DB = True|False`.
+# CI(GitHub Actions)에는 적재에 몇 시간 걸린 apt.db 가 없다. 여기에 '어느 것이 DB 를 쓰나'
+# 목록을 두면 또 손으로 유지하는 목록이 되고, 새 검사를 더한 사람은 이 파일을 모른다.
+# 그래서 선언을 검사 파일에 두고, **선언이 없으면 `[X]`** 로 막는다 — 빠뜨린 검사가 CI 에서
+# 'DB 가 없어 죽음' 으로 실패하거나, 반대로 조용히 건너뛰어지지 않게.
+NEEDS_DB_RE = re.compile(r"^NEEDS_DB\s*=\s*(True|False)\b", re.M)
+
+
+def needs_db(name: str) -> bool | None:
+    """선언한 값. 선언이 없으면 None."""
+    m = NEEDS_DB_RE.search((BACKEND / "scripts" / f"{name}.py").read_text(encoding="utf-8"))
+    return None if m is None else m.group(1) == "True"
+
+
 def suites() -> list[tuple[str, str, bool]]:
     """(모듈, 설명, 느린가). `SUITE_META` 순서를 먼저, 거기 없는 것은 이름순으로 뒤에."""
     found = sorted(p.stem for p in (BACKEND / "scripts").glob("verify_*.py"))
@@ -165,10 +180,21 @@ def suites() -> list[tuple[str, str, bool]]:
     return out
 
 
-def run_suites(rep: Report, fast: bool) -> None:
+def run_suites(rep: Report, fast: bool, no_db: bool = False) -> None:
     print("\n== 정합성 ==")
     env = {**os.environ, "FIT_IN_PROCESS": "1", "PYTHONIOENCODING": "utf-8"}
+    if no_db:
+        env["CHECK_NO_DB"] = "1"  # 검사 안에서 DB 를 읽는 절만 건너뛰게(verify_sync 등)
     for mod, what, slow in suites():
+        db = needs_db(mod.split(".")[-1])
+        if db is None:
+            print(f"  {what:<28} NEEDS_DB 선언 없음")
+            rep.add("X", "정합성", f"{mod} 에 `NEEDS_DB = True|False` 가 없습니다 — "
+                                   "DB 없이(CI) 돌 수 있는지 선언하세요")
+            continue
+        if no_db and db:
+            print(f"  {what:<28} 건너뜀 (DB 필요)")
+            continue
         if fast and slow:
             print(f"  {what:<28} 건너뜀 (--fast)")
             continue
@@ -477,6 +503,8 @@ def main() -> int:
     ap.add_argument("--fast", action="store_true", help="느린 검사(적합·전수 대조)는 건너뛴다")
     ap.add_argument("--only", choices=list(SECTIONS), help="한 절만")
     ap.add_argument("--today", help="신선도 기준일 (YYYY-MM-DD) — 검사 시험용")
+    ap.add_argument("--no-db", action="store_true",
+                    help="DB 없이 되는 것만 — NEEDS_DB 인 검사와 신선도를 건너뛴다(CI)")
     args = ap.parse_args()
 
     today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
@@ -484,9 +512,12 @@ def main() -> int:
     want = {args.only} if args.only else set(SECTIONS)
 
     if "정합성" in want:
-        run_suites(rep, args.fast)
+        run_suites(rep, args.fast, args.no_db)
     if "신선도" in want:
-        check_fresh(rep, today)
+        if args.no_db:
+            print("\n== 신선도 ==\n  건너뜀 (--no-db) — 적재일은 DB 에 있다")
+        else:
+            check_fresh(rep, today)
     if "군살" in want:
         check_cruft(rep)
 

@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 주석의 사례 글자만 읽는다 — checkup --no-db(CI)가 이것으로 거른다
+
 import sys
 from datetime import date
 

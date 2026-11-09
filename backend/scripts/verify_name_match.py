@@ -29,6 +29,8 @@ DB 의 모든 단지에 대해 `"{이름} {동}동"` 꼴의 첫 줄을 만들어
 
 from __future__ import annotations
 
+NEEDS_DB = True  # DB 의 단지명 전수를 대조한다 — checkup --no-db(CI)가 이것으로 거른다
+
 import argparse
 import re
 import sys

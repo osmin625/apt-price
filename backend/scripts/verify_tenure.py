@@ -22,6 +22,8 @@ R-ONE 평균 매매가격은 2021-07 표본 개편으로 한 달 새 18% 뛴다(
 
 from __future__ import annotations
 
+NEEDS_DB = True  # 실제 공표 가격 지수를 이어 붙인다 — checkup --no-db(CI)가 이것으로 거른다
+
 import sys
 from pathlib import Path
 
