@@ -22,6 +22,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = True  # 실제 거래로 적합한 페이로드를 직렬화한다 — checkup --no-db(CI)가 이것으로 거른다
+
 import json
 import math
 import os

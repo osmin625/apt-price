@@ -36,8 +36,11 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # DB 를 읽는 절(데이터·계약)은 CHECK_NO_DB 면 건너뛴다 — checkup --no-db(CI)가 이것으로 거른다
+
 import argparse
 import ast
+import os
 import re
 import sys
 from pathlib import Path
@@ -54,6 +57,9 @@ from scripts.doc_index import agent_guides  # noqa: E402
 # 검색이 엉뚱한 것을 섞어 찾는다 — 공급 분석의 주택 재고 증가가 `stock_delta` 였다.
 # 주식 패키지(`app/stock`)가 생기면 `stock` 을 찾는 사람의 절반이 재고를 만났을 것이다.
 # {자산 폴더: (쓰면 안 되는 낱말, 대신 쓸 이름)}. docs/engineering/glossary.md 와 짝이다.
+# `checkup --no-db`(CI)가 켠다. DB 를 읽는 절(데이터·계약)만 건너뛰고 나머지는 그대로 돈다.
+NO_DB = os.environ.get("CHECK_NO_DB") == "1"
+
 RESERVED_NAMES = {
     "realestate": ("stock", "housing_stock"),
 }
@@ -435,6 +441,9 @@ def check_contract(r: Result, months: int) -> None:
 # ──────────────────────────────────────────────────────────
 def check_data(r: Result) -> None:
     header("데이터 — 파생이 원천보다 뒤처졌나")
+    if NO_DB:
+        print("  건너뜀 (DB 없음 — CHECK_NO_DB)")
+        return
     try:
         from sqlalchemy import func, select
 
@@ -1102,9 +1111,9 @@ def main() -> int:
     check_exemptions(r)
     check_reserved(r)
     check_data(r)
-    if args.no_model:
+    if args.no_model or NO_DB:
         header("계약 — 프론트가 읽는 키를 백엔드가 보내나")
-        print("  --no-model 로 건너뜀")
+        print("  --no-model 로 건너뜀" if args.no_model else "  건너뜀 (DB 없음 — CHECK_NO_DB)")
     else:
         check_contract(r, args.months)
 

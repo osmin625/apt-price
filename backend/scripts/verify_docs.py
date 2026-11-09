@@ -37,6 +37,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 문서·코드 파일만 읽는다 — checkup --no-db(CI)가 이것으로 거른다
+
 import re
 import sys
 import unicodedata

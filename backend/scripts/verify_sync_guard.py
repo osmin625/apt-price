@@ -22,6 +22,9 @@
 파일 일곱 개가 LF 로 바뀌어 `git status` 가 더러워졌다. 내용은 같아서 '되돌린 뒤'
 검사도 통과했다 — 그래서 끝에 바이트까지 대조한다.
 """
+
+NEEDS_DB = False  # DB 가 있어야 하는 시험(계약·신선도)은 CHECK_NO_DB 면 건너뛴다 — checkup --no-db(CI)가 이것으로 거른다
+
 import os
 import subprocess
 import sys
@@ -33,6 +36,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 _VENV = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 PY = str(_VENV if _VENV.exists() else Path(sys.executable))
+# `checkup --no-db`(CI)가 켠다. DB 가 있어야 깨뜨려 볼 수 있는 시험(계약은 적합을, 신선도는
+# 적재일을 읽는다)은 건너뛰고 **건너뛰었다고 찍는다** — 안 찍으면 CI 에서 통과한 것이 그
+# 시험까지 통과한 것처럼 읽힌다.
+NO_DB = os.environ.get("CHECK_NO_DB") == "1"
 
 
 def run(with_model: bool = False, cmd: list[str] | None = None) -> tuple[int, str]:
@@ -49,6 +56,9 @@ def check_freshness() -> bool:
 
     데이터를 건드리지 않아도 되는 유일한 검사라 이렇게 따로 둔다.
     """
+    if NO_DB:
+        print(f"  {'신선도 — 기준일을 미래로':<34} 건너뜀 (DB 없음)")
+        return True
     code, out = run(cmd=["-m", "scripts.checkup", "--only", "신선도",
                          "--today", "2099-01-01"])
     caught = code != 0 and out.count("뒤처짐") >= 3
@@ -206,6 +216,12 @@ CASES = [
      lambda s: s.replace("| 부동산 | [backend/app/realestate/CLAUDE.md]"
                          "(backend/app/realestate/CLAUDE.md) |\n", "", 1),
      "루트 CLAUDE.md 에서 닿지 않음", False, ["-m", "scripts.verify_docs"]),
+    # 새 검사가 DB 를 쓰는지 선언하지 않은 모양. CI(`--no-db`)에서 조용히 빠지거나 'DB 없음'
+    # 으로 죽는 대신 검진이 `[X]` 로 막아야 한다. 정합성 절만, 느린 것은 빼고 돈다.
+    ("검진 — NEEDS_DB 선언을 지움", "backend/scripts/verify_spline.py",
+     lambda s: s.replace("NEEDS_DB = False", "NEEDS_DB_GONE = False", 1),
+     "NEEDS_DB = True|False` 가 없습니다", False,
+     ["-m", "scripts.checkup", "--only", "정합성", "--fast", "--no-db"]),
     # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
     ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
      lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),
@@ -246,6 +262,9 @@ def main() -> int:
         # 다섯째는 적합까지 돌릴지, 여섯째는 verify_sync 대신 돌릴 검사(지침서는 verify_docs 가 본다)
         with_model = bool(rest and rest[0])
         cmd = rest[1] if len(rest) > 1 else None
+        if with_model and NO_DB:
+            print(f"  {name:<34} 건너뜀 (DB 없음)")
+            continue
         p, before = edit(rel, fn)
         try:
             code, out = run(with_model, cmd)

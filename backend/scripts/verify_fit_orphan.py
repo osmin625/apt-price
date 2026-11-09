@@ -31,6 +31,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = False  # 워커 프로세스만 띄웠다 죽인다 — checkup --no-db(CI)가 이것으로 거른다
+
 import os
 import subprocess
 import sys

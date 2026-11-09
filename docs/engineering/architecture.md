@@ -5,6 +5,9 @@
 ## 파일 배치
 
 ```
+.github/workflows/check.yml CI — checkup --no-db + 프론트 빌드 (머지 관문의 한쪽)
+.claude/settings.json       머지 관문 훅 등록 — 모든 셸 명령 앞에서 merge_gate.py
+.claude/skills/             되풀이하는 절차(순서·끝난 기준만)
 backend/
   app/                      자산(asset)마다 패키지 하나 — 자산끼리는 서로 import 하지 않는다
     main.py                 FastAPI 앱 — 자산 라우터 등록, 적합 예열(FIT_WARM), /api/health
@@ -98,7 +101,8 @@ backend/
     fetch_complexes.py      카카오 POI 로 단지 목록 채우기
     verify_sync.py          경계를 넘는 싱크(코드↔문서↔데이터↔프론트)
     doc_index.py            지침서(CLAUDE.md)가 어디 있나 — 검사들이 같은 목록을 쓴다
-    checkup.py              정기 검진 — 정합성·신선도·군살 (입구 하나)
+    checkup.py              정기 검진 — 정합성·신선도·군살 (입구 하나). --no-db 는 CI 용
+    merge_gate.py           머지 관문 — `gh pr merge` 앞 훅. CI 통과 + PR 워크트리의 checkup --fast
     verify_sync_guard.py    그 싱크 검사가 깨뜨렸을 때 걸리는지
     ingest_amenity.py       단지 주변 입지(학교 거리·학원 수·유흥주점 수)
 frontend/

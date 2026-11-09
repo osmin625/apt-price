@@ -21,6 +21,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = True  # 두 화면이 실제 공급 통계로 낸 값을 대조한다 — checkup --no-db(CI)가 이것으로 거른다
+
 import sys
 from pathlib import Path
 

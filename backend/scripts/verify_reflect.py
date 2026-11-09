@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+NEEDS_DB = True  # 반영 분해를 실제 공표 통계(reb_stats)로 푼다 — checkup --no-db(CI)가 이것으로 거른다
+
 import random
 import sys
 from pathlib import Path

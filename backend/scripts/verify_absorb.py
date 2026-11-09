@@ -27,6 +27,8 @@ Frisch-Waugh-Lovell 정리가 보장하는 것은 **기울기 계수**가 같다
 
 from __future__ import annotations
 
+NEEDS_DB = True  # 실제 거래로 적합한다 — checkup --no-db(CI)가 이것으로 거른다
+
 import argparse
 import sys
 import time
