@@ -107,7 +107,9 @@ def check_ci(repo: str, num: str) -> str | None:
     except json.JSONDecodeError:
         return f"CI 결과를 읽지 못했습니다(gh 종료 {code}): {(err or out).strip()[:200]}"
     if not checks:
-        return ("이 PR 에 CI 결과가 없습니다 — `.github/workflows/check.yml` 이 돌았는지 보세요"
+        # 푸시 직후 수십 초는 CI 가 아직 등록되지 않아 이 모양이다(2026-11-10 에 겪었다).
+        return ("이 PR 에 CI 결과가 없습니다 — 방금 푸시했다면 등록을 기다리고, 아니면 "
+                "`.github/workflows/check.yml` 이 돌았는지 보세요"
                 f" ({(err or '').strip()[:120]})")
     bad = [c for c in checks if c.get("bucket") in ("fail", "cancel")]
     wait = [c for c in checks if c.get("bucket") == "pending"]
