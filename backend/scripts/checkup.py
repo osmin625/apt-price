@@ -52,6 +52,8 @@ PY = sys.executable
 
 sys.path.insert(0, str(BACKEND))
 
+from scripts.doc_index import agent_guides  # noqa: E402
+
 # 며칠(개월) 지나면 경고할까. **근거를 함께 적는다** — 숫자만 있으면 다음 사람이
 # 못 고친다.
 STALE = {
@@ -342,13 +344,15 @@ def check_cruft(rep: Report) -> None:
     # **CLAUDE.md 도 잰다.** 매 세션이 통째로 읽는 유일한 문서라 길어지는 비용이 가장
     # 크다 — 라우팅 표로 '필요한 것만 읽게' 해 놓고 입구가 뚱뚱해지면 소용이 없다.
     # 2026-10-18 에 규칙이 쌓여 280줄이 되도록 이 검사 밖에 있었다.
-    docs = [ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md"))]
+    # 자산 폴더의 지침서도 잰다 — 그 폴더를 열면 루트와 함께 통째로 읽힌다.
+    docs = [*agent_guides(ROOT), *sorted((ROOT / "docs").rglob("*.md"))]
     long_docs = []
     for d in docs:
         n = len(d.read_text(encoding="utf-8").splitlines())
         if n > DOC_LINES_WARN and d.name not in DOC_LONG_OK:
             long_docs.append((d.relative_to(ROOT / "docs").as_posix()
-                              if d.parent != ROOT else d.name, n))
+                              if (ROOT / "docs") in d.parents
+                              else d.relative_to(ROOT).as_posix(), n))
     print(f"  긴 지침서       {len(long_docs)}/{len(docs)} "
           f"({DOC_LINES_WARN}줄 넘음)")
     if long_docs:

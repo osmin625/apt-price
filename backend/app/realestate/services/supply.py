@@ -255,13 +255,13 @@ def south_supply(db: Session, since: int = 2005) -> dict:
     if len(apt) >= 2:
         aks = sorted(apt)
         first, last = aks[0][:4], aks[-1][:4]
-        stock = int(apt[aks[-1]] - apt[aks[0]])
+        housing_stock = int(apt[aks[-1]] - apt[aks[0]])
         moved = sum(y["households"] for y in years
                     if first < y["year"] <= last)
         cross = {
             "from": first, "to": last,
-            "stock_delta": stock, "kapt_sum": moved,
-            "gap_pct": round((moved / stock - 1) * 100, 1) if stock else None,
+            "housing_stock_delta": housing_stock, "kapt_sum": moved,
+            "gap_pct": round((moved / housing_stock - 1) * 100, 1) if housing_stock else None,
         }
 
     # 마지막 두 해는 아직 들어오는 중이라 따로 표시한다. '0' 이 아니라 '덜 찼다'.

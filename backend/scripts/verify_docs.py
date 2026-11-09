@@ -18,7 +18,9 @@
 - 상대 링크가 가리키는 **파일이 있는가**
 - `#앵커` 가 그 파일의 **제목에서 실제로 만들어지는가**
 - CLAUDE.md 라우팅 표가 **있는 문서를 가리키는가**, 그리고 `docs/` 의 문서가
-  표에서 **빠져 있지 않은가** (나눠 놓고 표에 안 넣으면 아무도 못 찾는다)
+  표에서 **빠져 있지 않은가** (나눠 놓고 표에 안 넣으면 아무도 못 찾는다). 지침서는
+  계층이라 루트와 자산 폴더의 CLAUDE.md 표를 **합쳐서** 본다
+- 자산 지침서가 **루트에서 닿는가**, `@` 로 가져오는 파일이 **있는가**
 - 문서가 **묶음 폴더 한 단계 아래**에 있는가 — `docs/<묶음>/<문서>.md`
 - **코드 주석**이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는가
 
@@ -39,6 +41,8 @@ import re
 import sys
 import unicodedata
 from pathlib import Path
+
+from scripts.doc_index import agent_guides, imports_of
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -142,7 +146,8 @@ def main() -> int:
     docs = sorted((ROOT / "docs").rglob("*.md"))
     # 스킬(.claude/skills/*/SKILL.md)도 docs 를 가리킨다 — 문서를 옮기면 같이 깨진다.
     skills = sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
-    targets = [ROOT / "CLAUDE.md", ROOT / "README.md", *docs, *skills]
+    guides = agent_guides(ROOT)
+    targets = [*guides, ROOT / "README.md", *docs, *skills]
     anchors = {p.resolve(): anchors_of(p) for p in targets}
 
     bad: list[str] = []
@@ -174,10 +179,24 @@ def main() -> int:
     # 문서 표가 모든 문서를 덮는가. 표는 둘이다 — CLAUDE.md 라우팅 표(에이전트가 '무엇을
     # 하려나' 로 고른다)와 README 표(사람이 '무엇이 있나' 로 고른다). 열이 달라 하나로
     # 합치지 않았는데, README 쪽은 아무도 안 봐서 문서를 더할 때 뒤처질 수 있었다.
+    #
+    # CLAUDE.md 쪽은 **지침서 전부를 합쳐** 본다. 루트는 자산과 무관한 문서만, 자산 문서는
+    # 그 자산의 CLAUDE.md 가 든다. 링크는 그 지침서 자리에서 풀어야 한다 — 자산 지침서는
+    # `../../../docs/…` 로 가리킨다.
+    def listed_in(paths: list[Path]) -> set[str]:
+        out = set()
+        for g in paths:
+            for _t, href in LINK.findall(g.read_text(encoding="utf-8")):
+                if SKIP.match(href):
+                    continue
+                tgt = (g.parent / href.partition("#")[0]).resolve()
+                if tgt.is_relative_to(ROOT.resolve()):
+                    out.add(tgt.relative_to(ROOT.resolve()).as_posix())
+        return out
+
     missing = []
-    for index in ("CLAUDE.md", "README.md"):
-        text = (ROOT / index).read_text(encoding="utf-8")
-        listed = {m for _t, m in LINK.findall(text) if m.startswith("docs/")}
+    for index, listed in (("CLAUDE.md(지침서 전부)", listed_in(guides)),
+                          ("README.md", listed_in([ROOT / "README.md"]))):
         miss = [d.relative_to(ROOT).as_posix() for d in docs
                 if d.relative_to(ROOT).as_posix() not in listed]
         if miss:
@@ -186,6 +205,26 @@ def main() -> int:
             for m in miss:
                 print(f"      {m}")
         missing += miss
+
+    # 자산 지침서가 루트에서 닿는가. 폴더의 파일을 열면 저절로 읽히지만, 문서만 고치는
+    # 일은 코드를 안 열 수 있다 — 루트 표에 없으면 그 자산의 라우팅 표를 아무도 못 본다.
+    # `@` 한 줄로 다른 지침서를 가져오기만 하는 파일(프론트 쪽)은 가져오는 대상이 닿으면 된다.
+    # 가져오는 파일이 없으면 Claude Code 는 **조용히** 빈 지침서를 읽는다.
+    root_links = listed_in([guides[0]])
+    unreached = []
+    for g in guides[1:]:
+        rel = g.relative_to(ROOT).as_posix()
+        imps = imports_of(g)
+        for written, tgt in imps:
+            if not tgt.exists():
+                unreached.append(f"{rel}  가져오는 파일 없음 → @{written}")
+        via = {t.relative_to(ROOT.resolve()).as_posix() for _w, t in imps
+               if t.exists() and t.is_relative_to(ROOT.resolve())}
+        if rel not in root_links and not (via & root_links):
+            unreached.append(f"{rel}  루트 CLAUDE.md 에서 닿지 않음 — 자산 표에 한 줄 더하세요")
+    print(f"\n지침서 {len(guides)}개 · 루트에서 안 닿거나 가져오기가 깨진 것 {len(unreached)}")
+    for b in unreached:
+        print(f"  [X] {b}")
 
     # 코드 → 문서 — 주석이 가리키는 경로와 절
     heads = {d.relative_to(ROOT).as_posix(): [m.group(1) for line in
@@ -220,7 +259,7 @@ def main() -> int:
     if not tested:
         print("  [X] 계층·코드→문서 검사가 일부러 어긴 경우를 못 잡거나 멀쩡한 것을 잡습니다")
 
-    ok = not bad and not missing and not layout and not refs and tested
+    ok = not bad and not missing and not unreached and not layout and not refs and tested
     print("\n" + ("전부 통과" if ok else "고칠 것이 있습니다"))
     return 0 if ok else 1
 

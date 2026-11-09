@@ -30,6 +30,7 @@
 | [docs/analysis/macro-model.md](docs/analysis/macro-model.md) | 요인을 합친 모델 — 반영 분해(방향 고정)와 걷은 예측 기록 | 반영 분해를 바꾸거나 예측을 다시 세우려 할 때 |
 | [docs/analysis/tenure.md](docs/analysis/tenure.md) | 같은 집의 매매·전세·월세 월 비용과 금리에 따른 수요 이동 (매매·전세·월세 탭) | 그 탭의 계산·그림을 바꿀 때 |
 | [docs/engineering/architecture.md](docs/engineering/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
+| [docs/engineering/glossary.md](docs/engineering/glossary.md) | 코드 이름과 뜻, 이름 짓는 규칙 | 이름이 헷갈리거나 새로 지을 때 |
 | [docs/engineering/performance.md](docs/engineering/performance.md) | 느린 곳을 찾아 고친 기록 | 다시 느려졌을 때 |
 | [docs/engineering/deploy.md](docs/engineering/deploy.md) | 결과를 정적 사이트로 내보내 올리는 방법 | 로컬 밖에서 보게 할 때 |
 
