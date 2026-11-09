@@ -555,7 +555,7 @@ def factor_then(s: dict[str, float], price: dict[str, float]) -> dict:
 # 데이터가 이론과 반대로 움직였으면 b_j 는 0 이 된다(그것도 측정 결과로 보인다). 예전에는 상관의
 # 부호로 방향을 정하고 |r| < 0.15 면 뺐다(2026-10-19 요청으로 버렸다).
 #
-# numpy 를 쓰지 않는다 — hedonic 만 쓰는 규칙(CLAUDE.md '순수 모듈을 지킨다' 옆 규칙). 부호 제약
+# numpy 를 쓰지 않는다 — hedonic 만 쓰는 규칙(realestate/CLAUDE.md '순수 모듈을 지킨다'). 부호 제약
 # 최소제곱은 활성 집합법(Lawson–Hanson)으로 푼다. scipy 의 nnls 와 같은 답인지 scripts/verify_reflect.py 가 대조한다.
 REFLECT_BOOT = 400        # 12개월 블록 부트스트랩 횟수 — 흔들림 폭(10~90%)
 REFLECT_BLOCK = 12        # 겹치는 12개월 창의 자기상관을 덩어리째 지킨다

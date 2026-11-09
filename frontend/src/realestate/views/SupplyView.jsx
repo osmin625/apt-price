@@ -393,7 +393,7 @@ function SouthTable({ d }) {
       {x && (
         <p className="muted small"><Hint pill wide label="설명">
           <b>다른 자료와 맞춰 봤습니다.</b> {x.from}~{x.to}년 아파트 재고가{' '}
-          {fmt(x.stock_delta)}호 늘었고(주택총조사), 같은 기간 입주 물량 합은{' '}
+          {fmt(x.housing_stock_delta)}호 늘었고(주택총조사), 같은 기간 입주 물량 합은{' '}
           {fmt(x.kapt_sum)}세대입니다(K-apt). 차이 {x.gap_pct}% — 기관도 방식도 다른 두
           자료라, 남는 차이에는 멸실분과 연말 기준 시차가 들어 있습니다.
         </Hint></p>

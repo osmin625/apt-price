@@ -26,7 +26,7 @@
 - 위치 z 는 카드와 같은 자(자기 평균 대비 표준편차 몇 배). 크기 b 는 '1σ 벗어나면 몇 %p'.
 - 흔들림 폭은 12개월 덩어리 블록 부트스트랩(겹치는 창의 자기상관을 지킨다)의 10~90%. 시기를 반으로
   나눠 맞춘 크기도 같이 낸다.
-- numpy 없이 Lawson–Hanson 활성 집합법으로 푼다(numpy 는 hedonic 만 — CLAUDE.md). scipy `nnls` 와
+- numpy 없이 Lawson–Hanson 활성 집합법으로 푼다(numpy 는 hedonic 만 — `backend/app/realestate/CLAUDE.md`). scipy `nnls` 와
   1e-12 까지 같은지 `scripts/verify_reflect.py` 가 대조한다 — 처음 쓴 좌표 하강은 거의 같은 열 둘이
   섞이면 0.004 어긋나 바꿨다.
 

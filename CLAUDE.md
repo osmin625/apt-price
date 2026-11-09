@@ -8,23 +8,22 @@
 문서를 목적별로 나눠 둔 이유는 **필요 없는 것까지 읽지 않기 위해서**다. 전부 읽지 말고
 하려는 일에 맞는 것만 연다.
 
+**지침서도 계층이다.** 이 파일은 자산과 무관한 방식만 든다. 한 자산의 화면·모델·데이터·
+분석을 건드리면 **그 자산의 지침서를 먼저 연다** — 그 자산의 라우팅 표와 그 자산에만 있는
+규칙이 거기 있다. 그 폴더의 파일을 열면 저절로 읽히지만, 문서만 고치는 일은 코드를 안 열
+수도 있어서 여기서 가리킨다.
+
+| 자산 | 지침서 |
+|---|---|
+| 부동산 | [backend/app/realestate/CLAUDE.md](backend/app/realestate/CLAUDE.md) |
+
+자산과 무관한 문서:
+
 | 묶음 | 하려는 일 | 읽을 것 |
 |---|---|---|
-| `screens/` 화면 | 화면·기능 동작을 바꾼다 | [screens/design.md](docs/screens/design.md) |
-| | 새 카드·그림·창을 만든다(색·로딩·창·카드를 둘 탭) | [screens/conventions.md](docs/screens/conventions.md) |
-| | 호가를 읽거나 줄 세우는 것을 바꾼다 | [screens/quotes.md](docs/screens/quotes.md) |
-| | 그 화면이 왜 그렇게 됐는지 찾는다 | [screens/ui-log.md](docs/screens/ui-log.md) |
-| `model/` 추정 | 모델에 요인을 더하거나 뺀다 | [model/factors.md](docs/model/factors.md) |
-| | 추정 방법·수식을 건드린다 | [model/method.md](docs/model/method.md) |
-| `data/` 출처 | 데이터를 채우거나 지역을 넓힌다 | [data/pipeline.md](docs/data/pipeline.md) |
-| | 공표 통계(한국부동산원·한국은행)를 건드린다 | [data/reb.md](docs/data/reb.md) |
-| | 경기 남부 공급·멸실을 직접 세는 자료(K-apt·건축물대장 전수, 스냅샷)를 건드린다 | [data/south-supply.md](docs/data/south-supply.md) |
-| | 붙여넣은 매물을 단지·평형에 맞추거나 메모를 읽는 규칙을 바꾼다 | [data/listings.md](docs/data/listings.md) |
-| `analysis/` 공급·거시·점유 탭 | 공급량 분석을 건드린다 | [analysis/supply.md](docs/analysis/supply.md) |
-| | 거시 요인(수요·통화·금리·정책)을 건드린다 | [analysis/macro.md](docs/analysis/macro.md) |
-| | 거시 요인을 합친 모델 — 반영 분해(방향 고정)를 바꾸거나, 걷은 예측을 다시 세우려 한다 | [analysis/macro-model.md](docs/analysis/macro-model.md) |
-| | 매매·전세·월세 탭(같은 집 월 비용·금리와 세 가격·월세 쏠림·순서)을 건드린다 | [analysis/tenure.md](docs/analysis/tenure.md) |
+| `screens/` 화면 | 새 카드·그림·창을 만든다(색·로딩·창·카드를 둘 탭) | [screens/conventions.md](docs/screens/conventions.md) |
 | `engineering/` 코드 다루기 | 코드 위치를 찾는다 | [engineering/architecture.md](docs/engineering/architecture.md) |
+| | 코드 이름의 뜻을 찾거나 새 이름을 짓는다 | [engineering/glossary.md](docs/engineering/glossary.md) |
 | | 느려진 것을 고친다 | [engineering/performance.md](docs/engineering/performance.md) |
 | | 정적 사이트를 내보내거나 배포한다 | [engineering/deploy.md](docs/engineering/deploy.md) |
 
@@ -38,7 +37,8 @@
 (engineering). 열두 문서가 `docs/` 에 평평하게 놓여 있을 때는 공급·거시·공표 통계처럼
 비슷한 문서가 이름순으로 흩어졌다.
 
-- **새 문서는 맞는 묶음에 넣고 표의 그 묶음 아래에 행을 더한다.** `docs/` 바로 아래에
+- **새 문서는 맞는 묶음에 넣고 표의 그 묶음 아래에 행을 더한다** — 한 자산의 문서면
+  그 자산 지침서의 표에, 아니면 이 파일의 표에. `docs/` 바로 아래에
   두거나 폴더를 두 단계로 파면 `verify_docs` 가 실패한다.
 - **맞는 묶음이 없으면 폴더를 옆으로 더한다.** 억지로 아무 데나 넣으면 묶음이 다시
   '이것저것' 이 된다. 문서가 하나뿐인 묶음도 괜찮다.
@@ -207,17 +207,6 @@
 외부 데이터를 쓸 때는 **기억이 아니라 대조로** 확인한다. 시군구 코드는 카카오 `b_code`
 앞 5자리로, 역 이름은 카카오가 돌려주는 이름으로 맞춰 본다.
 
-### 합치는 것보다 못 합치는 게 낫다
-
-단지·매물을 동일시할 때는 보수적으로 간다. 잘못 합치면 남의 거래가 섞여 시세가 통째로
-망가지지만, 안 합치면 줄이 하나 더 생길 뿐이다.
-
-- 단지명 유사도 매칭은 **실측으로 폐기했다**(발동한 10건이 전부 오답). 근접 후보는
-  기록만 하고 합치지 않는다.
-- 두 글자 단지명은 첫 줄에서 동을 뗀 나머지와 **정확히 같을 때만** 인정하고, 같은 이름이
-  여럿이면 자동 선택하지 않는다.
-- 호가 분석은 같은 층대 매물을 **접을 뿐 합치지 않는다.** 건수 배지와 호버로 전부 보인다.
-
 ### 추정을 사실처럼 보여 주지 않는다
 
 값이 추정이면 화면에 그렇게 적는다. 호가 이력을 이어 붙일 때 후보가 여럿이면 배지에
@@ -262,20 +251,6 @@
 
 문서·주석·커밋 메시지는 **한국어**로 쓴다. 기존 톤(단정적이고 군더더기 없는 평서문)을
 따른다.
-
-### 순수 모듈을 지킨다
-
-`app/realestate/pricing.py` 는 의존성이 없다. 시드 생성기와 회귀 모델이 **같은 함수**를 써야 참값
-복원 검증이 성립하기 때문이다. 여기에 DB·numpy 의존을 들이지 말 것.
-
-`app/realestate/services/hedonic.py` 는 numpy/statsmodels 를 쓰는 유일한 파일이고 지연 import 한다.
-미설치 환경에서도 나머지 탭은 동작해야 한다.
-
-### 스키마 변경
-
-`scripts/migrate.py` 가 빠진 컬럼만 `ALTER TABLE ADD COLUMN` 으로 채운다. 모델에 컬럼을
-추가했으면 이것을 돌린다. SQLite 의 `UNIQUE` 는 NULL 끼리를 서로 다른 값으로 보므로,
-유니크 키에 들어가는 컬럼은 NULL 대신 `0`/`""` 를 쓴다.
 
 ## 작업 환경
 

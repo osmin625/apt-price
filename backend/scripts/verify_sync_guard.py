@@ -192,6 +192,20 @@ CASES = [
     ("이름 — 있는 이름은 둔다(통과해야 함)", "docs/engineering/performance.md",
      lambda s: s + "\n`regime.hist_z` · `_undo_ytd()` · `DATABASE_URL` · "
                    "`shared/Modal.jsx` · `clr.dll` 을 적어 본다.\n", None),
+    # 자산 이름을 다른 자산의 도메인 개념에 쓴 모양 — 실제로 있던 것 그대로(응답 키).
+    ("이름 — 부동산에서 맨 stock", "backend/app/realestate/services/supply.py",
+     lambda s: s.replace('"housing_stock_delta"', '"stock_delta"', 1), "stock_delta"),
+    # **걸리지 말아야 할 때** — 주석의 설명과 대신 쓸 이름은 둔다.
+    ("이름 — 주석의 stock·housing_stock 은 둔다(통과해야 함)",
+     "backend/app/realestate/services/supply.py",
+     lambda s: s.replace("    # 교차검증 — 아파트 재고 증가와",
+                         "    # 주식(stock) 과 헷갈리지 않게 housingStock 으로 쓴다.\n"
+                         "    # 교차검증 — 아파트 재고 증가와", 1), None),
+    # 지침서를 나눴는데 루트에서 안 닿으면 그 자산의 라우팅 표를 아무도 못 본다.
+    ("지침서 — 자산 지침서를 루트 표에서 지움", "CLAUDE.md",
+     lambda s: s.replace("| 부동산 | [backend/app/realestate/CLAUDE.md]"
+                         "(backend/app/realestate/CLAUDE.md) |\n", "", 1),
+     "루트 CLAUDE.md 에서 닿지 않음", False, ["-m", "scripts.verify_docs"]),
     # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
     ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
      lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),
@@ -229,10 +243,12 @@ def main() -> int:
 
     ok = True
     for name, rel, fn, needle, *rest in CASES:
+        # 다섯째는 적합까지 돌릴지, 여섯째는 verify_sync 대신 돌릴 검사(지침서는 verify_docs 가 본다)
         with_model = bool(rest and rest[0])
+        cmd = rest[1] if len(rest) > 1 else None
         p, before = edit(rel, fn)
         try:
-            code, out = run(with_model)
+            code, out = run(with_model, cmd)
             if needle is None:
                 # **걸리면 안 되는** 경우. 통과해야 맞다.
                 good = code == 0

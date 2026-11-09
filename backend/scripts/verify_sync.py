@@ -48,6 +48,16 @@ FRONT = ROOT / "frontend" / "src"
 
 sys.path.insert(0, str(BACKEND))
 
+from scripts.doc_index import agent_guides  # noqa: E402
+
+# 자산 이름은 자산 패키지의 것이다. 다른 자산 폴더에서 같은 낱말을 도메인 개념에 쓰면
+# 검색이 엉뚱한 것을 섞어 찾는다 — 공급 분석의 주택 재고 증가가 `stock_delta` 였다.
+# 주식 패키지(`app/stock`)가 생기면 `stock` 을 찾는 사람의 절반이 재고를 만났을 것이다.
+# {자산 폴더: (쓰면 안 되는 낱말, 대신 쓸 이름)}. docs/engineering/glossary.md 와 짝이다.
+RESERVED_NAMES = {
+    "realestate": ("stock", "housing_stock"),
+}
+
 # architecture.md 에 일부러 안 적는 것. 목록이 '전부' 를 뜻하지 않아도 되지만,
 # **빠뜨린 것과 일부러 뺀 것은 구분되어야** 한다.
 ARCH_SKIP = {
@@ -189,7 +199,7 @@ def check_labels(r: Result) -> None:
     # '호가 입력' 탭에 '매물 관리' 라고 적혀 있었다(아홉 곳). 보는 사람에게는
     # 문서보다 화면이 먼저다. JSX 도 같이 본다 — 주석은 뺀다. 거기 적힌 옛 이름은
     # '왜 바꿨나' 를 남긴 경위 기록이라 지우면 안 된다.
-    docs = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md")),
+    docs = [ROOT / "README.md", *agent_guides(ROOT), *sorted((ROOT / "docs").rglob("*.md")),
             *sorted(FRONT.rglob("*.jsx"))]
     hits = 0
     for d in docs:
@@ -811,6 +821,8 @@ NAME_OK = {
     "A_2024_00156": "reb.md '살펴보고 버린 표' 의 R-ONE 표 코드 — 안 쓰기로 한 표다",
     "A_2024_00549": "reb.md '살펴보고 버린 표' 의 R-ONE 표 코드 — 안 쓰기로 한 표다",
     "ConsoleHost": "deploy.md 스케줄러 충돌 조사에 나온 윈도우 모듈 이름",
+    ".claude/launch.json": "개발 서버 설정 — 기기마다 달라 저장소에 넣지 않는다(.gitignore 주석). "
+                           "새 워크트리·CI 에는 없어서, 있는지로 따지면 거기서만 실패한다",
     "formId": "south-supply.md 의 국토교통 통계누리 주소 인자 — 남의 사이트다",
     "regime.macro_model": "macro-model.md 가 걷은 합산 모델(2026-10-18)의 옛 자리를 적은 것 — "
                    "그 방식은 scripts/cv_macro.py 에만 남아 있다",
@@ -830,7 +842,8 @@ _FILE_SUFFIX = {"dll", "exe", "log", "db", "env", "txt", "html", "local", "stati
 
 def _doc_files() -> list[Path]:
     # 스킬도 에이전트가 처음 읽는 문서다. 이름·명령·경로가 썩는 길이 같다.
-    return [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").rglob("*.md")),
+    # 자산 폴더의 지침서(CLAUDE.md)도 — 지침서는 계층이다(scripts/doc_index.py).
+    return [ROOT / "README.md", *agent_guides(ROOT), *sorted((ROOT / "docs").rglob("*.md")),
             BACKEND / "data" / "manual" / "README.md",
             *sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))]
 
@@ -979,6 +992,45 @@ def check_doc_names(r: Result) -> None:
     print(f"  문서가 부르는 이름·경로 {n}개 · 없는 것 {len(hits)}")
 
 
+def reserved_hits(path_texts: list[tuple[str, str]], word: str, instead: str) -> list[str]:
+    """`word` 가 든 이름을 찾는다 — `instead` 가 든 이름은 괜찮다.
+
+    주석은 뺀다. '주식(stock) 자산과 헷갈리지 않게' 같은 설명은 써도 된다. 문자열은
+    **본다** — 실제로 겪은 것이 응답 키(`"stock_delta"`)였다. 대소문자도 가리지 않는다
+    (`StockDelta`·`STOCK_`).
+    """
+    ok = {instead.lower(), instead.replace("_", "").lower()}
+    hits = []
+    for rel, src in path_texts:
+        if rel.endswith(".py"):
+            src = re.sub(r"(?m)#.*$", " ", src)
+        else:
+            src = strip_comments(src)  # JSX 의 {/* … */} 도 여기서 빠진다
+        for no, line in enumerate(src.splitlines(), 1):
+            for tok in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", line):
+                low = tok.lower()
+                if word in low and not any(o in low for o in ok):
+                    hits.append(f"{rel}:{no} `{tok}`")
+    return hits
+
+
+def check_reserved(r: Result) -> None:
+    header("이름 — 다른 자산의 이름을 도메인 개념에 썼나")
+    n_files = n_hits = 0
+    for asset, (word, instead) in RESERVED_NAMES.items():
+        files = [p for p in [*(BACKEND / "app" / asset).rglob("*.py"),
+                             *(FRONT / asset).rglob("*.js"), *(FRONT / asset).rglob("*.jsx")]
+                 if "__pycache__" not in p.parts]
+        n_files += len(files)
+        hits = reserved_hits([(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8"))
+                              for p in files], word, instead)
+        n_hits += len(hits)
+        for h in hits:
+            r.bad(f"{h} — `{word}` 는 자산 이름입니다. {asset} 에서는 `{instead}` 로 "
+                  f"(docs/engineering/glossary.md)")
+    print(f"  자산 {len(RESERVED_NAMES)}개 · 파일 {n_files}개 · 걸린 이름 {n_hits}개")
+
+
 def check_exemptions(r: Result) -> None:
     """예외 목록이 **아직 있는 것**을 가리키나.
 
@@ -1048,6 +1100,7 @@ def main() -> int:
     check_commands(r)
     check_doc_names(r)
     check_exemptions(r)
+    check_reserved(r)
     check_data(r)
     if args.no_model:
         header("계약 — 프론트가 읽는 키를 백엔드가 보내나")
