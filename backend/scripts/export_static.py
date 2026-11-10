@@ -150,6 +150,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/regime/overview", {}),
         # 매매·전세·월세 — 대출 비율은 화면이 바꿔 계산하므로 재료 한 벌이면 된다.
         Req("/api/tenure/overview", {}),
+        # 주식 — 지수 둘의 지금 구간과 백테스트 성적. 파라미터가 없다.
+        Req("/api/stock/indices", {}),
     ]
 
     # 매크로 인사이트.

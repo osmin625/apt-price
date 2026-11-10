@@ -223,10 +223,19 @@ CASES = [
      "NEEDS_DB = True|False` 가 없습니다", False,
      ["-m", "scripts.checkup", "--only", "정합성", "--fast", "--no-db"]),
     # macro.db 가 없을 때 파일부터 보는 확인을 뺀 모양. SQLite 가 빈 파일을 만들고 'no such
-    # table' 로 죽는다 — 무엇이 빠졌는지 안 보이고 빈 파일이 남는다(app/macro/store.py).
-    ("거시 — macro.db 존재 확인을 뺌", "backend/app/macro/store.py",
-     lambda s: s.replace("    if p is not None and not p.exists():", "    if False:", 1),
+    # table' 로 죽는다 — 무엇이 빠졌는지 안 보이고 빈 파일이 남는다(app/core/dbfile.py).
+    ("거시 — macro.db 존재 확인을 뺌", "backend/app/core/dbfile.py",
+     lambda s: s.replace("        if p is not None and not p.exists():", "        if False:", 1),
      "실제: OperationalError", False, ["-m", "scripts.verify_macro_store"]),
+    # 지수 예측이 미래를 보는 두 모양 — 학습에 끝이 기점 너머인 수익률을 넣음, 지금 변동성을
+    # 다음 달에서 읽음. 둘 다 백테스트 점수를 좋게 만들 뿐 오류를 내지 않는다(app/stock/forecast.py).
+    ("주식 — 학습 범위가 기점을 넘음", "backend/app/stock/forecast.py",
+     lambda s: s.replace("    past = range(0, t - h + 1)", "    past = range(0, t)", 1),
+     "기점 뒤 달을 읽으려 했다", False, ["-m", "scripts.verify_lookahead"]),
+    ("주식 — 변동성을 다음 달에서 읽음", "backend/app/stock/forecast.py",
+     lambda s: s.replace("        v_now = s.vol.get(s.months[t])",
+                         "        v_now = s.vol.get(s.months[min(t + 1, len(s.months) - 1)])", 1),
+     "뒤를 바꿔도 같은가: FAIL", False, ["-m", "scripts.verify_lookahead"]),
     # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
     ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
      lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),

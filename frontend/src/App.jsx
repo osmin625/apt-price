@@ -5,13 +5,14 @@ import { scrollToChart, TabContext } from './shared/ChartLink'
 import Hint from './shared/Hint'
 import ComplexDetail from './realestate/views/ComplexDetail'
 import { TABS as REALESTATE_TABS } from './realestate/tabs'
+import { TABS as STOCK_TABS } from './stock/tabs'
 
 /**
  * 자산 — 제목 자리에서 고른다. 탭은 자산마다 따로 있다.
  *
  * 2026-10-27 요청으로 범위를 넓혔다: 이 사이트는 '경기 남부 아파트 적정 시세' 였고, 이제 그 전부가
  * '부동산' 한 자산이다. 탭과 그 화면은 자산마다 `src/<자산>/tabs.jsx` 가 정한다 — 이 파일은 조립만 한다.
- * 새 자산은 여기 한 줄과 그 자산의 tabs.jsx 를 더한다. 탭이 아직 없는 자산(주식)은 빈 목록이다.
+ * 새 자산은 여기 한 줄과 그 자산의 tabs.jsx 를 더한다. 탭이 아직 없는 자산은 빈 목록이다.
  *
  * 탭이 없는 자산도 고를 수 있게 둔다. tabs.jsx 의 '눌리는데 실패하는 탭을 두지 않는다' 와 부딪히는 것 같지만,
  * 그 규칙이 막는 것은 **눌렀더니 틀린 답이나 오류가 나오는 것**이다. 탭이 없는 자산은 그렇다고 말하는
@@ -19,7 +20,7 @@ import { TABS as REALESTATE_TABS } from './realestate/tabs'
  */
 const ASSETS = [
   { id: 'realestate', label: '부동산', tabs: REALESTATE_TABS },
-  { id: 'stock', label: '주식', tabs: [] },
+  { id: 'stock', label: '주식', tabs: STOCK_TABS },
 ].map((a) => ({ ...a, tabs: STATIC_MODE ? a.tabs.filter((t) => t.static) : a.tabs }))
 
 /** 탭 id 는 자산을 건너 겹치지 않는다 — 그래서 주소에 자산을 따로 적지 않아도 탭에서 자산이 나온다. */

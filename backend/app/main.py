@@ -21,6 +21,7 @@ from .realestate.routers import (
     tenure,
 )
 from .realestate.services import fit_worker, hedonic, model_view
+from .stock.routers import indices as stock_indices
 
 # 주의: create_all 은 없는 '테이블'만 만들고 기존 테이블에 '컬럼'은 추가하지 않는다.
 # 스키마를 바꿨다면 `python -m scripts.seed_demo --recreate-schema` 로 재생성해야 한다.
@@ -49,6 +50,7 @@ app.include_router(macro.router)
 app.include_router(supply.router)
 app.include_router(regime.router)
 app.include_router(tenure.router)
+app.include_router(stock_indices.router)
 
 
 @app.on_event("startup")

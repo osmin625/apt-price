@@ -101,36 +101,43 @@ def _get(path: str) -> dict:
     return data
 
 
-def fetch(metric: str, start_ym: str = "200001", end_ym: str = "209912") -> list[EcosPoint]:
-    """한 지표의 월별 시계열.
+def fetch_table(code: str, item: str, cycle: str, start: str, end: str) -> list[tuple[str, float, str]]:
+    """통계표 하나의 (시점, 값, 단위). 시점은 ECOS 꼴 그대로 — 월 'YYYYMM', 일 'YYYYMMDD'.
 
+    거시 지표(`fetch`)와 주식 지수(KOSPI 일별, `app/stock/indices.py`)가 같이 쓴다.
     **빈 결과를 성공으로 넘기지 않는다.** 코드가 바뀌면 오류가 아니라 0행이 온다.
     """
-    code, item, cycle = TABLES[metric]
     key = api_key() or "sample"
     page = REAL_PAGE if available() else SAMPLE_PAGE
+    width = {"M": 6, "D": 8}.get(cycle)
 
-    out: list[EcosPoint] = []
-    start = 1
+    out: list[tuple[str, float, str]] = []
+    first = 1
     while True:
-        d = _get(f"StatisticSearch/{key}/json/kr/{start}/{start + page - 1}/"
-                 f"{code}/{cycle}/{start_ym}/{end_ym}/{item}")
+        d = _get(f"StatisticSearch/{key}/json/kr/{first}/{first + page - 1}/"
+                 f"{code}/{cycle}/{start}/{end}/{item}")
         rows = d["StatisticSearch"]["row"]
         for r in rows:
             v = r.get("DATA_VALUE")
             t = str(r.get("TIME") or "")
-            if v in (None, "") or len(t) != 6:
+            if v in (None, "") or (width and len(t) != width):
                 continue
-            out.append(EcosPoint(metric=metric, ym=t, value=float(v),
-                                 unit=str(r.get("UNIT_NAME") or "")))
+            out.append((t, float(v), str(r.get("UNIT_NAME") or "")))
         total = int(d["StatisticSearch"].get("list_total_count") or 0)
-        start += page
-        if start > total or not rows:
+        first += page
+        if first > total or not rows:
             break
         if not available():
             time.sleep(0.12)
 
     if not out:
-        raise EcosError(f"{metric}: 0행. 통계표 코드({code}/{item})를 "
+        raise EcosError(f"{code}/{item}: 0행. 통계표 코드를 "
                         f"`python -m scripts.probe_ecos` 로 다시 확인하세요.")
     return out
+
+
+def fetch(metric: str, start_ym: str = "200001", end_ym: str = "209912") -> list[EcosPoint]:
+    """한 지표의 월별 시계열."""
+    code, item, cycle = TABLES[metric]
+    return [EcosPoint(metric=metric, ym=t, value=v, unit=u)
+            for t, v, u in fetch_table(code, item, cycle, start_ym, end_ym)]
