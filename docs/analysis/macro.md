@@ -294,7 +294,7 @@ python -m scripts.ingest_macro --metric m2
 | 요인 정의·평균 기준 위치(z)·그때는·기저율·과거 국면 | `backend/app/realestate/services/regime.py` |
 | 정책·세제 연표 | `backend/app/realestate/services/policy.py` |
 | R-ONE 거시 표 | `backend/app/realestate/clients/reb.py` 의 `MACRO_TABLES` |
-| ECOS | `backend/app/realestate/clients/ecos.py` |
+| ECOS | `backend/app/macro/clients/ecos.py` |
 | API | `backend/app/realestate/routers/regime.py` (`/api/regime/overview` 하나) |
 | 화면 | `frontend/src/realestate/views/RegimeView.jsx` |
 | 적재 | `backend/scripts/ingest_macro.py` |

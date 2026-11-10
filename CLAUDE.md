@@ -101,6 +101,7 @@
 - `scripts/verify_reflect.py` — 반영 분해의 부호 제약 최소제곱(순수 파이썬) vs scipy `nnls` (1e-12)
 - `scripts/verify_fit_orphan.py` — 부모 프로세스를 강제로 끝내면 적합 워커도 끝나는지
 - `scripts/verify_fit_cache_key.py` — 적합 캐시 키가 표본을 정하는 것(거래·날짜)을 다 담는지
+- `scripts/verify_macro_store.py` — macro.db 가 없으면 빈 파일을 만들지 않고 시끄럽게 실패하는지, 쓴 값을 그대로 읽는지
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지,
   코드 주석이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다

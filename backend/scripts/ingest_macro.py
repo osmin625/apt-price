@@ -8,7 +8,7 @@
 
 한국은행 ECOS 키를 따로 받아야 하는 줄 알았는데, 공급 표를 찾느라 738개를 훑다가
 **금리·가계대출·심리·미분양이 전부 R-ONE 안에** 있는 것을 봤다. 지금 키로 받는다.
-ECOS 가 필요한 것은 M2·기준금리·소비자물가뿐이고 그쪽은 `realestate/clients/ecos.py` 가
+ECOS 가 필요한 것은 M2·기준금리·소비자물가뿐이고 그쪽은 `macro/clients/ecos.py` 가
 맡는다.
 
 ## 지역 수준이 섞인다
@@ -36,7 +36,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.realestate.clients import ecos, reb  # noqa: E402
+from app.macro import store as macro_store  # noqa: E402
+from app.macro.clients import ecos  # noqa: E402
+from app.realestate.clients import reb  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from scripts.ingest_supply import upsert  # noqa: E402
 
@@ -58,7 +60,7 @@ def main() -> int:
         print("  [!] ECOS_API_KEY 가 없어 sample 키로 받습니다 — "
               "10행씩이라 느리고 정식 경로가 아닙니다. "
               "backend/.env.example 을 보세요.")
-    with SessionLocal() as db:
+    with macro_store.writer() as mdb:
         for metric in sorted(set(metrics) & set(ecos.TABLES)):
             t0 = time.perf_counter()
             try:
@@ -67,16 +69,16 @@ def main() -> int:
                 print(f"  [X] {metric:<13} 00   {exc}")
                 bad += 1
                 continue
-            # ECOS 점을 RebPoint 모양으로 옮겨 같은 upsert 를 쓴다. 표가 하나면
-            # 화면도 한 곳만 보면 된다 — 출처는 `source` 로 구분한다.
-            rows = [reb.RebPoint(table_id=ecos.TABLES[metric][0], metric=metric,
-                                 sgg_cd="00", cls_id="", region_name="전국",
-                                 ym=p.ym, value=p.value, unit=p.unit) for p in pts]
-            n = upsert(db, rows, source="ECOS")
-            db.commit()
+            # 한국은행 계열은 macro.db 로 간다 — 주식도 읽는다(app/macro). 예전에는
+            # RebPoint 모양으로 바꿔 apt.db 의 reb_stats 에 넣었다.
+            rows = [{"series": metric, "freq": ecos.TABLES[metric][2], "period": p.ym,
+                     "value": p.value, "unit": p.unit, "source": "ECOS"} for p in pts]
+            n = macro_store.upsert(mdb, rows)
+            mdb.commit()
             print(f"      {metric:<13} 00   {n:>4}행  {pts[0].ym}~{pts[-1].ym}"
                   f"  {time.perf_counter() - t0:.1f}s")
 
+    with SessionLocal() as db:
         if "unsold" in metrics:
             # 경기 남부 8개 시 합. 공급 표는 시도까지만 오지만 **미분양만 시 단위가
             # 있다** — 738개를 훑어 확인했다. 우리가 보는 지역에 가장 가까운 줄이다.
