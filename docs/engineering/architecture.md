@@ -12,12 +12,25 @@ backend/
   app/                      자산(asset)마다 패키지 하나 — 자산끼리는 서로 import 하지 않는다
     main.py                 FastAPI 앱 — 자산 라우터 등록, 적합 예열(FIT_WARM), /api/health
     core/config.py          설정(.env) — DATABASE_URL 로 DB 사본을 걸 수 있다
-    core/db.py              엔진·세션 — make_engine 은 DB 파일마다(apt.db·macro.db) 같은 설정을 건다
+    core/db.py              엔진·세션 — make_engine 은 DB 파일마다(apt.db·macro.db·stock.db) 같은 설정을 건다
+    core/dbfile.py          apt.db 옆 DB 파일 하나 — 없으면 빈 파일을 만들지 않고 DbMissing(macro·stock 이 같이 쓴다)
 
     macro/                  거시 — 자산을 건너 쓰는 공표 계열. 어느 자산도 import 하지 않는다
     macro/store.py          macro.db(apt.db 옆) 읽기·쓰기 — 파일이 없으면 빈 계열 대신 MacroMissing
     macro/models.py         macro_points — (계열 id, 주기, 시점) 한 줄
     macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리 (키 없으면 sample 폴백)
+                            fetch_table 은 표 하나를 그대로 — KOSPI 일별도 이것으로 받는다
+    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 3개월 국채(TB3MS)·S&P 500(SP500, 최근 10년)
+
+    stock/                  주식 — 지수(다음은 종목)의 월~분기 수익률 구간 예측
+    stock/CLAUDE.md         주식 지침서 — 평가 장치가 먼저, 출처는 공식·대조는 비공식
+    stock/models.py         bars — (시장, 종목, 날짜) 일봉 종가 한 줄, 현지 통화
+    stock/store.py          stock.db(apt.db 옆) 읽기·쓰기
+    stock/indices.py        지수 목록과 받는 곳(KOSPI←ECOS, S&P 500←FRED)·각자의 무위험 금리
+    stock/forecast.py       후보 넷(무작위 보행·과거 평균·금리+프리미엄·변동성 조정)과 walk-forward·구간 점수·DM 검정
+                            (순수 파이썬 — CI 에서도 같은 코드)
+    stock/service.py        지수 탭 응답 — 지금 구간 + 같은 장치로 잰 과거 성적
+    stock/routers/indices.py   /api/stock/indices
 
     realestate/             부동산
     realestate/CLAUDE.md    부동산 지침서 — 이 자산의 라우팅 표와 규칙(아래 '자산 구조')
@@ -96,6 +109,9 @@ backend/
     ingest_kapt_all.py      K-apt 시군구 전수 — 붙이지 않고 담는다(경기 남부 공급)
     ingest_gg_housing.py    경기도기본통계 CSV — 시군구 가구수·주택수(손으로 받음)
     ingest_bldrgst.py       건축물대장 법정동 전수 — 멸실을 직접 관측하려고
+    ingest_stock.py         주식 지수 일봉(stock.db)·FRED 금리(macro.db) — 받을 때마다 종가·하루 변화 검사
+    probe_stock_crosscheck.py  지수 종가를 비공식(야후)과 맞춰 본다(네트워크 — 검진 밖)
+    verify_lookahead.py     지수 예측이 기점 뒤 값을 바꿔도 그대로인지(미래를 보지 않는지)
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
@@ -125,6 +141,9 @@ frontend/
   src/realestate/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법
   src/realestate/topics/    같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
   src/realestate/topics/RegionMap.jsx        시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
+  src/stock/CLAUDE.md       백엔드 쪽 주식 지침서를 `@` 로 가져오는 한 줄
+  src/stock/tabs.jsx        주식의 탭 — 지수 예측
+  src/stock/views/IndexView.jsx   지수의 지금 구간 · 후보별 과거 성적 표 · 실제 대 구간 그림
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가

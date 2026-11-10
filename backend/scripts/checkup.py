@@ -82,6 +82,11 @@ STALE = {
     # 2026-08 까지였다(그 달 말일에서 50일). 75일이면 정상 지연과 겹치지 않는다.
     "ecos_days": {"cpi": 45, "base_rate": 45, "m2": 105,
                   "mortgage_rate": 75, "jeonse_loan_rate": 75, "deposit_rate": 75},
+    # 지수 일봉(stock.db). ECOS·FRED 모두 다음 영업일에 전날 종가가 들어온다. 설·추석 연휴
+    # (최장 5거래일)에 주말이 붙으면 9일까지 빈다 — 10일을 넘기면 적재가 멈췄다.
+    "stock_days": 10,
+    # FRED 미국 3개월 국채(월평균)는 다음 달 첫 영업일께 나온다. ECOS 기준금리와 같은 45일.
+    "fred_days": {"us_tbill3m": 45},
 }
 DEAD_CSS_WARN_PCT = 15.0
 
@@ -285,6 +290,34 @@ def check_fresh(rep: Report, today: dt.date) -> None:
             d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
         say(f"ECOS {metric}", days_since(d, today), limit,
             f"python -m scripts.ingest_macro --metric {metric}")
+
+    from app.macro.clients import fred
+    from app.stock import store as stock_store
+    from app.stock.indices import INDICES
+
+    try:
+        last_fred = macro_store.last_period(fred.SERIES)
+    except macro_store.MacroMissing:
+        last_fred = {}  # 위 ECOS 에서 이미 [X] 로 알렸다
+    for name in fred.SERIES:
+        last = last_fred.get(name)
+        d = None
+        if last:
+            y, m = int(last[:4]), int(last[4:6])
+            d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
+        say(f"FRED {name}", days_since(d, today), STALE["fred_days"][name],
+            "python -m scripts.ingest_stock")
+
+    try:
+        last_bar = stock_store.last_dates()
+    except stock_store.StockMissing as exc:
+        rep.add("X", "신선도", str(exc))
+        last_bar = {}
+    for ix in INDICES:
+        last = last_bar.get((ix.market, ix.symbol))
+        d = dt.date(int(last[:4]), int(last[4:6]), int(last[6:8])) if last else None
+        say(f"지수 {ix.label}", days_since(d, today), STALE["stock_days"],
+            "python -m scripts.ingest_stock")
 
     amen_age = days_since(oldest_amen.date() if oldest_amen else None, today)
     say("입지 수집", amen_age, STALE["amenity_days"],

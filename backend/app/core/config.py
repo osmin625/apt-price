@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # 본 저장소의 apt.db 를 가리킨다. 거시만 워크트리의 빈 `data/` 를 보면 계열이 조용히
     # 비고, 그 화면은 '아직 적재되지 않음' 으로 멀쩡히 뜬다.
     macro_database_url: str = ""
+    # 주식 일봉(stock.db). 같은 규칙으로 비우면 apt.db 옆이다.
+    stock_database_url: str = ""
 
     # 공공데이터포털 '아파트 매매 실거래가 상세 자료'(15126468) 활용신청 후 받는
     # 일반 인증키(Decoding). https://www.data.go.kr/data/15126468/openapi.do
@@ -57,6 +59,10 @@ class Settings(BaseSettings):
     @property
     def macro_url(self) -> str:
         return self.sibling_url("macro.db", self.macro_database_url)
+
+    @property
+    def stock_url(self) -> str:
+        return self.sibling_url("stock.db", self.stock_database_url)
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -19,7 +19,10 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8000',
+          // 워크트리에서 띄우면 본 저장소의 백엔드가 이미 8000 을 쥐고 있어 새 백엔드는 다른 포트로 밀린다.
+          // 그대로 두면 이 화면이 **다른 코드의 백엔드**를 부르고, 새 엔드포인트는 404 로 비어 보인다.
+          // VITE_API_TARGET 으로 그 포트를 가리킨다(.claude/launch.json 의 env).
+          target: env.VITE_API_TARGET || 'http://127.0.0.1:8000',
           changeOrigin: true,
           // 헤도닉 적합은 캐시가 비어 있으면 실거래 3만 건 기준 ~7초가 걸린다.
           // 기본 프록시 타임아웃으로는 백엔드 재시작 직후 첫 요청이 끊긴다.

@@ -6,7 +6,7 @@
 파일이 둘이 되면 새로 생기는 실패가 하나 있다 — **한쪽 파일만 못 찾는 것.** SQLite 는 없는
 파일을 열면 빈 파일을 새로 만든다. 첫 오류('no such table')는 무엇이 빠졌는지 말하지 않고,
 남은 빈 파일에 누가 표를 만들면 그다음부터 거시 계열은 오류 없이 0행이 되어 화면이 '적재 전'
-으로 멀쩡히 뜬다(`store.py` 머리말). 워크트리처럼 `data/` 가 빈 곳이 그 자리다.
+으로 멀쩡히 뜬다(`core/dbfile.py` 머리말). 워크트리처럼 `data/` 가 빈 곳이 그 자리다.
 
 그래서 본다.
 
@@ -38,9 +38,7 @@ from app.macro import store  # noqa: E402
 
 def drop_engine() -> None:
     # 윈도우는 열린 SQLite 파일을 지우지 못한다 — 임시 폴더를 치우기 전에 연결을 닫는다.
-    if store._sessions.cache_info().currsize:
-        store._sessions().kw["bind"].dispose()
-    store._sessions.cache_clear()
+    store.FILE.dispose()
 
 
 def point_to(url: str) -> None:

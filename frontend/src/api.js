@@ -215,6 +215,7 @@ export const api = {
   supplyOverview: () => request('/supply/overview'),
   regimeOverview: () => request('/regime/overview'),
   tenureOverview: () => request('/tenure/overview'),
+  stockIndices: () => request('/stock/indices'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),
