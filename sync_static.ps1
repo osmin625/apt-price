@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 <#
-    정적 사이트 동기화 — 내보내기 → 빌드 → 배포
+    정적 사이트 동기화 — (지수 적재) → 내보내기 → 빌드 → 배포
 
     로컬은 동적으로 돈다(데이터 적재·모델 적합·매물 붙여넣기). 이 스크립트는 그
     결과를 **읽기 전용 스냅샷**으로 떠서 정적 사이트로 올린다.
@@ -9,7 +9,8 @@
     있고, docs/engineering/deploy.md 에도 적어 두었다.
 
     사용:
-      .\sync_static.ps1                 내보내기 + 빌드 + 배포
+      .\sync_static.ps1                 지수 적재 + 내보내기 + 빌드 + 배포
+      .\sync_static.ps1 -NoIngest       적재 없이 지금 DB 그대로 (푸시 연동 배포가 이것으로 부른다)
       .\sync_static.ps1 -NoPublish      배포 없이 로컬 확인용 빌드까지만
       .\sync_static.ps1 -NoQuotes       호가(매물 순위·단지 상세)를 뺀다
       .\sync_static.ps1 -Quiet          스케줄러용. 요약만 남긴다
@@ -23,6 +24,7 @@ param(
     [switch]$NoQuotes,
     [switch]$Quiet,
     [switch]$AllowAnyBranch,
+    [switch]$NoIngest,
     [string]$Branch = 'gh-pages'
 )
 
@@ -154,7 +156,36 @@ if (-not $NoPublish -and -not $AllowAnyBranch) {
     Say '배포 전제 확인 — main · 변경 없음 · origin 과 같음'
 }
 
-# ------------------------------------------------------------ 1) 내보내기
+# ------------------------------------------------------------ 1) 지수 적재
+<#
+    주식 지수 일봉과 그 무위험 금리는 **날마다** 바뀐다. 손으로 돌리는 실거래와 달리
+    키 하나(ECOS)와 몇 초면 되고 두 번 돌려도 같다(덮어쓰기). 그래서 매일 작업이 받는다.
+    받지 않으면 지수 예측 탭은 마지막으로 손으로 받은 날에 멈춘 채 멀쩡히 뜬다.
+
+    **실패해도 배포는 한다.** 어제 값이라도 올라가는 편이, 실거래·공급까지 통째로 하루
+    늦는 것보다 낫다. 대신 끝에서 종료 코드 1 로 끝내 스케줄러에 실패가 남게 한다 —
+    지수가 옛 값이라는 것은 진짜 실패다. 화면은 마지막 거래일을 ⓘ 에 적는다.
+
+    푸시 연동 배포(deploy_on_push.ps1)는 -NoIngest 로 부른다. 그쪽은 코드가 바뀐 것을
+    올리는 일이고, 적재 실패로 종료 코드가 1 이 되면 '배포 실패' 로 보고 한 시간마다
+    다시 올린다 — 배포는 됐는데도.
+#>
+$IngestFailed = $false
+if (-not $NoIngest) {
+    Say '지수 적재...'
+    Push-Location $Backend
+    try {
+        $code = Run $VPy @('-m', 'scripts.ingest_stock')
+    } finally {
+        Pop-Location
+    }
+    if ($code -ne 0) {
+        $IngestFailed = $true
+        Say "[X] 지수 적재 실패 (exit $code) — 옛 값으로 내보냅니다. 끝에서 실패로 남깁니다."
+    }
+}
+
+# ------------------------------------------------------------ 2) 내보내기
 <#
     적합이 없으면 여기서 계산한다(기간당 수십 초). 스냅샷 8MB 에 50초쯤 걸린다.
     실패하면 종료 코드로 알려 주므로 그냥 넘기지 않는다 — 스냅샷이 반쪽이면
@@ -179,7 +210,7 @@ $meta = Get-Content $metaPath -Raw -Encoding utf8 | ConvertFrom-Json
 Say ("스냅샷 {0}개 파일 · {1:N1}MB · 실거래 {2:N0}건 · 최신 거래 {3}" -f `
     $meta.files, ($meta.bytes / 1MB), $meta.data.trades, $meta.data.latest_deal_date)
 
-# ------------------------------------------------------------ 2) 빌드
+# ------------------------------------------------------------ 3) 빌드
 Say '빌드...'
 Push-Location $Frontend
 try {
@@ -198,11 +229,12 @@ Say "빌드 완료 · dist 안 스냅샷 ${distJson}개"
 
 if ($NoPublish) {
     Say '배포 생략(-NoPublish). 확인: cd frontend; npm run preview:static'
+    if ($IngestFailed) { Say '=== 완료(지수 적재 실패) ==='; exit 1 }
     Say '=== 완료 ==='
     exit 0
 }
 
-# ------------------------------------------------------------ 3) 배포
+# ------------------------------------------------------------ 4) 배포
 <#
     왜 dist 안에서 git 을 새로 만들어 강제 푸시하나
 
@@ -250,6 +282,7 @@ try {
 }
 
 Say "배포 완료 · $msg"
+if ($IngestFailed) { Say '=== 완료(지수 적재 실패 — 지수는 옛 값) ==='; exit 1 }
 Say '=== 완료 ==='
 exit 0
 

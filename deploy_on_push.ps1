@@ -208,7 +208,9 @@ if ($GitCode -ne 0) { Say "[X] main 을 fast-forward 하지 못했습니다: $ou
 Say "$what — 배포를 시작합니다"
 $before = if (Test-Path $SyncLog) { (Get-Item $SyncLog).Length } else { 0 }
 
-& $Sync -Quiet
+# 적재는 매일 작업만 한다(sync_static.ps1 '1) 지수 적재' 주석). 여기서 적재가 실패하면
+# 배포는 됐는데 종료 코드가 1 이 되어 한 시간마다 다시 올리게 된다.
+& $Sync -Quiet -NoIngest
 $code = $LASTEXITCODE
 
 # 이번 실행이 덧붙인 부분만 읽는다. 로그는 UTF-8 이라 바이트로 잘라 디코딩한다.
