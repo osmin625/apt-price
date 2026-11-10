@@ -2,8 +2,8 @@
 
     python -m scripts.ingest_stock            # 전부 처음부터(덮어쓰기라 두 번 돌려도 같다)
 
-받는 것은 `app/stock/indices.py` 의 지수와, 각 지수의 무위험 금리 중 macro.db 에 아직 없는
-계열(FRED `us_tbill3m`). 한국은행 기준금리는 `ingest_macro` 가 받는다.
+받는 것은 `app/stock/indices.py` 의 지수, 지수 분석이 견주는 지표(`app/stock/indicators.py` —
+한국은행 계열 포함), FRED 계열 전부(`fred.SERIES`). 매일 06:30 동기화(`sync_static.ps1`)가 부른다.
 
 ## 받은 값을 그대로 믿지 않는다
 
@@ -27,8 +27,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.macro import store as macro_store  # noqa: E402
-from app.macro.clients import fred  # noqa: E402
+from app.macro.clients import ecos, fred  # noqa: E402
 from app.stock import store  # noqa: E402
+from app.stock.indicators import INDICATORS  # noqa: E402
 from app.stock.indices import INDICES, fetch  # noqa: E402
 
 MAX_DAILY_LOG = 0.25
@@ -85,6 +86,25 @@ def main() -> int:
                   f"  {time.perf_counter() - t0:.1f}s")
 
     with macro_store.writer() as mdb:
+        # 지수 분석이 견주는 한국은행 계열(app/stock/indicators.py). ingest_macro 도 받지만 그쪽은
+        # 손으로 돌린다 — 매일 06:30 동기화가 이것을 부르므로 여기서도 받아 지표를 새로 유지한다.
+        # 덮어쓰기라 두 쪽이 받아도 같다.
+        for ind in INDICATORS:
+            if ind.source != "ECOS":
+                continue
+            t0 = time.perf_counter()
+            try:
+                pts = with_retry(lambda ind=ind: ecos.fetch(ind.id), ind.id)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  [X] {ind.id:<12} {exc}")
+                bad += 1
+                continue
+            n = macro_store.upsert(mdb, [{"series": ind.id, "freq": ecos.TABLES[ind.id][2], "period": p.ym,
+                                          "value": p.value, "unit": p.unit, "source": "ECOS"} for p in pts])
+            mdb.commit()
+            print(f"      {ind.id:<12} {n:>5}달  {pts[0].ym}~{pts[-1].ym}  ECOS"
+                  f"  {time.perf_counter() - t0:.1f}s")
+
         for name in fred.SERIES:
             t0 = time.perf_counter()
             try:

@@ -20,7 +20,7 @@ backend/
     macro/models.py         macro_points — (계열 id, 주기, 시점) 한 줄
     macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리 (키 없으면 sample 폴백)
                             fetch_table 은 표 하나를 그대로 — KOSPI 일별도 이것으로 받는다
-    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 3개월 국채(TB3MS)·S&P 500(SP500, 최근 10년)
+    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 금리·물가·M2·실업률(SERIES)·S&P 500(SP500, 최근 10년)
 
     stock/                  주식 — 지수(다음은 종목)의 월~분기 수익률 구간 예측
     stock/CLAUDE.md         주식 지침서 — 평가 장치가 먼저, 출처는 공식·대조는 비공식
@@ -29,7 +29,9 @@ backend/
     stock/indices.py        지수 목록과 받는 곳(KOSPI←ECOS, S&P 500←FRED)·각자의 무위험 금리
     stock/forecast.py       후보 넷(무작위 보행·과거 평균·금리+프리미엄·변동성 조정)과 walk-forward·구간 점수·DM 검정
                             (순수 파이썬 — CI 에서도 같은 코드)
-    stock/service.py        지수 탭 응답 — 지금 구간 + 같은 장치로 잰 과거 성적
+    stock/indicators.py     지수 분석의 지표 목록·짝·꼴(diff·growth·level)·발표 시차 — 적재·응답·신선도가 여기서 읽는다
+    stock/effects.py        지표 → 지수 영향(평소 폭 막대·등분산 Hansen–Hodrick 95% 범위·시기 나누기·함께 넣은 값)
+    stock/service.py        지수 분석 응답 — 지표 영향 + 지금 구간 + 같은 장치로 잰 과거 성적
     stock/routers/indices.py   /api/stock/indices
 
     realestate/             부동산
@@ -112,6 +114,7 @@ backend/
     ingest_stock.py         주식 지수 일봉(stock.db)·FRED 금리(macro.db) — 받을 때마다 종가·하루 변화 검사
     probe_stock_crosscheck.py  지수 종가를 비공식(야후)과 맞춰 본다(네트워크 — 검진 밖)
     verify_lookahead.py     지수 예측이 기점 뒤 값을 바꿔도 그대로인지(미래를 보지 않는지)
+    verify_index_effects.py 지표 영향의 95% 범위가 참값을 덮는지·헛짚음·발표 시차 (합성 자료)
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
@@ -142,7 +145,10 @@ frontend/
   src/realestate/topics/    같은 주제는 창 하나 — registry.js 가 주제와 그 집(탭)을 정한다
   src/realestate/topics/RegionMap.jsx        시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
   src/stock/CLAUDE.md       백엔드 쪽 주식 지침서를 `@` 로 가져오는 한 줄
-  src/stock/tabs.jsx        주식의 탭 — 지수 예측
+  src/stock/tabs.jsx        주식의 탭 — 지수 분석(옛 id indices 는 App.jsx TAB_ALIAS)
+  src/stock/components/EffectBars.jsx    지표별 영향 막대(평소 폭·95% 범위·판정 색)
+  src/stock/components/EffectModal.jsx   막대를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
+  src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)
   src/stock/views/IndexView.jsx   지수의 지금 구간 · 후보별 과거 성적 표 · 실제 대 구간 그림
 ```
 

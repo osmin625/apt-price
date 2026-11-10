@@ -9,6 +9,7 @@ FRED API 는 키가 필요하지만, 그래프 화면이 쓰는 `fredgraph.csv` 
 ## 받는 것
 
     TB3MS   미국 3개월 국채 금리(유통, 월평균, 연%)   1934~  — S&P 500 의 무위험 금리
+    FEDFUNDS·GS10·T10Y3MM·CPIAUCSL·M2SL·UNRATE        — 지수 분석의 미국 지표(`SERIES`)
     SP500   S&P 500 지수(일별 종가)                 최근 10년 — 주식 쪽(`app/stock/indices.py`)
 
 **SP500 은 FRED 에 최근 10년만 있다**(S&P 다우존스 지수의 사용 조건). 그보다 긴 공식 무료
@@ -30,6 +31,14 @@ BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv?id="
 # 우리 이름 → (FRED 계열 id, 주기, 단위). macro.db 에 우리 이름으로 들어간다.
 SERIES: dict[str, tuple[str, str, str]] = {
     "us_tbill3m": ("TB3MS", "M", "연%"),
+    # 주식 '지수 분석' 의 미국 지표(2026-11, app/stock/indicators.py). 전부 월 계열이다 — 금리는
+    # 월평균, 물가·M2 는 계절조정. 장단기 금리차는 일별(T10Y3M) 말고 월평균(T10Y3MM)을 쓴다.
+    "us_fedfunds": ("FEDFUNDS", "M", "연%"),
+    "us_10y": ("GS10", "M", "연%"),
+    "us_term_spread": ("T10Y3MM", "M", "%p"),
+    "us_cpi": ("CPIAUCSL", "M", "1982-84=100"),
+    "us_m2": ("M2SL", "M", "십억달러"),
+    "us_unrate": ("UNRATE", "M", "%"),
 }
 
 

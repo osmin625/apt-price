@@ -81,12 +81,18 @@ STALE = {
     # 예금은행 신규취급액 금리(주담대·전세대출·정기예금)는 다음 달 말께 나온다 — 2026-10-19 에
     # 2026-08 까지였다(그 달 말일에서 50일). 75일이면 정상 지연과 겹치지 않는다.
     "ecos_days": {"cpi": 45, "base_rate": 45, "m2": 105,
-                  "mortgage_rate": 75, "jeonse_loan_rate": 75, "deposit_rate": 75},
+                  "mortgage_rate": 75, "jeonse_loan_rate": 75, "deposit_rate": 75,
+                  # 원/달러 말일자료는 다음 달 첫 영업일에 나온다. 기준금리와 같은 45일.
+                  "krw_usd": 45},
     # 지수 일봉(stock.db). ECOS·FRED 모두 다음 영업일에 전날 종가가 들어온다. 설·추석 연휴
     # (최장 5거래일)에 주말이 붙으면 9일까지 빈다 — 10일을 넘기면 적재가 멈췄다.
     "stock_days": 10,
     # FRED 미국 3개월 국채(월평균)는 다음 달 첫 영업일께 나온다. ECOS 기준금리와 같은 45일.
-    "fred_days": {"us_tbill3m": 45},
+    "fred_days": {"us_tbill3m": 45,
+                  # 금리 월평균·실업률은 다음 달 첫 주에 나온다 — 45일.
+                  "us_fedfunds": 45, "us_10y": 45, "us_term_spread": 45, "us_unrate": 45,
+                  # 물가는 다음 달 중순, M2 는 넷째 주께 나온다 — 그 달 말일에서 55일 남짓까지 정상이라 75일.
+                  "us_cpi": 75, "us_m2": 75},
 }
 DEAD_CSS_WARN_PCT = 15.0
 
