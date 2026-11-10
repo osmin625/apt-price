@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
+from ...macro import store as macro_store
 from ..models import RebStat
 from ..services import tenure as tn
 
@@ -21,8 +22,10 @@ NOT_INGESTED = (
 def overview(db: Session = Depends(get_db)):
     n = db.scalar(
         select(func.count()).select_from(RebStat)
-        .where(RebStat.metric.in_(("rent_index", "mortgage_rate")))
+        .where(RebStat.metric == "rent_index")
     ) or 0
+    # 금리는 macro.db 에 있다. 파일이 없으면 여기서 MacroMissing 으로 시끄럽게 실패한다.
+    n += len(macro_store.monthly("mortgage_rate"))
     if n == 0:
         raise HTTPException(status_code=503, detail=NOT_INGESTED)
     return tn.overview(db)

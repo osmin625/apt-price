@@ -50,6 +50,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
+from ...macro import store as macro_store
+from ...macro.clients import ecos
 from ..models import RebStat
 from .policy import (ASSEMBLIES, ASSEMBLY_SOURCE, COVERS_FROM, GOV_SOURCE, GOVERNMENTS, POLICY,
                      government_at)
@@ -123,6 +125,9 @@ GROUP_ORDER = ("공급", "수요", "통화량", "금리", "정책", "세금")
 # ──────────────────────────────────────────────────────────
 def _raw(db: Session, metric: str, sgg_cd: str) -> dict[str, float]:
     """월별 원계열. `sgg_cd` 가 비면 우리 17개 구의 평균(또는 합)을 쓴다."""
+    if metric in ecos.TABLES:
+        # 한국은행 계열은 macro.db 에 있다(전국 한 줄이라 `sgg_cd` 는 '00' 뿐이다).
+        return macro_store.monthly(metric)
     q = select(RebStat.ym, RebStat.value).where(RebStat.metric == metric)
     if sgg_cd:
         q = q.where(RebStat.sgg_cd == sgg_cd)

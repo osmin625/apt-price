@@ -12,7 +12,12 @@ backend/
   app/                      자산(asset)마다 패키지 하나 — 자산끼리는 서로 import 하지 않는다
     main.py                 FastAPI 앱 — 자산 라우터 등록, 적합 예열(FIT_WARM), /api/health
     core/config.py          설정(.env) — DATABASE_URL 로 DB 사본을 걸 수 있다
-    core/db.py              엔진·세션
+    core/db.py              엔진·세션 — make_engine 은 DB 파일마다(apt.db·macro.db) 같은 설정을 건다
+
+    macro/                  거시 — 자산을 건너 쓰는 공표 계열. 어느 자산도 import 하지 않는다
+    macro/store.py          macro.db(apt.db 옆) 읽기·쓰기 — 파일이 없으면 빈 계열 대신 MacroMissing
+    macro/models.py         macro_points — (계열 id, 주기, 시점) 한 줄
+    macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리 (키 없으면 sample 폴백)
 
     realestate/             부동산
     realestate/CLAUDE.md    부동산 지침서 — 이 자산의 라우팅 표와 규칙(아래 '자산 구조')
@@ -59,7 +64,6 @@ backend/
     realestate/clients/kakao.py        좌표 변환 + 지하철역 탐색 + 단지 POI 검색
     realestate/clients/tmap.py         보행자 경로안내
     realestate/clients/sdsc.py         소상공인 상가정보 — 업종 분류로 유흥을 가른다
-    realestate/clients/ecos.py         한국은행 ECOS — M2·기준금리·소비자물가 (키 없으면 sample 폴백)
     realestate/clients/bldrgst.py      건축HUB 건축물대장 표제부 — 0 을 성공으로 받지 않는다
     realestate/clients/kapt.py         K-apt 단지 세대수·동수
     realestate/clients/reb.py          한국부동산원 R-ONE 공표 통계
@@ -72,6 +76,7 @@ backend/
     verify_supply_cum.py    거시 '누적 공급'(월별) vs 공급 분석 누적 차이(연별) 대조
     verify_reflect.py       반영 분해의 부호 제약 최소제곱(순수 파이썬) vs scipy nnls
     verify_tenure.py        매매·전세·월세의 이어 붙인 가격 수준에 표본 개편 튐이 없는지
+    verify_macro_store.py   macro.db 가 없을 때 빈 파일을 만들지 않고 시끄럽게 실패하는지 · 쓴 값 그대로 읽는지
     probe_policy.py         정책 연표의 원문 링크(정책브리핑 보도자료)가 아직 그 부처·제목·날짜인지(네트워크)
     model_status.py         지금 모델·데이터 상태 (문서에 숫자를 박지 않기 위해)
     verify_guard.py         넣어 둔 검사가 실제로 걸리는지 시험
@@ -139,7 +144,12 @@ frontend/
   사이에 끼어 '이 폴더의 무엇이 내 일인가' 를 매번 다시 가려야 했을 것이다.
 - **겹치면 그때 뽑는다.** 처음부터 공통 계층을 설계하지 않는다. 두 번째 자산이 같은 것을
   실제로 쓰기 시작할 때 뽑는다. 거시 계열(금리·통화량)처럼 두 자산이 같은 원천을 읽게 되면
-  두 자산 밖의 패키지로 옮긴다.
+  두 자산 밖의 패키지로 옮긴다. 거시가 처음이었다 — 한국은행 계열을 `app/macro` 와 `macro.db`
+  로 꺼냈다(2026-11). 한국부동산원 계열은 시군구별이고 부동산만 써서 apt.db 에 남겼다.
+  옮기기 전후 정적 내보내기를 파일마다 바이트로 견줘 같았다.
+- **DB 파일은 apt.db 옆에 둔다.** `MACRO_DATABASE_URL` 이 비면 `DATABASE_URL` 이 가리키는
+  apt.db 와 같은 폴더의 macro.db 다. 워크트리·머지 관문은 `DATABASE_URL` 하나로 본 저장소의
+  DB 를 가리키는데, 거시만 워크트리의 빈 `data/` 를 보면 화면이 '적재 전' 으로 조용히 빈다.
 - **탭은 자산의 `tabs.jsx` 가 정한다.** 이름·순서·정적 여부·화면이 한 곳에 있고 `App.jsx`
   는 조립만 한다. 탭 id 는 자산을 건너 겹치지 않는다 — 주소 `#탭` 만으로 자산이 정해진다.
 - **지침서도 계층이다.** 루트 `CLAUDE.md` 는 자산과 무관한 방식만, 자산 폴더의 `CLAUDE.md`

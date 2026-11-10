@@ -32,7 +32,7 @@ import sys
 import time
 from datetime import date
 
-from app.realestate.clients import ecos
+from app.macro.clients import ecos
 
 # 항목 이름의 기대값. ECOS 의 ITEM_NAME 과 **글자 그대로** 비교한다.
 #

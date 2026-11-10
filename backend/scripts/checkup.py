@@ -232,14 +232,17 @@ def days_since(d: dt.date | None, today: dt.date) -> int | None:
 
 def check_fresh(rep: Report, today: dt.date) -> None:
     print("\n== 신선도 ==")
-    from sqlalchemy import func, select
+    from sqlalchemy import func, or_, select
 
     from app.core.db import SessionLocal
     from app.realestate.models import BldRun, ComplexAmenity, KaptRun, RebStat, Trade
 
     with SessionLocal() as db:
         last_trade = db.scalar(select(func.max(Trade.deal_date)))
-        last_reb = db.scalar(select(func.max(RebStat.ym)))
+        # 한국은행 계열은 macro.db 로 옮겼다. 옮기기 전 행이 reb_stats 에 남아 있어도
+        # 공표통계(R-ONE) 신선도를 대신 채우지 않게 출처로 거른다.
+        last_reb = db.scalar(select(func.max(RebStat.ym)).where(
+            or_(RebStat.source.is_(None), RebStat.source != "ECOS")))
         oldest_amen = db.scalar(select(func.min(ComplexAmenity.collected_at)))
 
     def say(label: str, age: int | None, limit: int, fix: str) -> None:
@@ -264,13 +267,14 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     say("최신 공표통계", days_since(reb_date, today), STALE["reb_days"],
         "python -m scripts.ingest_reb")
 
-    from app.realestate.clients import ecos
+    from app.macro import store as macro_store
+    from app.macro.clients import ecos
 
-    with SessionLocal() as db:
-        last_ecos = dict(db.execute(
-            select(RebStat.metric, func.max(RebStat.ym))
-            .where(RebStat.metric.in_(list(ecos.TABLES)))
-            .group_by(RebStat.metric)).all())
+    try:
+        last_ecos = macro_store.last_period(ecos.TABLES)
+    except macro_store.MacroMissing as exc:
+        rep.add("X", "신선도", str(exc))
+        last_ecos = {}
     for metric in ecos.TABLES:
         # 한도가 없는 지표를 더했으면 여기서 멈춘다 — 조용히 빠지지 않게.
         limit = STALE["ecos_days"][metric]

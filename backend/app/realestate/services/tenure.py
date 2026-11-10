@@ -47,6 +47,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..clients.molit import DISTRICTS
+from ...macro import store as macro_store
+from ...macro.clients import ecos
 from ..models import RebStat
 
 # 구마다 오는 표(R-ONE). 평균가·전세가율은 마지막 달 한 점만 쓴다(위 '지수로 이어 붙인다').
@@ -98,9 +100,16 @@ def _gap(a: str, b: str) -> int:
 
 
 def _load(db: Session, metrics: tuple[str, ...], by_sgg: bool) -> dict[str, dict]:
-    """{metric: {sgg: {ym: v}}} (by_sgg) 또는 {metric: {ym: v}}(전국)."""
-    q = select(RebStat.metric, RebStat.sgg_cd, RebStat.ym, RebStat.value).where(RebStat.metric.in_(metrics))
+    """{metric: {sgg: {ym: v}}} (by_sgg) 또는 {metric: {ym: v}}(전국).
+
+    한국은행 금리는 macro.db 에서 온다 — 전국 한 줄이라 구별(`by_sgg`)로는 비어 있다.
+    """
     out: dict[str, dict] = {m: {} for m in metrics}
+    for m in metrics:
+        if m in ecos.TABLES and not by_sgg:
+            out[m] = macro_store.monthly(m)
+    rest = [m for m in metrics if m not in ecos.TABLES]
+    q = select(RebStat.metric, RebStat.sgg_cd, RebStat.ym, RebStat.value).where(RebStat.metric.in_(rest))
     for m, sgg, ym, v in db.execute(q):
         if by_sgg:
             if sgg in DISTRICTS:

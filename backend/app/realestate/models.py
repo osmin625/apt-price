@@ -332,9 +332,9 @@ class RebStat(Base):
     # 리베이스될 때 다음 적재에서 저절로 따라간다.
     base: Mapped[str] = mapped_column(String(40), default="")
 
-    # 어디서 받은 값인가. 표 이름은 `reb_stats` 지만 **한국은행(ECOS) 값도 들어
-    # 있다** — M2 와 기준금리만 R-ONE 에 없어서다. 출처를 안 적으면 나중에 단위나
-    # 기준시점을 따질 때 어느 기관 규칙을 봐야 할지 알 수 없다.
+    # 어디서 받은 값인가. 한국은행(ECOS) 값도 여기 들어 있었다 — M2 와 기준금리만
+    # R-ONE 에 없어서다. 2026-11 에 macro.db(`app/macro`)로 옮겼고, 남은 'ECOS' 행은
+    # 읽는 곳이 없다(docs/data/reb.md '한국은행 ECOS').
     # 표 이름을 바꾸지 않은 이유: SQLite 테이블 이름 변경은 `migrate.py` 가 하는
     # ADD COLUMN 으로 안 되고, 이름보다 출처가 적혀 있는 쪽이 실제로 쓸모 있다.
     source: Mapped[str] = mapped_column(String(8), default="REB", index=True)

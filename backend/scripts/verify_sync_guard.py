@@ -222,6 +222,11 @@ CASES = [
      lambda s: s.replace("NEEDS_DB = False", "NEEDS_DB_GONE = False", 1),
      "NEEDS_DB = True|False` 가 없습니다", False,
      ["-m", "scripts.checkup", "--only", "정합성", "--fast", "--no-db"]),
+    # macro.db 가 없을 때 파일부터 보는 확인을 뺀 모양. SQLite 가 빈 파일을 만들고 'no such
+    # table' 로 죽는다 — 무엇이 빠졌는지 안 보이고 빈 파일이 남는다(app/macro/store.py).
+    ("거시 — macro.db 존재 확인을 뺌", "backend/app/macro/store.py",
+     lambda s: s.replace("    if p is not None and not p.exists():", "    if False:", 1),
+     "실제: OperationalError", False, ["-m", "scripts.verify_macro_store"]),
     # 예외가 사라진 것을 가리키면 기록만 남아 다음 사람을 속인다.
     ("예외 — 사라진 파일을 가리킴", "backend/scripts/verify_sync.py",
      lambda s: s.replace('    "__init__.py",\n', '    "__init__.py",\n    "gone_tool.py",\n', 1),
