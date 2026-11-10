@@ -1,114 +1,72 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { api } from '../../api'
 import ChartLink from '../../shared/ChartLink'
-import { fmt } from '../../shared/Charts'
 import Hint from '../../shared/Hint'
-import TimeLines from '../../shared/TimeLines'
+import EffectBars from '../components/EffectBars'
+import EffectModal from '../components/EffectModal'
+import ForecastCard from '../components/ForecastCard'
 
 /**
- * 지수 예측 — KOSPI·S&P 500 의 다음 1개월·3개월 수익률 80% 구간과, **같은 장치로 잰 과거 성적**.
+ * 지수 분석 — 경제지표가 움직일 때 KOSPI·S&P 500 은 어땠나(맨 위), 그리고 다음 1·3개월 범위(접힌 카드).
  *
- * 예측만 보여 주면 '얼마나 믿을 만한가' 를 말할 수 없다. 그래서 표 한 줄이 후보 하나이고, 지금 구간
- * 옆에 그 후보가 과거 같은 기점들에서 낸 성적(포함률·폭·구간 점수·기준선 대비 DM 검정)을 같이 둔다.
- * 기준선은 무작위 보행이다. 못 이기면 숫자가 그렇게 말한다 — 판정 문장은 만들지 않는다
- * (CLAUDE.md '값은 계산해 넣어도 판정은 그날에 묶인다'). 상태 한 줄은 응답에서 그 자리에서 센다.
+ * 2026-11 에 '지수 예측' 에서 바꿨다. 구간 예측 표가 무엇을 말하는지 와닿지 않는다는 말을 듣고, 정말
+ * 묻고 싶은 질문 — **금리 같은 지표가 주가에 + 인가 − 인가, 얼마나** — 을 맨 위로 올렸다. 계산은
+ * backend/app/stock/effects.py, 지표 목록은 indicators.py, 경위는 docs/stock/effects.md.
  *
- * 줄을 누르면 그 후보의 과거 구간이 그림에 그려진다. 처음에는 구간 점수가 가장 낮은 후보다.
+ * 단추 셋이 같은 막대의 시점을 바꾼다: 같은 1년(지표가 움직인 그 1년의 지수) · 그 뒤 3개월 · 그 뒤 12개월
+ * (지표를 알게 된 뒤의 지수). 막대를 누르면 창에 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값이 나온다.
  */
+const HZ = [
+  { id: 'same', label: '같은 1년' },
+  { id: 'after3', label: '그 뒤 3개월' },
+  { id: 'after12', label: '그 뒤 12개월' },
+]
 const ym = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}`
-const day = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
-const signed = (v, d = 1) => `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}%`
-const tone = (v) => (v > 0 ? 'tone-pos' : v < 0 ? 'tone-neg' : '')
-const P_SIG = 0.05
-// 0.0005 아래를 소수 셋째 자리로 찍으면 '0' 이 된다 — p 가 0 인 검정은 없다.
-const pText = (p) => (p == null ? '—' : p < 0.001 ? '<0.001' : fmt(p, 3))
 
-function IndexCard({ ix }) {
-  const [h, setH] = useState(ix.horizons[0].h)
-  const hz = ix.horizons.find((x) => x.h === h)
-  const best = useMemo(
-    () => [...hz.models].sort((a, b) => a.interval_score - b.interval_score)[0].id,
-    [hz],
-  )
+function EffectCard({ ix }) {
+  const [hz, setHz] = useState('same')
   const [pick, setPick] = useState(null)
-  const sel = pick && hz.models.some((m) => m.id === pick) ? pick : best
-  const selModel = hz.models.find((m) => m.id === sel)
-  const bt = hz.backtest
-  const beats = hz.models.filter(
-    (m) => !m.baseline && m.dm_interval_p != null && m.dm_interval_p < P_SIG && m.dm_interval_t < 0,
-  )
-
-  const series = useMemo(() => {
-    const pts = (arr) => bt.origins.map((o, i) => ({ ym: o, value: arr[i] }))
-    return [
-      { key: 'actual', label: `실제 ${h}개월 수익률`, color: 'var(--series-1)', width: 2, points: pts(bt.actual) },
-      { key: 'hi', label: `${selModel.label} 상단`, color: 'var(--series-3)', dash: true, points: pts(bt.bands[sel].map((b) => b[1])) },
-      { key: 'lo', label: `${selModel.label} 하단`, color: 'var(--series-3)', dash: true, points: pts(bt.bands[sel].map((b) => b[0])) },
-    ]
-  }, [bt, sel, selModel, h])
+  const e = ix.effects[hz]
+  const live = e.rows.filter((r) => r.n)
+  const clear = live.filter((r) => r.verdict !== 'none').length
+  const from = live.length ? live.map((r) => r.from).sort()[0] : null
+  const to = live.length ? live.map((r) => r.to).sort().slice(-1)[0] : null
+  const row = pick && e.rows.find((r) => r.id === pick)
+  const hzLabel = HZ.find((x) => x.id === hz).label
 
   return (
     <section className="card">
       <h2>
-        {ix.label}
+        {ix.label} — 경제지표와 함께
         <Hint
           wide
           notes={[
-            `${ym(ix.origin)} 말 종가에서 다음 ${h}개월 수익률이 ${Math.round((1 - ix.alpha) * 100)}% 확률로 들어갈 구간입니다. 현지 통화(${ix.currency}) 기준이고 배당은 빠진 가격 지수입니다.`,
-            '후보마다 그 기점 전에 알려진 것만으로 매달 다시 예측해 실제와 견줬습니다(시간순 표본 밖). 모든 후보가 같은 기점에서 잽니다.',
-            '포함률은 실제가 구간 안에 든 비율로, 목표에 가까울수록 정직한 구간입니다. 넓히기만 해도 포함률은 오르므로 구간 점수(폭 + 벗어난 만큼의 벌점, 낮을수록 좋음)를 같이 봅니다. 폭·점수는 로그 수익률(%p)로 잽니다.',
-            'p 는 기준선(무작위 보행)과 같은지를 본 Diebold–Mariano 검정입니다. 작을수록 차이가 우연이 아닙니다 — 방향은 점수가 낮은 쪽입니다.',
-            `무위험 금리는 ${ix.rf_label}입니다. 출처: ${ix.source}. 마지막 거래일 ${day(ix.last_day)} — 그 달은 아직 끝나지 않아 기점에서 뺍니다.`,
+            '막대는 지표가 평소 폭(1년 움직임의 표준편차)만큼 움직였을 때 지수 수익률이 평균 몇 % 달랐나입니다. 단위가 다른 지표를 같은 길이로 견주려고 평소 폭으로 맞췄습니다. 1단위(1%p·1%)당 값은 줄 오른쪽에 있습니다.',
+            '가는 선은 95% 범위입니다. 범위가 0 을 넘지 않으면 초록(+)·빨강(−), 넘으면 회색(뚜렷하지 않음)입니다.',
+            '같은 1년: 지표가 움직인 그 1년 동안의 지수. 그 뒤: 지표를 알 수 있게 된 뒤부터의 지수입니다 — 물가·M2·실업률은 다음 달에야 발표되어 한 달 밀어 셉니다.',
+            '금리·실업률은 1년 변화(%p), 물가·M2·환율은 1년 상승률(%)입니다. 미국 장단기 금리차만 수준(%p)입니다 — 역전 여부가 신호라서입니다.',
+            '연관이지 원인이 아닙니다. 금리가 오른 해에 주가가 내렸어도 경기가 둘을 같이 움직였을 수 있습니다. 지표가 여럿이라 우연히 뚜렷해 보이는 것도 섞일 수 있습니다.',
+            '시기에 따라 다름: 표본을 시간순으로 반 나눠 다시 재면 방향이 다릅니다.',
+            `지수는 현지 통화(${ix.currency})·배당을 뺀 가격 지수의 월말 종가입니다.`,
           ]}
         />
-        <ChartLink id={ix.id} />
+        <ChartLink id={`${ix.id}-effects`} />
       </h2>
-      <div className="seg" role="tablist" aria-label="기간">
-        {ix.horizons.map((x) => (
-          <button key={x.h} role="tab" aria-selected={x.h === h} onClick={() => setH(x.h)}>
-            {x.h}개월
+      <div className="seg" role="tablist" aria-label="시점">
+        {HZ.map((x) => (
+          <button key={x.id} role="tab" aria-selected={x.id === hz} onClick={() => setHz(x.id)}>
+            {x.label}
           </button>
         ))}
       </div>
       <p className="muted small">
-        기점 {bt.origins.length}개({ym(bt.origins[0])}~{ym(bt.origins[bt.origins.length - 1])}) · 기준선보다 구간
-        점수가 낮고 p&lt;{P_SIG}: {beats.length ? beats.map((m) => m.label).join(', ') : '없음'}
+        {from ? `${ym(from)}~${ym(to)}` : '—'} · 뚜렷한 지표 {clear}/{live.length}개 · 막대를 누르면 자세히
       </p>
-      {/* 휴대폰 폭에서는 여덟 칸이 안 들어간다 — 글자를 세로로 쪼개지 말고 표만 옆으로 민다. */}
-      <div className="table-wrap">
-        <table className="coef" style={{ whiteSpace: 'nowrap' }}>
-          <thead>
-            <tr>
-              <th>후보</th>
-              <th>지금 구간</th>
-              <th>중심</th>
-              <th>포함률</th>
-              <th>평균 폭</th>
-              <th>구간 점수</th>
-              <th>p(구간)</th>
-              <th>p(중심)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {hz.models.map((m) => (
-              <tr key={m.id} className={m.id === sel ? 'is-current' : ''} onClick={() => setPick(m.id)}
-                  style={{ cursor: 'pointer' }}>
-                <td>{m.label}{m.baseline ? ' (기준선)' : ''}</td>
-                <td>{m.now ? `${signed(m.now.lo)} ~ ${signed(m.now.hi)}` : '—'}</td>
-                <td className={m.now ? tone(m.now.mid) : ''}>{m.now ? signed(m.now.mid, 2) : '—'}</td>
-                <td>{fmt(m.coverage, 1)}%</td>
-                <td>{fmt(m.width, 1)}%p</td>
-                <td>{fmt(m.interval_score, 1)}</td>
-                <td>{m.baseline ? '—' : pText(m.dm_interval_p)}</td>
-                <td>{m.baseline ? '—' : pText(m.dm_point_p)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <TimeLines series={series} unit="%" decimals={1} zero height={260}
-                 ariaLabel={`${ix.label} 실제 ${h}개월 수익률과 ${selModel.label} 구간`} />
+      <EffectBars rows={e.rows} onPick={(r) => setPick(r.id)} />
+      {row && (
+        <EffectModal ix={ix} row={row} joint={e.joint} horizonLabel={hzLabel} onClose={() => setPick(null)} />
+      )}
     </section>
   )
 }
@@ -128,7 +86,7 @@ export default function IndexView() {
   if (error || !data) {
     return (
       <section className="card">
-        <h2>지수 예측</h2>
+        <h2>지수 분석</h2>
         <p className="empty">{error ? error.message : '불러오는 중…'}</p>
       </section>
     )
@@ -137,7 +95,10 @@ export default function IndexView() {
     <>
       {data.indices.map((ix) =>
         ix.available ? (
-          <IndexCard key={ix.id} ix={ix} />
+          <div key={ix.id}>
+            <EffectCard ix={ix} />
+            <ForecastCard ix={ix} />
+          </div>
         ) : (
           <section className="card" key={ix.id}>
             <h2>{ix.label}</h2>

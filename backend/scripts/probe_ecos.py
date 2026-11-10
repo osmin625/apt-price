@@ -46,6 +46,7 @@ EXPECT: dict[str, str] = {
     "mortgage_rate": "주택담보대출",   # 121Y006 예금은행 대출금리(신규취급액)
     "jeonse_loan_rate": "전세자금대출",
     "deposit_rate": "정기예금",        # 121Y002 예금은행 수신금리(신규취급액)
+    "krw_usd": "원/미국달러(매매기준율)",  # 731Y004 — 둘째 코드 0000200 이 말일자료
 }
 
 # 월간 계열의 끝 시점이 이보다 오래되면 끊긴 것으로 본다. M2 는 두 달 남짓 늦게
@@ -105,7 +106,8 @@ def check(metric: str) -> bool:
           f"{'' if srch else '  — 조회 불가(SRCH_YN != Y)'}")
     ok &= srch
 
-    rows = _item_rows(code, item)
+    # 둘째 항목 코드가 붙은 것('0000001/0000200')은 목록에서 첫째 코드로 찾는다.
+    rows = _item_rows(code, item.split("/")[0])
     if not rows:
         print(f"  [X] 항목 {item} 이 {code} 의 항목 목록에 없습니다.")
         return False

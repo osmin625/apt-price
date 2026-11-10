@@ -31,8 +31,12 @@ const assetOfTab = (id) => ASSETS.find((a) => a.tabs.some((t) => t.id === id))
  * 모르는 이름이면 첫 자산의 첫 탭(링크가 옛 탭 이름이어도 빈 화면이 아니게). 예전 링크(`#regime/overlay`)는
  * 그대로 부동산으로 열린다.
  */
+// 이름을 바꾼 탭의 옛 id → 새 id. 이미 나눈 링크가 첫 자산의 첫 탭으로 떨어지지 않게 한다.
+const TAB_ALIAS = { indices: 'index-analysis' }
+
 function readHash() {
-  const [t, c] = decodeURIComponent(window.location.hash.replace(/^#/, '')).split('/')
+  const [raw, c] = decodeURIComponent(window.location.hash.replace(/^#/, '')).split('/')
+  const t = TAB_ALIAS[raw] || raw
   const byTab = assetOfTab(t)
   if (byTab) return { asset: byTab.id, tab: t, chart: c || null }
   const a = ASSETS.find((x) => x.id === t) || ASSETS[0]

@@ -1,4 +1,6 @@
-"""지수 탭의 응답 — 지금 구간 예측과, 같은 장치로 잰 과거 성적을 같이 낸다.
+"""지수 분석 탭의 응답 — 경제지표의 영향(`effects`)과, 지금 구간 예측·그 과거 성적을 같이 낸다.
+
+영향은 `effects.py`, 지표 목록은 `indicators.py` 가 정한다. 아래는 구간 예측 쪽의 설명이다.
 
 예측만 내면 '얼마나 믿을 만한가' 를 화면이 말할 수 없다. 그래서 응답 하나에 (1) 지금 기점의
 구간, (2) 같은 후보를 같은 기점들에서 잰 백테스트 점수, (3) 기준선 대비 DM 검정을 같이 싣는다.
@@ -10,8 +12,10 @@ from __future__ import annotations
 import math
 
 from ..macro import store as macro_store
+from . import effects as EF
 from . import forecast as F
 from . import store
+from .indicators import BY_ID as INDICATOR, PAIRS, unit_of
 from .indices import INDICES, Index
 
 LABELS = {
@@ -81,7 +85,26 @@ def one(ix: Index) -> dict:
         "origin": s.months[t],
         "alpha": F.ALPHA, "min_train": F.MIN_TRAIN,
         "horizons": horizons,
+        "effects": effects_of(ix, s.close),
     }
+
+
+def effects_of(ix: Index, close: dict[str, float]) -> dict:
+    """{시점: {rows: [지표별 영향], joint: 함께 넣은 값}} — 화면의 단추 셋이 이것을 고른다."""
+    ids = PAIRS[ix.id]
+    xs = {i: EF.movement(INDICATOR[i].kind, macro_store.monthly(i)) for i in ids}
+    out = {}
+    for hz in EF.HORIZONS:
+        rows = []
+        for i in ids:
+            ind = INDICATOR[i]
+            r = EF.one(xs[i], close, hz, ind.pub_lag, ind.kind)
+            rows.append({"id": i, "label": ind.label, "group": ind.group, "kind": ind.kind,
+                         "unit": unit_of(ind), "pub_lag": ind.pub_lag, "source": ind.source,
+                         **(r or {"n": 0})})
+        out[hz] = {"rows": rows,
+                   "joint": EF.joint(xs, close, hz, {i: INDICATOR[i].pub_lag for i in ids})}
+    return out
 
 
 def overview() -> dict:

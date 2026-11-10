@@ -232,6 +232,14 @@ CASES = [
     ("주식 — 학습 범위가 기점을 넘음", "backend/app/stock/forecast.py",
      lambda s: s.replace("    past = range(0, t - h + 1)", "    past = range(0, t)", 1),
      "기점 뒤 달을 읽으려 했다", False, ["-m", "scripts.verify_lookahead"]),
+    # 지표 영향의 두 실패 — 겹침을 무시(시차 0)하면 범위가 좁아져 헛짚고, 발표 시차를 빼면 몰랐던
+    # 값으로 '그 뒤' 를 맞힌다. 둘 다 숫자가 그럴듯하게 나올 뿐 오류가 없다(app/stock/effects.py).
+    ("주식 — 영향 범위가 겹침을 무시함", "backend/app/stock/effects.py",
+     lambda s: s.replace("LAG = 11 ", "LAG = 0  ", 1),
+     "FAIL", False, ["-m", "scripts.verify_index_effects"]),
+    ("주식 — 발표 시차를 뺌", "backend/app/stock/effects.py",
+     lambda s: s.replace("            a = _shift(t, pub_lag)", "            a = _shift(t, 0)", 1),
+     "FAIL", False, ["-m", "scripts.verify_index_effects"]),
     ("주식 — 변동성을 다음 달에서 읽음", "backend/app/stock/forecast.py",
      lambda s: s.replace("        v_now = s.vol.get(s.months[t])",
                          "        v_now = s.vol.get(s.months[min(t + 1, len(s.months) - 1)])", 1),
