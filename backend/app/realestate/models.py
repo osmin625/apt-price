@@ -333,8 +333,8 @@ class RebStat(Base):
     base: Mapped[str] = mapped_column(String(40), default="")
 
     # 어디서 받은 값인가. 한국은행(ECOS) 값도 여기 들어 있었다 — M2 와 기준금리만
-    # R-ONE 에 없어서다. 2026-11 에 macro.db(`app/macro`)로 옮겼고, 남은 'ECOS' 행은
-    # 읽는 곳이 없다(docs/data/reb.md '한국은행 ECOS').
+    # R-ONE 에 없어서다. 2026-11 에 macro.db(`app/macro`)로 옮기고 여기 행은 지웠다
+    # (docs/data/reb.md '한국은행 ECOS').
     # 표 이름을 바꾸지 않은 이유: SQLite 테이블 이름 변경은 `migrate.py` 가 하는
     # ADD COLUMN 으로 안 되고, 이름보다 출처가 적혀 있는 쪽이 실제로 쓸모 있다.
     source: Mapped[str] = mapped_column(String(8), default="REB", index=True)

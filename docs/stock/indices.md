@@ -30,7 +30,8 @@
 - FRED 는 API 키 없이 `fredgraph.csv` 로 받는다(`app/macro/clients/fred.py`).
 - 대조: `scripts/probe_stock_crosscheck.py` 가 야후 차트의 같은 날 종가와 견준다. 2026-11-10 에
   돌렸을 때 겹친 484일(KOSPI)·498일(S&P 500) 모두 차이 0.000% 였다.
-- 적재: `python -m scripts.ingest_stock` — 지수 일봉은 stock.db, FRED 금리는 macro.db. 받을 때마다
+- 적재: `python -m scripts.ingest_stock` — 지수 일봉은 stock.db, FRED 금리는 macro.db. 매일 06:30
+  동기화(`sync_static.ps1`)가 내보내기 앞에 돌린다([배포](../engineering/deploy.md#주기-동기화)). 받을 때마다
   종가가 양수인지, 하루 로그 변화가 ±25% 를 넘지 않는지 본다(역대 최대 하루 낙폭이 -12% 안팎이라
   그걸 넘으면 자료가 틀렸다).
 
@@ -80,5 +81,3 @@
 
 - 관심 종목 목록 파일 하나 + 종목 일봉(공공데이터포털 주식시세·EDGAR). 같은 `backtest` 에 얹는다.
 - 원화 환산 표시(예측은 현지 통화 그대로).
-- 매일 적재: 지금 매일 06:30 동기화는 내보내기·배포만 한다. `ingest_stock` 을 그 앞에 넣지 않으면
-  검진 신선도(10일)가 먼저 알린다.

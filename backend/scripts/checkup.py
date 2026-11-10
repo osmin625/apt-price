@@ -237,17 +237,14 @@ def days_since(d: dt.date | None, today: dt.date) -> int | None:
 
 def check_fresh(rep: Report, today: dt.date) -> None:
     print("\n== 신선도 ==")
-    from sqlalchemy import func, or_, select
+    from sqlalchemy import func, select
 
     from app.core.db import SessionLocal
     from app.realestate.models import BldRun, ComplexAmenity, KaptRun, RebStat, Trade
 
     with SessionLocal() as db:
         last_trade = db.scalar(select(func.max(Trade.deal_date)))
-        # 한국은행 계열은 macro.db 로 옮겼다. 옮기기 전 행이 reb_stats 에 남아 있어도
-        # 공표통계(R-ONE) 신선도를 대신 채우지 않게 출처로 거른다.
-        last_reb = db.scalar(select(func.max(RebStat.ym)).where(
-            or_(RebStat.source.is_(None), RebStat.source != "ECOS")))
+        last_reb = db.scalar(select(func.max(RebStat.ym)))
         oldest_amen = db.scalar(select(func.min(ComplexAmenity.collected_at)))
 
     def say(label: str, age: int | None, limit: int, fix: str) -> None:

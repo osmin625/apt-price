@@ -172,9 +172,9 @@ M2·기준금리·소비자물가, 그리고 '매매·전세·월세' 탭의 예
 
 한국은행 값은 **macro.db**(`app/macro`)에 둔다. 처음에는 apt.db 의 `reb_stats` 에 같이 넣고
 `source` 컬럼으로 갈랐는데, 주식도 금리를 읽게 되면서 자산 밖으로 꺼냈다
-([자산 구조](../engineering/architecture.md#자산-구조)). 옮기기 전 행(`source='ECOS'`)은
-reb_stats 에 남아 있어도 읽는 곳이 없다 — 부동산 화면은 `ecos.TABLES` 에 있는 이름을
-macro.db 에서 읽고, 공표통계 신선도도 그 행을 거른다.
+([자산 구조](../engineering/architecture.md#자산-구조)). 부동산 화면은 `ecos.TABLES` 에 있는
+이름을 macro.db 에서 읽는다. reb_stats 에 남았던 옮기기 전 행(`source='ECOS'`, 1,676행)은
+macro.db 와 한 행씩 값이 같은 것을 확인하고 지웠다(2026-11-10).
 
 ### 통계표 코드를 기억으로 적지 않는다
 
