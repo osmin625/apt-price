@@ -146,10 +146,9 @@ frontend/
   src/realestate/topics/RegionMap.jsx        시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
   src/stock/CLAUDE.md       백엔드 쪽 주식 지침서를 `@` 로 가져오는 한 줄
   src/stock/tabs.jsx        주식의 탭 — 지수 분석(옛 id indices 는 App.jsx TAB_ALIAS)
-  src/stock/components/EffectBars.jsx    지표별 영향 막대(평소 폭·95% 범위·판정 색)
-  src/stock/components/EffectModal.jsx   막대를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
+  src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)
-  src/stock/views/IndexView.jsx   지수의 지금 구간 · 후보별 과거 성적 표 · 실제 대 구간 그림
+  src/stock/views/IndexView.jsx   지표 카드(상식의 방향 · 잰 값과 95% 범위 띠 · 맞는지) + 지수마다 접힌 예측 카드
 ```
 
 차트 라이브러리는 쓰지 않는다. 백엔드가 곡선을 50점 가까이 조밀하게 보내므로 보간기가
