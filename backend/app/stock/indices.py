@@ -1,7 +1,7 @@
 """지수 목록과 받는 곳. 공식 출처만 — 비공식(야후 등)은 대조용(`scripts/probe_stock_crosscheck.py`).
 
-    KOSPI    한국은행 ECOS 802Y001 / 0001000  일별 1995-01~   무위험 금리: 한국은행 기준금리
     S&P 500  FRED SP500                      일별 최근 10년   무위험 금리: 미국 3개월 국채(TB3MS)
+    KOSPI    한국은행 ECOS 802Y001 / 0001000  일별 1995-01~   무위험 금리: 한국은행 기준금리
 
 KOSPI 항목 코드는 기억이 아니라 ECOS 목록(StatisticItemList 802Y001)에서 골랐다 — 같은 표에
 KOSDAQ·거래대금·외국인 순매수가 나란히 있다. 공공데이터포털 '금융위원회 지수시세정보' 는 따로
@@ -30,9 +30,10 @@ class Index:
     rf_label: str
 
 
+# 미국이 먼저다(2026-11-12 요청 — 주식의 모든 정보는 미국 우선). 화면·적재·검진이 이 순서를 따른다.
 INDICES: tuple[Index, ...] = (
-    Index("kospi", "KR", "KOSPI", "KOSPI", "KRW", "ECOS", "base_rate", "한국은행 기준금리"),
     Index("spx", "US", "SPX", "S&P 500", "USD", "FRED", "us_tbill3m", "미국 3개월 국채"),
+    Index("kospi", "KR", "KOSPI", "KOSPI", "KRW", "ECOS", "base_rate", "한국은행 기준금리"),
 )
 BY_ID = {i.id: i for i in INDICES}
 

@@ -102,6 +102,19 @@ def main() -> int:
     stray = [i for ids in PAIRS.values() for i in ids if i not in BY_ID]
     check(not stray, f"짝이 아는 지표만 가리킨다{' — 모름: ' + ', '.join(stray) if stray else ''}")
 
+    # 상식의 방향은 카드의 기준이다 — 빠지거나 ±1 이 아니면 '상식대로·반대' 가 조용히 틀린다.
+    odd = [i.id for i in INDICATORS if i.expect not in (1, -1) or not i.why.strip()]
+    check(not odd, f"지표마다 상식의 방향(±1)과 이유가 있다{' — 빠짐: ' + ', '.join(odd) if odd else ''}")
+    # 미국이 먼저다(2026-11-12 요청) — 지수도, 지수마다의 지표도(FRED 가 ECOS 앞).
+    from app.stock.indices import INDICES
+    order_ok = INDICES[0].market == "US" and all(
+        (us := [BY_ID[i].source == "FRED" for i in ids]) == sorted(us, reverse=True) for ids in PAIRS.values())
+    check(order_ok, "미국 지수·지표가 앞에 있다")
+    from app.stock.service import _agree
+    got = [_agree({"verdict": v}, e) for v, e in (("pos", 1), ("neg", 1), ("neg", -1), ("none", -1))]
+    check(got == ["yes", "no", "yes", "unclear"] and _agree(None, 1) is None,
+          "상식과 맞는지 — 뚜렷할 때만 맞다·반대, 범위가 0 을 넘으면 뚜렷하지 않음")
+
     print("\n이상 없음" if not bad else f"\n[X] 실패 {bad}개")
     return 1 if bad else 0
 

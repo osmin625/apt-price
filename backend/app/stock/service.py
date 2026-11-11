@@ -89,6 +89,19 @@ def one(ix: Index) -> dict:
     }
 
 
+def _agree(r: dict | None, expect: int) -> str | None:
+    """잰 값이 상식의 방향(`indicators.expect`)과 맞나 — 'yes' · 'no' · 'unclear'(범위가 0 을 넘음).
+
+    판정은 95% 범위로 백엔드가 정한 `verdict` 를 그대로 쓴다. 막대가 상식 쪽이어도 범위가 0 을 넘으면
+    'unclear' 다 — 회색 막대를 '상식대로' 라고 부르면 뚜렷하지 않은 것을 확인한 것처럼 읽힌다.
+    """
+    if not r:
+        return None
+    if r["verdict"] == "none":
+        return "unclear"
+    return "yes" if (r["verdict"] == "pos") == (expect > 0) else "no"
+
+
 def effects_of(ix: Index, close: dict[str, float]) -> dict:
     """{시점: {rows: [지표별 영향], joint: 함께 넣은 값}} — 화면의 단추 셋이 이것을 고른다."""
     ids = PAIRS[ix.id]
@@ -101,7 +114,10 @@ def effects_of(ix: Index, close: dict[str, float]) -> dict:
             r = EF.one(xs[i], close, hz, ind.pub_lag, ind.kind)
             rows.append({"id": i, "label": ind.label, "group": ind.group, "kind": ind.kind,
                          "unit": unit_of(ind), "pub_lag": ind.pub_lag, "source": ind.source,
-                         **(r or {"n": 0})})
+                         "expect": ind.expect, "why": ind.why,
+                         **(r or {"n": 0}), "agree": _agree(r, ind.expect),
+                         # 뚜렷하지 않아도 막대가 어느 쪽으로 기울었나 — 화면이 '상식 쪽으로 기움' 으로 적는다.
+                         "lean": None if not r else (r["bar"] > 0) == (ind.expect > 0)})
         out[hz] = {"rows": rows,
                    "joint": EF.joint(xs, close, hz, {i: INDICATOR[i].pub_lag for i in ids})}
     return out
