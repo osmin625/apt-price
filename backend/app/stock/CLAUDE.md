@@ -1,7 +1,7 @@
 # 주식 — 지침서
 
 미국·국내 지수(다음에 종목)를 다루는 자산이다 — **경제지표가 지수에 미친 영향**(화면 '지수 분석' 맨 위)과
-월~분기 수익률 **구간 예측**(그 아래 접힌 카드). 루트
+월~분기 수익률 **구간 예측**(그 아래 접힌 카드), 그리고 기법 저장소 두 탭(장기 투자·단기 매매). 루트
 [CLAUDE.md](../../../CLAUDE.md) 의 방식은 그대로 따르고, 여기에는 **이 자산에만 있는 것**을 적는다.
 
 코드는 이 폴더(`backend/app/stock/`)와 `frontend/src/stock/` 에 있다. 프론트 쪽 CLAUDE.md 는
@@ -13,6 +13,8 @@
 |---|---|---|
 | `stock/` 주식 | 지수·종목 출처, 예측 후보, 평가 방법을 건드린다 | [stock/indices.md](../../../docs/stock/indices.md) |
 | | 경제지표의 영향(지표·짝·발표 시차·범위를 재는 법)을 건드린다 | [stock/effects.md](../../../docs/stock/effects.md) |
+| | 장기 투자 탭(가치평가 기법 저장소·지수 평가 출처)을 건드린다 | [stock/valuation.md](../../../docs/stock/valuation.md) |
+| | 단기 매매 탭(차트 기법 저장소·합성 예시·grilling 결정)을 건드린다 | [stock/trading.md](../../../docs/stock/trading.md) |
 
 ## 미국이 먼저다
 

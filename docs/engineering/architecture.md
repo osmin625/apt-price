@@ -146,6 +146,9 @@ frontend/
   src/realestate/topics/RegionMap.jsx        시군구 지도 — 가격 분석 지표를 한 달의 색으로(경계는 sgg_shapes.json)
   src/stock/CLAUDE.md       백엔드 쪽 주식 지침서를 `@` 로 가져오는 한 줄
   src/stock/tabs.jsx        주식의 탭 — 지수 분석(옛 id indices 는 App.jsx TAB_ALIAS)
+  src/stock/techniques/      기법 저장소 — long.js·short.js(기법 목록·글·예시), synth.js(합성 가격·지표 계산)
+  src/stock/views/TechniqueView.jsx  장기 투자·단기 매매 두 탭이 같이 쓰는 저장소 화면
+  src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
   src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)
   src/stock/views/IndexView.jsx   지표 카드(상식의 방향 · 잰 값과 95% 범위 띠 · 맞는지) + 지수마다 접힌 예측 카드

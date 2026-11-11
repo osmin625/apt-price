@@ -763,6 +763,25 @@ tr.is-deleting td { opacity: 0.4; }
 .ix-agree.is-unclear { font-weight: 400; color: var(--text-secondary); }
 .ix-agree.is-no { color: var(--warning); }
 .ix-flip { color: var(--warning); }
+/* 주식 기법 저장소(장기 투자·단기 매매) — 기법 카드와 설명 창. 카드는 요인 카드(.rg-tile)를 빌린다. */
+.tq-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tq-jump .chip { text-decoration: none; }
+.tq-tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.tq-tile { cursor: pointer; display: flex; flex-direction: column; }
+.tq-tile:hover, .tq-tile:focus-visible { border-color: var(--accent); outline: none; }
+.tq-one { margin: 5px 0 6px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); flex: 1; }
+.tq-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.badge.is-close, .badge.is-index { border-color: var(--series-3); color: var(--series-3); }
+.tq-summary { font-weight: 600; }
+.tq-list { margin: 4px 0 8px; padding-left: 20px; line-height: 1.6; }
+.tq-list li + li { margin-top: 2px; }
+.tq-calc { margin: 8px 0; }
+.tq-read { font-size: 13px; color: var(--text-secondary); border-left: 3px solid var(--border); padding-left: 10px; }
+.tq-two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+@media (max-width: 640px) { .tq-two { grid-template-columns: 1fr; } }
+.ex-chart { margin: 6px 0; }
+.ex-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0; }
+.ex-legend .swatch { display: inline-block; width: 12px; height: 3px; margin-right: 5px; vertical-align: 3px; }
 
 /* 거시 분석 '요인별로 나누면' — 가운데 0 에서 좌우로 뻗는 막대(오름 초록 · 내림 빨강, 화면 공통 규칙).
    가는 선은 흔들림 폭(부트스트랩 10~90%). 합계 줄(평균·맞춘 값·실제)은 굵게, 위에 선. */
