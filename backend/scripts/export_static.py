@@ -152,6 +152,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/tenure/overview", {}),
         # 주식 — 지수 둘의 지금 구간과 백테스트 성적. 파라미터가 없다.
         Req("/api/stock/indices", {}),
+        # 주식 단기 매매 — 기법을 지수마다 돌린 지금 상태·성적·실제 사례. 파라미터가 없다.
+        Req("/api/stock/short-term", {}),
     ]
 
     # 매크로 인사이트.

@@ -31,8 +31,9 @@ backend/
                             (순수 파이썬 — CI 에서도 같은 코드)
     stock/indicators.py     지수 분석의 지표 목록·짝·꼴(diff·growth·level)·발표 시차 — 적재·응답·신선도가 여기서 읽는다
     stock/effects.py        지표 → 지수 영향(평소 폭 막대·등분산 Hansen–Hodrick 95% 범위·시기 나누기·함께 넣은 값)
-    stock/service.py        지수 분석 응답 — 지표 영향 + 지금 구간 + 같은 장치로 잰 과거 성적
-    stock/routers/indices.py   /api/stock/indices
+    stock/service.py        지수 분석 응답 — 지표 영향 + 지금 구간 + 같은 장치로 잰 과거 성적 · 단기 매매 응답
+    stock/trading.py        단기 매매 — 종가로 재는 기법 12개를 지수에 돌린 지금 상태·기저율 대비 성적·실제 사례(지그재그 패턴 탐지)
+    stock/routers/indices.py   /api/stock/indices · /api/stock/short-term
 
     realestate/             부동산
     realestate/CLAUDE.md    부동산 지침서 — 이 자산의 라우팅 표와 규칙(아래 '자산 구조')
@@ -115,6 +116,7 @@ backend/
     probe_stock_crosscheck.py  지수 종가를 비공식(야후)과 맞춰 본다(네트워크 — 검진 밖)
     verify_lookahead.py     지수 예측이 기점 뒤 값을 바꿔도 그대로인지(미래를 보지 않는지)
     verify_index_effects.py 지표 영향의 95% 범위가 참값을 덮는지·헛짚음·발표 시차 (합성 자료)
+    verify_short_rules.py   단기 기법·패턴 신호가 미래를 안 보는지·비용·기저율 범위·지표가 synth.js 와 같은지 (합성 자료)
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
@@ -149,6 +151,7 @@ frontend/
   src/stock/techniques/      기법 저장소 — long.js·short.js(기법 목록·글·예시), synth.js(합성 가격·지표 계산)
   src/stock/views/TechniqueView.jsx  장기 투자·단기 매매 두 탭이 같이 쓰는 저장소 화면
   src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
+  src/stock/components/LiveSection.jsx    창의 '실제 지수에서' — 지금 상태·신호 뒤 성적·규칙대로 vs 사서 들고 있기
   src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)
   src/stock/views/IndexView.jsx   지표 카드(상식의 방향 · 잰 값과 95% 범위 띠 · 맞는지) + 지수마다 접힌 예측 카드

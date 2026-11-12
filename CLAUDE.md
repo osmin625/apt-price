@@ -105,6 +105,7 @@
 - `scripts/verify_macro_store.py` — macro.db 가 없으면 빈 파일을 만들지 않고 시끄럽게 실패하는지, 쓴 값을 그대로 읽는지
 - `scripts/verify_lookahead.py` — 지수 예측이 기점 뒤 값(종가·금리)을 바꿔도 그대로인지, 기점 달 안을 바꾸면 달라지는지
 - `scripts/verify_index_effects.py` — 지표 영향의 95% 범위가 합성 참값을 덮는지(300·120개월), 관계가 없을 때 '뚜렷함' 이 드문지, 발표 시차
+- `scripts/verify_short_rules.py` — 단기 기법·패턴 신호가 잘라 낸 계열에서도 같은지(미래를 안 보나), 엿보는 규칙이 걸리는지, 비용·체결, 기저율 범위, 지표가 화면 쪽 `synth.js` 와 같은지
 - `scripts/verify_docs.py` — 문서 링크·앵커, 라우팅 표가 문서를 다 덮는지, docs 가 묶음 한 단계인지,
   코드 주석이 가리키는 `docs/…` 경로와 `'절 제목'` 이 아직 있는지
 - `scripts/cv_model.py` — 요인을 넣을지 말지를 표본 밖 오차로 정한다
