@@ -11,7 +11,8 @@
  *
  * 잡음은 씨앗을 정한 난수(mulberry32)다. 열 때마다 그림이 바뀌면 설명 글('두 번째 바닥에서')이 어긋난다.
  *
- * 실제 지수에서 그 모양이 나온 구간은 다음 단계에서 붙인다(docs/stock/trading.md '예시와 실제').
+ * 실제 지수에서 그 모양이 나온 구간은 백엔드가 같은 규칙을 실제 종가에 돌려 붙인다(backend/app/stock/trading.py —
+ * 지표 정의가 여기와 같은지는 scripts/verify_short_rules.py 가 본다).
  */
 
 export function rng(seed) {

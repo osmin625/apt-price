@@ -216,6 +216,7 @@ export const api = {
   regimeOverview: () => request('/regime/overview'),
   tenureOverview: () => request('/tenure/overview'),
   stockIndices: () => request('/stock/indices'),
+  stockShortTerm: () => request('/stock/short-term'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),

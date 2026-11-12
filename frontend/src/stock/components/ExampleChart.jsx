@@ -16,11 +16,23 @@ import { fmt, useMeasure } from '../../shared/Charts'
  *   priceLabel · log    첫 선의 이름, 로그 눈금
  *   yTicks · yUnit      세로축 눈금 — 수준 자체가 기준인 것(CAPE 배수·금리 %)만
  *   xUnit               가로축 단위('일'·'개월'·'봉(5분)')
+ *   axis · dates        실제 지수 사례 — 가격 눈금을 저절로 잡고, 가로축 양 끝에 날짜를 적는다
+ *   markNames           ▲·▼ 의 이름(기본 진입·청산 — 패턴은 오름·내림 신호)
  *
  * 가격 축 숫자는 기본으로 적지 않는다 — 합성 가격이라 값에 뜻이 없고, 숫자가 있으면 실제 지수로 읽힌다.
  * 수준이 규칙인 것(RSI 70·30, CAPE 의 평균 배수)만 적는다. 표시 색은 화면 공통 규칙대로 ▲ 초록, ▼ 빨강.
  */
 const P = { l: 8, r: 40, t: 10, b: 20 }
+
+/** lo~hi 를 3~5칸으로 나누는 어림수 눈금 — 실제 지수 사례에만 쓴다. */
+function niceTicks(lo, hi) {
+  const raw = (hi - lo) / 4
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((s) => s >= raw)
+  const out = []
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(v)
+  return out
+}
 
 export default function ExampleChart({ spec }) {
   const [ref, width] = useMeasure()
@@ -39,8 +51,9 @@ export default function ExampleChart({ spec }) {
     ...(spec.lines || []).flatMap((l) => [l.v0, l.v1]),
   ].filter((v) => v != null && Number.isFinite(v))
   const tf = spec.log ? Math.log : (v) => v
-  const lo = Math.min(...vals.map(tf), ...(spec.yTicks || []).map(tf))
-  const hi = Math.max(...vals.map(tf), ...(spec.yTicks || []).map(tf))
+  const yTicks = spec.yTicks || (spec.axis ? niceTicks(Math.min(...vals), Math.max(...vals)) : [])
+  const lo = Math.min(...vals.map(tf), ...yTicks.map(tf))
+  const hi = Math.max(...vals.map(tf), ...yTicks.map(tf))
   const pad = (hi - lo) * 0.06 || 1
   const sx = (i) => P.l + (i / Math.max(1, n - 1)) * (W - P.l - P.r)
   const sy = (v) => P.t + mainH - ((tf(v) - (lo - pad)) / (hi - lo + 2 * pad)) * mainH
@@ -81,15 +94,15 @@ export default function ExampleChart({ spec }) {
             {g.label}
           </span>
         ))}
-        {spec.marks?.some((m) => m.dir > 0) && <span><b className="tone-pos">▲</b> 진입</span>}
-        {spec.marks?.some((m) => m.dir < 0) && <span><b className="tone-neg">▼</b> 청산</span>}
+        {spec.marks?.some((m) => m.dir > 0) && <span><b className="tone-pos">▲</b> {spec.markNames?.[0] || '진입'}</span>}
+        {spec.marks?.some((m) => m.dir < 0) && <span><b className="tone-neg">▼</b> {spec.markNames?.[1] || '청산'}</span>}
       </div>
-      <svg width={W} height={H} role="img" aria-label="예시 그림(합성 데이터)">
+      <svg width={W} height={H} role="img" aria-label={spec.dates ? `실제 사례 ${spec.dates[0]}~${spec.dates[1]}` : '예시 그림(합성 데이터)'}>
         <rect x={P.l} y={P.t} width={W - P.l - P.r} height={mainH} fill="none" stroke="var(--border)" />
-        {(spec.yTicks || []).map((v) => (
+        {yTicks.map((v) => (
           <g key={`y${v}`}>
             <line x1={P.l} x2={W - P.r} y1={sy(v)} y2={sy(v)} stroke="var(--border)" strokeDasharray="2 3" />
-            <text x={W - P.r + 4} y={sy(v) + 4} fontSize="10.5" fill="var(--text-muted)">{fmt(v, 1)}{spec.yUnit}</text>
+            <text x={W - P.r + 4} y={sy(v) + 4} fontSize="10.5" fill="var(--text-muted)">{fmt(v, spec.axis ? 0 : 1)}{spec.yUnit}</text>
           </g>
         ))}
         {spec.band && (
@@ -206,9 +219,16 @@ export default function ExampleChart({ spec }) {
             )}
           </g>
         )}
-        <text x={W - P.r} y={H - 5} fontSize="10.5" textAnchor="end" fill="var(--text-muted)">
-          {n}{spec.xUnit || '일'} →
-        </text>
+        {spec.dates ? (
+          <>
+            <text x={P.l} y={H - 5} fontSize="10.5" fill="var(--text-muted)">{spec.dates[0]}</text>
+            <text x={W - P.r} y={H - 5} fontSize="10.5" textAnchor="end" fill="var(--text-muted)">{spec.dates[1]}</text>
+          </>
+        ) : (
+          <text x={W - P.r} y={H - 5} fontSize="10.5" textAnchor="end" fill="var(--text-muted)">
+            {n}{spec.xUnit || '일'} →
+          </text>
+        )}
       </svg>
       {spec.panel?.series.some((s) => !s.bar) && (
         <div className="ex-legend">

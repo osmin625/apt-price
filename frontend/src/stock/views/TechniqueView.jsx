@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import ChartLink from '../../shared/ChartLink'
 import Hint from '../../shared/Hint'
+import { nowShort } from '../components/LiveSection'
 import TechniqueModal from '../components/TechniqueModal'
 
 /**
@@ -13,11 +14,25 @@ import TechniqueModal from '../components/TechniqueModal'
  *
  * 매매 신호처럼 읽히지 않게, 카드에는 '사라·팔아라' 를 적지 않는다. 지금 상태·과거 성적은 재서 붙인다
  * (docs/stock/trading.md · valuation.md).
+ *
+ * `load` 가 있으면(단기 매매) 실제 지수에 돌린 결과를 받아, 종가로 재는 카드에 지수마다 지금 상태 한 줄을 단다
+ * (backend/app/stock/trading.py). 받는 동안에도 카드와 설명은 그대로 보인다 — 설명이 초점이라 기다리게 하지 않는다.
  */
-export default function TechniqueView({ title, notes, catalog }) {
+export default function TechniqueView({ title, notes, catalog, load }) {
   const { GROUPS, TECHNIQUES, NEED } = catalog
   const [pick, setPick] = useState(null)
+  const [live, setLive] = useState(load ? null : undefined)
+  const [error, setError] = useState(null)
   const t = pick && TECHNIQUES.find((x) => x.id === pick)
+
+  useEffect(() => {
+    if (!load) return undefined
+    let alive = true
+    load().then((d) => alive && setLive(d)).catch((e) => alive && setError(e))
+    return () => {
+      alive = false
+    }
+  }, [load])
 
   return (
     <>
@@ -67,6 +82,15 @@ export default function TechniqueView({ title, notes, catalog }) {
                 </div>
                 <div className="muted small">{x.en}</div>
                 <p className="tq-one">{x.summary}</p>
+                {live?.rules?.[x.id] && (
+                  <ul className="tq-state">
+                    {live.indices.map((ix) => (
+                      <li key={ix.id}>
+                        <span className="muted">{ix.label}</span> {nowShort(live.rules[x.id], live.rules[x.id].by[ix.id])}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="tq-badges">
                   <span className={`badge is-${x.need}`}>{NEED[x.need]}</span>
                 </div>
@@ -75,7 +99,9 @@ export default function TechniqueView({ title, notes, catalog }) {
           </div>
         </section>
       ))}
-      {t && <TechniqueModal t={t} needLabel={NEED[t.need]} onClose={() => setPick(null)} />}
+      {t && (
+        <TechniqueModal t={t} needLabel={NEED[t.need]} onClose={() => setPick(null)} live={live} liveError={error} />
+      )}
     </>
   )
 }

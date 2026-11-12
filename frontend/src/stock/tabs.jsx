@@ -1,3 +1,4 @@
+import { api } from '../api'
 import * as LONG from './techniques/long'
 import * as SHORT from './techniques/short'
 import IndexView from './views/IndexView'
@@ -21,8 +22,8 @@ const LONG_NOTES = [
 ]
 const SHORT_NOTES = [
   '차트 모양과 지표로 며칠~몇 주를 보고 사고파는 기법을 모았습니다. 카드를 누르면 원리·규칙·예시·함정·원전이 나옵니다.',
-  '예시 그림은 모양을 정해 만든 합성 가격이고, 진입·청산 표시는 규칙을 그 가격에 그대로 돌려 얻었습니다.',
-  '필요한 데이터: 종가로 잼은 지수 종가만으로 규칙을 돌릴 수 있다는 뜻입니다. 고가·저가, 거래량, 분봉이 필요한 기법은 지금 받는 자료로는 실제 지수에 돌릴 수 없습니다.',
+  '종가로 잼 카드는 규칙을 실제 S&P 500·KOSPI 종가에 그대로 돌렸습니다. 카드의 한 줄은 지금 상태 — 진입·청산이 있는 규칙은 규칙대로라면 지금 들고 있는 구간인지, 패턴은 형성 중이거나 최근에 난 신호입니다. 창에는 과거 성적(아무 날이나 산 것·사서 들고 있기와 견준 것, 거래 비용 뺌)과 실제 사례가 있습니다.',
+  '고가·저가, 거래량, 분봉이 필요한 기법은 지금 받는 자료(지수 일봉 종가)로는 실제 지수에 돌릴 수 없어, 모양을 정해 만든 합성 가격으로 설명합니다. 그 위의 진입·청산 표시도 규칙을 돌려 얻었습니다.',
   '기법 설명이지 투자 권유가 아닙니다. 거래 비용을 빼면 잦은 매매일수록 남는 것이 줄어듭니다.',
 ]
 
@@ -34,6 +35,6 @@ export const TABS = [
   },
   {
     id: 'short-term', label: '단기 매매', static: true,
-    render: () => <TechniqueView title="단기 매매 — 차트 기법" notes={SHORT_NOTES} catalog={SHORT} />,
+    render: () => <TechniqueView title="단기 매매 — 차트 기법" notes={SHORT_NOTES} catalog={SHORT} load={api.stockShortTerm} />,
   },
 ]

@@ -15,6 +15,7 @@ from ..macro import store as macro_store
 from . import effects as EF
 from . import forecast as F
 from . import store
+from . import trading as TR
 from .indicators import BY_ID as INDICATOR, PAIRS, unit_of
 from .indices import INDICES, Index
 
@@ -125,3 +126,18 @@ def effects_of(ix: Index, close: dict[str, float]) -> dict:
 
 def overview() -> dict:
     return {"indices": [one(ix) for ix in INDICES]}
+
+
+_short: dict[tuple, dict] = {}
+
+
+def short_term() -> dict:
+    """단기 매매 탭 — 종가로 재는 기법을 지수마다 돌린 지금 상태·과거 성적·실제 사례(`trading.py`).
+
+    한 번 계산에 몇 초 걸려 지수의 마지막 날로 기억해 둔다 — 새 종가가 적재되면 키가 바뀐다.
+    """
+    key = tuple(sorted(store.last_dates().items()))
+    if key not in _short:
+        _short.clear()
+        _short[key] = TR.overview([(ix, store.daily(ix.market, ix.symbol)) for ix in INDICES])
+    return _short[key]
