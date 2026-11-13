@@ -29,6 +29,7 @@
   찾지 못했다. 그래서 S&P 500 의 백테스트 기점은 KOSPI 의 3분의 1 남짓이고 검정의 힘도 약하다 —
   화면이 기점 수를 같이 적는다.
 - FRED 는 API 키 없이 `fredgraph.csv` 로 받는다(`app/macro/clients/fred.py`).
+- 장기 투자의 지수 평가 재료(시가총액·GDP·PER·실러 자료)의 출처는 [valuation.md](valuation.md#출처) 에 있다.
 - 대조: `scripts/probe_stock_crosscheck.py` 가 야후 차트의 같은 날 종가와 견준다. 2026-11-10 에
   돌렸을 때 겹친 484일(KOSPI)·498일(S&P 500) 모두 차이 0.000% 였다.
 - 적재: `python -m scripts.ingest_stock` — 지수 일봉은 stock.db, FRED 금리는 macro.db. 매일 06:30

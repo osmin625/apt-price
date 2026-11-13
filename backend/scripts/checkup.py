@@ -83,7 +83,13 @@ STALE = {
     "ecos_days": {"cpi": 45, "base_rate": 45, "m2": 105,
                   "mortgage_rate": 75, "jeonse_loan_rate": 75, "deposit_rate": 75,
                   # 원/달러 말일자료는 다음 달 첫 영업일에 나온다. 기준금리와 같은 45일.
-                  "krw_usd": 45},
+                  "krw_usd": 45,
+                  # 장기 투자의 KOSPI 평가(2026-11-13). 시가총액·PER(901Y014)은 2026-11-13 에 2026-09 까지였다 —
+                  # 그 달 말일에서 44일. 다음 달 치는 그 뒤에 나오므로 75일. 국고채 10년은 다음 달 초라 45일.
+                  "kospi_mcap": 75, "kospi_per": 75, "kr_10y": 45,
+                  # 명목 GDP 는 분기 끝에서 두 달 남짓 뒤 잠정치로 들어온다(속보치는 실질만). 다음 분기 치가 나오기
+                  # 직전이면 분기 끝에서 92 + 70일 — 170일을 넘기면 한 분기를 놓쳤다.
+                  "kr_gdp": 170},
     # 지수 일봉(stock.db). ECOS·FRED 모두 다음 영업일에 전날 종가가 들어온다. 설·추석 연휴
     # (최장 5거래일)에 주말이 붙으면 9일까지 빈다 — 10일을 넘기면 적재가 멈췄다.
     "stock_days": 10,
@@ -92,8 +98,24 @@ STALE = {
                   # 금리 월평균·실업률은 다음 달 첫 주에 나온다 — 45일.
                   "us_fedfunds": 45, "us_10y": 45, "us_term_spread": 45, "us_unrate": 45,
                   # 물가는 다음 달 중순, M2 는 넷째 주께 나온다 — 그 달 말일에서 55일 남짓까지 정상이라 75일.
-                  "us_cpi": 75, "us_m2": 75},
+                  "us_cpi": 75, "us_m2": 75,
+                  # 자금순환표(Z.1)는 분기 끝에서 10주쯤 뒤에 나온다 — 다음 분기 치 직전이면 92 + 72일. GDP 는 속보가
+                  # 분기 끝 한 달 뒤라 92 + 30일. 정부 셧다운이면 늦을 수 있어 둘 다 여유를 둔다.
+                  "us_mcap": 170, "us_gdp": 130},
+    # 실러 자료(비공식, app/macro/clients/shiller.py). 주가·CAPE 는 달마다 갱신된다 — 2026-11-13 에 2026-10 까지였다.
+    # 이익(E)은 발표가 늦어 표 끝 넉 달이 비어 있다(같은 날 2026-06 까지) — 그 달 말일에서 136일. 실러가 손으로
+    # 갱신하므로 한두 달 거르는 일이 있어 주가 75일, 이익 200일.
+    "shiller_days": {"shiller_p": 75, "shiller_e": 200},
 }
+def period_end(period: str | None) -> dt.date | None:
+    """macro.db 시점의 마지막 날 — 월 'YYYYMM', 분기 'YYYYQn'. 월·분기 통계는 그 기간이 끝나야 셀 수 있다."""
+    if not period:
+        return None
+    y = int(period[:4])
+    m = int(period[5]) * 3 if period[4] == "Q" else int(period[4:6])
+    return dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
+
+
 DEAD_CSS_WARN_PCT = 15.0
 
 # 지침서가 길어지면 손볼 때가 됐다는 신호다. 300줄은 규칙이 아니라 **읽어 볼
@@ -279,19 +301,15 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     from app.macro.clients import ecos
 
     try:
-        last_ecos = macro_store.last_period(ecos.TABLES)
+        # 분기 계열(명목 GDP)은 freq 'Q' 로 들어 있다 — 월만 보면 '받은 적 없음' 으로 보인다.
+        last_ecos = {**macro_store.last_period(ecos.TABLES), **macro_store.last_period(ecos.TABLES, "Q")}
     except macro_store.MacroMissing as exc:
         rep.add("X", "신선도", str(exc))
         last_ecos = {}
     for metric in ecos.TABLES:
         # 한도가 없는 지표를 더했으면 여기서 멈춘다 — 조용히 빠지지 않게.
         limit = STALE["ecos_days"][metric]
-        last = last_ecos.get(metric)
-        d = None
-        if last:
-            y, m = int(last[:4]), int(last[4:6])
-            d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
-        say(f"ECOS {metric}", days_since(d, today), limit,
+        say(f"ECOS {metric}", days_since(period_end(last_ecos.get(metric)), today), limit,
             f"python -m scripts.ingest_macro --metric {metric}")
 
     from app.macro.clients import fred
@@ -299,16 +317,15 @@ def check_fresh(rep: Report, today: dt.date) -> None:
     from app.stock.indices import INDICES
 
     try:
-        last_fred = macro_store.last_period(fred.SERIES)
+        last_fred = {**macro_store.last_period(fred.SERIES), **macro_store.last_period(fred.SERIES, "Q")}
+        last_shiller = macro_store.last_period(STALE["shiller_days"])
     except macro_store.MacroMissing:
-        last_fred = {}  # 위 ECOS 에서 이미 [X] 로 알렸다
+        last_fred, last_shiller = {}, {}  # 위 ECOS 에서 이미 [X] 로 알렸다
     for name in fred.SERIES:
-        last = last_fred.get(name)
-        d = None
-        if last:
-            y, m = int(last[:4]), int(last[4:6])
-            d = dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
-        say(f"FRED {name}", days_since(d, today), STALE["fred_days"][name],
+        say(f"FRED {name}", days_since(period_end(last_fred.get(name)), today), STALE["fred_days"][name],
+            "python -m scripts.ingest_stock")
+    for name, limit in STALE["shiller_days"].items():
+        say(f"실러 {name}", days_since(period_end(last_shiller.get(name)), today), limit,
             "python -m scripts.ingest_stock")
 
     try:

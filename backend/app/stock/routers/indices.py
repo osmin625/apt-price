@@ -1,4 +1,4 @@
-"""주식 — 지수 분석(영향·구간 예측)과 단기 매매 탭의 실제 지수 계산."""
+"""주식 — 지수 분석(영향·구간 예측)과 장기 투자·단기 매매 탭의 실제 지수 계산."""
 
 from fastapi import APIRouter, HTTPException
 
@@ -22,5 +22,13 @@ def indices():
 def short_term():
     try:
         return service.short_term()
+    except DbMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/long-term")
+def long_term():
+    try:
+        return service.long_term()
     except DbMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -16,6 +16,7 @@ from . import effects as EF
 from . import forecast as F
 from . import store
 from . import trading as TR
+from . import valuation as VA
 from .indicators import BY_ID as INDICATOR, PAIRS, unit_of
 from .indices import INDICES, Index
 
@@ -137,7 +138,32 @@ def short_term() -> dict:
     한 번 계산에 몇 초 걸려 지수의 마지막 날로 기억해 둔다 — 새 종가가 적재되면 키가 바뀐다.
     """
     key = tuple(sorted(store.last_dates().items()))
-    if key not in _short:
+    got = _short.get(key)
+    if got is None:
+        # 지역 변수로 들고 돌려준다 — 두 요청이 겹치면 다른 쪽의 clear() 가 방금 넣은 것을 지울 수 있다.
+        got = TR.overview([(ix, store.daily(ix.market, ix.symbol)) for ix in INDICES])
         _short.clear()
-        _short[key] = TR.overview([(ix, store.daily(ix.market, ix.symbol)) for ix in INDICES])
-    return _short[key]
+        _short[key] = got
+    return got
+
+
+_long: dict[tuple, dict] = {}
+
+
+def long_term() -> dict:
+    """장기 투자 탭 — 지수 평가 넷의 지금 상태·과거 성적(`valuation.py`).
+
+    가짜 주가 경로를 수천 개 뽑아 몇 초 걸린다. 지수의 마지막 날과 평가 재료의 마지막 시점으로 기억해 둔다 —
+    새 값이 적재되면 키가 바뀐다.
+    """
+    names = [n for src in VA.NEEDS.values() for n in src]
+    key = (tuple(sorted(store.last_dates().items())),
+           tuple(sorted(macro_store.last_period(names).items())),
+           tuple(sorted(macro_store.last_period(names, "Q").items())))
+    got = _long.get(key)
+    if got is None:
+        got = VA.overview()
+        _long.clear()
+        _long[key] = got
+    return got
+

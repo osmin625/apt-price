@@ -13,3 +13,6 @@ numpy==2.2.1
 pandas==2.2.3
 scipy==1.17.1
 statsmodels==0.15.0
+
+# 실러 자료(ie_data.xls, 옛 엑셀 꼴)를 읽는다. app/macro/clients/shiller.py 안에서만 지연 import.
+xlrd==2.0.1

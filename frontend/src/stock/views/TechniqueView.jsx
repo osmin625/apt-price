@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import ChartLink from '../../shared/ChartLink'
 import Hint from '../../shared/Hint'
 import { nowShort } from '../components/LiveSection'
+import { valShort } from '../components/ValuationSection'
 import TechniqueModal from '../components/TechniqueModal'
 
 /**
@@ -15,8 +16,8 @@ import TechniqueModal from '../components/TechniqueModal'
  * 매매 신호처럼 읽히지 않게, 카드에는 '사라·팔아라' 를 적지 않는다. 지금 상태·과거 성적은 재서 붙인다
  * (docs/stock/trading.md · valuation.md).
  *
- * `load` 가 있으면(단기 매매) 실제 지수에 돌린 결과를 받아, 종가로 재는 카드에 지수마다 지금 상태 한 줄을 단다
- * (backend/app/stock/trading.py). 받는 동안에도 카드와 설명은 그대로 보인다 — 설명이 초점이라 기다리게 하지 않는다.
+ * `load` 가 있으면 실제 지수에 돌린 결과를 받아, 카드에 지수마다 지금 상태 한 줄을 단다 — 단기 매매는 종가로 재는
+ * 기법(backend/app/stock/trading.py, `live.rules`), 장기 투자는 지수 평가 넷(valuation.py, `live.measures`). 받는 동안에도 카드와 설명은 그대로 보인다 — 설명이 초점이라 기다리게 하지 않는다.
  */
 export default function TechniqueView({ title, notes, catalog, load }) {
   const { GROUPS, TECHNIQUES, NEED } = catalog
@@ -26,6 +27,11 @@ export default function TechniqueView({ title, notes, catalog, load }) {
   const t = pick && TECHNIQUES.find((x) => x.id === pick)
 
   useEffect(() => {
+    // 장기·단기 두 탭이 같은 자리의 이 화면을 나눠 써서, 탭을 옮겨도 상태가 남는다 — 단기 탭의 오류가 장기 탭
+    // 창에 '요청 실패' 로 뜬 적이 있다. load 가 바뀌면 처음부터.
+    setLive(load ? null : undefined)
+    setError(null)
+    setPick(null)
     if (!load) return undefined
     let alive = true
     load().then((d) => alive && setLive(d)).catch((e) => alive && setError(e))
@@ -82,11 +88,14 @@ export default function TechniqueView({ title, notes, catalog, load }) {
                 </div>
                 <div className="muted small">{x.en}</div>
                 <p className="tq-one">{x.summary}</p>
-                {live?.rules?.[x.id] && (
+                {(live?.rules?.[x.id] || live?.measures?.[x.id]) && (
                   <ul className="tq-state">
                     {live.indices.map((ix) => (
                       <li key={ix.id}>
-                        <span className="muted">{ix.label}</span> {nowShort(live.rules[x.id], live.rules[x.id].by[ix.id])}
+                        <span className="muted">{ix.label}</span>{' '}
+                        {live.rules?.[x.id]
+                          ? nowShort(live.rules[x.id], live.rules[x.id].by[ix.id])
+                          : valShort(x.id, live.measures[x.id], live.measures[x.id].by[ix.id])}
                       </li>
                     ))}
                   </ul>

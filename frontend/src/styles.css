@@ -772,6 +772,10 @@ tr.is-deleting td { opacity: 0.4; }
 .tq-one { margin: 5px 0 6px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); flex: 1; }
 .tq-badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .tq-state { list-style: none; margin: 0 0 6px; padding: 0; font-size: 12px; line-height: 1.55; }
+.tq-perf tr.tq-here td {
+  font-weight: 600;
+}
+
 .tq-now { font-size: 13px; margin: 8px 0 4px; }
 .tq-perf td:first-child { white-space: nowrap; }
 .badge.is-close, .badge.is-index { border-color: var(--series-3); color: var(--series-3); }

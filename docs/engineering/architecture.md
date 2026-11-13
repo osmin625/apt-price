@@ -18,9 +18,10 @@ backend/
     macro/                  거시 — 자산을 건너 쓰는 공표 계열. 어느 자산도 import 하지 않는다
     macro/store.py          macro.db(apt.db 옆) 읽기·쓰기 — 파일이 없으면 빈 계열 대신 MacroMissing
     macro/models.py         macro_points — (계열 id, 주기, 시점) 한 줄
-    macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리 (키 없으면 sample 폴백)
+    macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리·KOSPI 시가총액·PER·국고채 10년·명목 GDP (키 없으면 sample 폴백)
                             fetch_table 은 표 하나를 그대로 — KOSPI 일별도 이것으로 받는다
-    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 금리·물가·M2·실업률(SERIES)·S&P 500(SP500, 최근 10년)
+    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 금리·물가·M2·실업률·시가총액·GDP(SERIES)·S&P 500(SP500, 최근 10년)
+    macro/clients/shiller.py   실러 교수의 ie_data.xls — S&P 500 1871~ 월별 주가·이익·물가·10년 금리·CAPE (비공식, 받을 때 FRED 와 대조)
 
     stock/                  주식 — 지수(다음은 종목)의 월~분기 수익률 구간 예측
     stock/CLAUDE.md         주식 지침서 — 평가 장치가 먼저, 출처는 공식·대조는 비공식
@@ -33,7 +34,8 @@ backend/
     stock/effects.py        지표 → 지수 영향(평소 폭 막대·등분산 Hansen–Hodrick 95% 범위·시기 나누기·함께 넣은 값)
     stock/service.py        지수 분석 응답 — 지표 영향 + 지금 구간 + 같은 장치로 잰 과거 성적 · 단기 매매 응답
     stock/trading.py        단기 매매 — 종가로 재는 기법 12개를 지수에 돌린 지금 상태·기저율 대비 성적·실제 사례(지그재그 패턴 탐지)
-    stock/routers/indices.py   /api/stock/indices · /api/stock/short-term
+    stock/valuation.py      장기 투자 — 지수 평가 넷(버핏 지표·이익 수익률 vs 국채·CAPE·추세 대비)의 지금 백분위·뒤 5·10년 수익(가짜 경로 범위)
+    stock/routers/indices.py   /api/stock/indices · /api/stock/long-term · /api/stock/short-term
 
     realestate/             부동산
     realestate/CLAUDE.md    부동산 지침서 — 이 자산의 라우팅 표와 규칙(아래 '자산 구조')
@@ -117,6 +119,7 @@ backend/
     verify_lookahead.py     지수 예측이 기점 뒤 값을 바꿔도 그대로인지(미래를 보지 않는지)
     verify_index_effects.py 지표 영향의 95% 범위가 참값을 덮는지·헛짚음·발표 시차 (합성 자료)
     verify_short_rules.py   단기 기법·패턴 신호가 미래를 안 보는지·비용·기저율 범위·지표가 synth.js 와 같은지 (합성 자료)
+    verify_valuation.py     지수 평가가 미래(발표 시차 포함)를 안 보는지·범위가 5% 안팎인지·CAPE 가 실러 열과 같은지
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
     seed_stations.py        역 테이블 + 강남 접근성 (수기 관리)
@@ -152,6 +155,7 @@ frontend/
   src/stock/views/TechniqueView.jsx  장기 투자·단기 매매 두 탭이 같이 쓰는 저장소 화면
   src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
   src/stock/components/LiveSection.jsx    창의 '실제 지수에서' — 지금 상태·신호 뒤 성적·규칙대로 vs 사서 들고 있기
+  src/stock/components/ValuationSection.jsx   장기 지수 평가 창의 '실제 지수에서' — 지금 값·역사 백분위·백분위 칸별 뒤 5·10년 수익
   src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)
   src/stock/views/IndexView.jsx   지표 카드(상식의 방향 · 잰 값과 95% 범위 띠 · 맞는지) + 지수마다 접힌 예측 카드

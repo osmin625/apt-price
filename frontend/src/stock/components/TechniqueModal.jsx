@@ -5,6 +5,7 @@ import Hint from '../../shared/Hint'
 import Modal from '../../shared/Modal'
 import ExampleChart from './ExampleChart'
 import LiveSection, { day } from './LiveSection'
+import ValuationSection, { realChart, ym } from './ValuationSection'
 
 /**
  * 기법 하나의 설명 창 — 저장소의 초점이 설명이라(2026-11-12 합의) 카드에는 한 줄만 두고 나머지를 여기 둔다.
@@ -16,21 +17,28 @@ import LiveSection, { day } from './LiveSection'
  * 단기 기법 중 종가로 재는 것은 실제 지수에 돌린 결과(`live`, backend/app/stock/trading.py)가 붙는다 — '실제 지수에서'
  * 절과, 예시의 실제 사례. 사례가 있으면 실제가 먼저, 없으면 합성(2026-11-12 합의). 실제 사례는 고르지 않고 규칙으로
  * 정한다 — 뒤 60거래일이 다 지난 가장 최근 신호. 보기 좋은 것을 고르면 기법이 실제보다 좋아 보인다.
+ *
+ * 장기 지수 평가 넷(`need === 'index'`)은 실제 지수의 그 평가 계열이 붙는다(`live.measures`, backend/app/stock/valuation.py)
+ * — '실제 지수에서' 절과, 예시 자리의 실제 계열 그림. 고를 사례가 없이 계열 전체를 그린다.
  */
 export default function TechniqueModal({ t, needLabel, onClose, live, liveError }) {
   const rule = live?.rules?.[t.id]
+  const measure = live?.measures?.[t.id]
   const runs = live !== undefined && t.need === 'close'
+  const values = live !== undefined && t.need === 'index'
   const [ix, setIx] = useState(() => live?.indices?.[0]?.id)
   const index = live?.indices?.find((x) => x.id === ix) || live?.indices?.[0]
   const real = rule && index ? rule.by[index.id]?.example : null
+  const vBy = measure && index ? measure.by[index.id] : null
+  const vReal = vBy && !vBy.missing ? realChart(t.id, measure, vBy) : null
   const [mode, setMode] = useState('real')
-  const showReal = real && mode === 'real'
+  const showReal = (real || vReal) && mode === 'real'
   const ex = t.example()
   const synthChart = ex.chart || (ex.close || ex.bars ? ex : null)
-  const chart = showReal
-    ? { ...real, priceLabel: `${index.label} 종가`, axis: true, dates: [day(real.first), day(real.last)],
-        markNames: rule.kind === 'hold' ? null : ['오름 신호', '내림 신호'] }
-    : synthChart
+  const chart = !showReal
+    ? synthChart
+    : vReal || { ...real, priceLabel: `${index.label} 종가`, axis: true, dates: [day(real.first), day(real.last)],
+                 markNames: rule.kind === 'hold' ? null : ['오름 신호', '내림 신호'] }
   const virtual = t.need === 'company'
   return (
     <Modal title={`${t.name} · ${t.en}`} onClose={onClose} wide>
@@ -47,12 +55,20 @@ export default function TechniqueModal({ t, needLabel, onClose, live, liveError 
       {runs && (
         <LiveSection rid={t.id} live={live} error={liveError} ix={index?.id} setIx={setIx} />
       )}
+      {values && (
+        <ValuationSection id={t.id} live={live} error={liveError} ix={index?.id} setIx={setIx} />
+      )}
 
       <h3>
-        예시 <span className="badge">{virtual ? '가상 회사 숫자' : showReal ? `실제 ${index.label}` : '합성 데이터'}</span>
+        {vReal && showReal ? '실제 계열' : '예시'} <span className="badge">{virtual ? '가상 회사 숫자' : showReal ? `실제 ${index.label}` : '합성 데이터'}</span>
         <Hint
           notes={[
-            showReal
+            showReal && vReal
+              ? (t.id === 'trend-position'
+                ? `실제 ${index.label} 의 물가를 뺀 지수입니다(지금 = 100). 점선은 지금까지의 자료로 맞춘 추세라 과거 구간에는 그때 몰랐던 자료가 들어 있습니다 — 아래 칸의 편차는 그달까지의 자료로 맞춘 추세에서 잰 것이라 위 그림의 점선과의 거리와 다를 수 있습니다.`
+                : `실제 ${index.label} 의 ${measure.label} 입니다(${ym(vBy.series.dates[0])}~). ${t.id === 'fed-model' ? '아래 칸이 두 수익률의 차이입니다.' : '평균과 띠는 전체 기간으로 낸 것이라 과거 구간에는 그때 몰랐던 자료가 들어 있습니다 — 표의 백분위는 그달까지의 값으로만 냈습니다.'}`)
+              : null,
+            showReal && real
               ? `실제 ${index.label} 종가입니다. 규칙에 맞는 신호 가운데 뒤 ${live.after}거래일이 다 지난 가장 최근 것을 골랐습니다 — 보기 좋은 것을 고르면 기법이 실제보다 좋아 보입니다. 표시는 이 구간 안의 모든 신호입니다.`
               : null,
             showReal ? null : virtual
@@ -63,13 +79,13 @@ export default function TechniqueModal({ t, needLabel, onClose, live, liveError 
           ]}
         />
       </h3>
-      {real && (
+      {(real || vReal) && (
         <div className="seg" role="tablist" aria-label="예시">
-          <button role="tab" aria-selected={mode === 'real'} onClick={() => setMode('real')}>실제 사례</button>
+          <button role="tab" aria-selected={mode === 'real'} onClick={() => setMode('real')}>{vReal ? '실제 계열' : '실제 사례'}</button>
           <button role="tab" aria-selected={mode !== 'real'} onClick={() => setMode('synth')}>합성 예시</button>
         </div>
       )}
-      {showReal && (
+      {showReal && real && (
         <p className="muted small">
           {day(real.at)} {real.dir > 0 ? '▲' : '▼'}{real.kind ? ` ${real.kind}` : ''} · 다음 날 종가에서 {live.after}거래일 뒤{' '}
           {real.after == null ? '—' : <b className={real.after >= 0 ? 'tone-pos' : 'tone-neg'}>{real.after >= 0 ? '+' : '−'}{fmt(Math.abs(real.after), 1)}%</b>}

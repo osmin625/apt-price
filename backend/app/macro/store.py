@@ -54,6 +54,16 @@ def monthly(series: str) -> dict[str, float]:
     return {p: float(v) for p, v in rows}
 
 
+def quarterly(series: str) -> dict[str, float]:
+    """{'YYYYQn': 값}. 분기 계열(FRED 자금순환표·GDP, ECOS 명목 GDP)."""
+    with reader() as db:
+        rows = db.execute(
+            select(MacroPoint.period, MacroPoint.value)
+            .where(MacroPoint.series == series, MacroPoint.freq == "Q")
+        ).all()
+    return {p: float(v) for p, v in rows}
+
+
 def last_period(series: Iterable[str], freq: str = "M") -> dict[str, str]:
     """계열별 마지막 시점. 신선도 검진이 쓴다."""
     with reader() as db:

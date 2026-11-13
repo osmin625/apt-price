@@ -154,6 +154,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/stock/indices", {}),
         # 주식 단기 매매 — 기법을 지수마다 돌린 지금 상태·성적·실제 사례. 파라미터가 없다.
         Req("/api/stock/short-term", {}),
+        # 주식 장기 투자 — 지수 평가 넷의 지금 상태·과거 성적. 파라미터가 없다.
+        Req("/api/stock/long-term", {}),
     ]
 
     # 매크로 인사이트.
