@@ -17,7 +17,8 @@ import TechniqueView from './views/TechniqueView'
  */
 const LONG_NOTES = [
   '버핏·그레이엄 같은 장기 투자자의 가치평가 기법을 모았습니다. 카드를 누르면 원리·쓰는 법·예시·함정·원전이 나옵니다.',
-  '지수 평가는 시장 전체에, 나머지는 한 회사의 재무에 쓰는 기법입니다. 예시는 합성 데이터나 가상 회사 숫자이고, 창에 그렇게 적었습니다.',
+  '지수 평가 넷은 실제 S&P 500·KOSPI 에 돌렸습니다. 카드의 한 줄은 지금 값과 역사 백분위(그달까지의 값 가운데 아래인 비율)이고, 창에는 백분위 칸마다 그 뒤 5·10년 수익률과 실제 계열 그림이 있습니다.',
+  '나머지는 한 회사의 재무에 쓰는 기법이라 가상 회사 숫자로 계산 과정을 보여 줍니다. 창에 그렇게 적었습니다.',
   '기법 설명이지 투자 권유가 아닙니다. 어느 기법도 언제 사고팔지를 보장하지 않습니다.',
 ]
 const SHORT_NOTES = [
@@ -31,7 +32,7 @@ export const TABS = [
   { id: 'index-analysis', label: '지수 분석', static: true, render: () => <IndexView /> },
   {
     id: 'long-term', label: '장기 투자', static: true,
-    render: () => <TechniqueView title="장기 투자 — 가치평가 기법" notes={LONG_NOTES} catalog={LONG} />,
+    render: () => <TechniqueView title="장기 투자 — 가치평가 기법" notes={LONG_NOTES} catalog={LONG} load={api.stockLongTerm} />,
   },
   {
     id: 'short-term', label: '단기 매매', static: true,

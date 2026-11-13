@@ -45,7 +45,9 @@
 ## 출처는 공식, 대조는 비공식
 
 받는 것은 공식 출처(한국은행 ECOS·FRED, 다음은 공공데이터포털·DART·EDGAR)다. 비공식(야후 등)은
-`scripts/probe_stock_crosscheck.py` 로 **같은 날 종가를 맞춰 보는 데만** 쓴다. 계열 코드는 기억이
+`scripts/probe_stock_crosscheck.py` 로 **같은 날 종가를 맞춰 보는 데만** 쓴다. **예외는 실러 자료 하나**다
+(2026-11-12 합의 — S&P 500 주당 이익과 1871년부터의 주가는 공식 무료 출처가 없다). 그 대신 받을 때마다
+공식 출처(FRED SP500·GS10)와 맞춰 보고 어긋나면 넣지 않는다(`scripts/ingest_stock.py` 의 `shiller_problems`). 계열 코드는 기억이
 아니라 목록에서 고른다 — ECOS 의 같은 표에 KOSPI 와 KOSDAQ 이 나란히 있다.
 
 ## 통화

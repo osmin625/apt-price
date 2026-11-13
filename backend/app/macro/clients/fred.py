@@ -10,6 +10,7 @@ FRED API 는 키가 필요하지만, 그래프 화면이 쓰는 `fredgraph.csv` 
 
     TB3MS   미국 3개월 국채 금리(유통, 월평균, 연%)   1934~  — S&P 500 의 무위험 금리
     FEDFUNDS·GS10·T10Y3MM·CPIAUCSL·M2SL·UNRATE        — 지수 분석의 미국 지표(`SERIES`)
+    NCBEILQ027S·GDP  시가총액·명목 GDP(분기)          — 장기 투자의 버핏 지표
     SP500   S&P 500 지수(일별 종가)                 최근 10년 — 주식 쪽(`app/stock/indices.py`)
 
 **SP500 은 FRED 에 최근 10년만 있다**(S&P 다우존스 지수의 사용 조건). 그보다 긴 공식 무료
@@ -39,6 +40,12 @@ SERIES: dict[str, tuple[str, str, str]] = {
     "us_cpi": ("CPIAUCSL", "M", "1982-84=100"),
     "us_m2": ("M2SL", "M", "십억달러"),
     "us_unrate": ("UNRATE", "M", "%"),
+    # 주식 '장기 투자' 의 버핏 지표(2026-11-13, app/stock/valuation.py). 둘 다 분기다.
+    # 시가총액은 연준 자금순환표(Z.1)의 **비금융 법인 주식(부채 쪽, 시가)** 이다. 모든 부문 합계
+    # (BOGZ1FL893064105Q)는 미국인이 든 **외국 주식**까지 들어 있어 GDP(국내)와 맞지 않는다 — 2026Q2 에
+    # 124조 달러로, 비금융 법인(83조)의 1.5배였다. 윌셔 5000(WILL5000IND)은 FRED 에서 내려갔다(404).
+    "us_mcap": ("NCBEILQ027S", "Q", "백만달러"),
+    "us_gdp": ("GDP", "Q", "십억달러(연율)"),  # 명목, 계절조정 연율 — 분기 값이 이미 1년치 크기다
 }
 
 
@@ -67,8 +74,16 @@ def fetch_csv(series_id: str) -> list[tuple[str, float]]:
     return sorted(out)
 
 
-def fetch_monthly(name: str) -> list[tuple[str, float, str]]:
-    """macro.db 용 (YYYYMM, 값, 단위). 월 계열은 그 달 1일 날짜로 온다."""
+def period(d: str, freq: str) -> str:
+    """FRED 날짜(그 기간의 첫날)를 macro.db 시점으로 — 월 'YYYYMM', 분기 'YYYYQn'(ECOS 와 같은 꼴)."""
+    if freq == "M":
+        return d[:6]
+    if freq == "Q":
+        return f"{d[:4]}Q{(int(d[4:6]) - 1) // 3 + 1}"
+    raise ValueError(freq)
+
+
+def fetch_series(name: str) -> list[tuple[str, float, str]]:
+    """macro.db 용 (시점, 값, 단위). 월·분기 계열은 그 기간의 첫날 날짜로 온다."""
     sid, freq, unit = SERIES[name]
-    assert freq == "M", name
-    return [(d[:6], v, unit) for d, v in fetch_csv(sid)]
+    return [(period(d, freq), v, unit) for d, v in fetch_csv(sid)]

@@ -77,6 +77,14 @@ TABLES: dict[str, tuple[str, str, str]] = {
     # 줄이 온다 — 항목 코드 하나만 주면 달마다 두 값이 섞인다(받아 보고 알았다). 지수가 월말
     # 종가라 말일자료를 고른다. 항목 자리에 '/' 로 둘째 코드를 이어 붙이면 ECOS 가 받는다.
     "krw_usd": ("731Y004", "0000001/0000200", "M"),
+    # 주식 '장기 투자' 의 KOSPI 지수 평가(2026-11-13, app/stock/valuation.py). 전부 목록에서 골랐다.
+    # 901Y014 는 한 항목에 연(A)·월(M) 두 줄이 있다 — 월은 시가총액 2005-01~, PER 2004-01~ 부터다.
+    "kospi_mcap": ("901Y014", "1040000", "M"),   # KOSPI 시가총액(천원) — 버핏 지표의 분자
+    "kospi_per": ("901Y014", "1110000", "M"),    # KOSPI 주가이익비율(배) — 이익 수익률·CAPE
+    "kr_10y": ("721Y001", "5050000", "M"),       # 국고채 10년(연%) 2000-10~
+    # 명목 GDP(계절조정, 분기, 십억원) — 분기 값 그대로라 연 GDP 는 ×4. **속보치는 실질만** 내므로
+    # 명목은 분기 끝에서 두 달 남짓 뒤 잠정치로 들어온다.
+    "kr_gdp": ("200Y107", "10601", "Q"),
 }
 
 
@@ -140,8 +148,13 @@ def fetch_table(code: str, item: str, cycle: str, start: str, end: str) -> list[
     return out
 
 
-def fetch(metric: str, start_ym: str = "200001", end_ym: str = "209912") -> list[EcosPoint]:
-    """한 지표의 월별 시계열."""
+# 주기마다 시점 꼴이 다르다 — 분기는 '2026Q2'. 월 꼴('200001')을 분기 표에 주면 ECOS 가 오류를 낸다.
+SPAN = {"M": ("200001", "209912"), "Q": ("1960Q1", "2099Q4")}
+
+
+def fetch(metric: str, start_ym: str | None = None, end_ym: str | None = None) -> list[EcosPoint]:
+    """한 지표의 시계열. 월은 'YYYYMM', 분기는 'YYYYQn'."""
     code, item, cycle = TABLES[metric]
+    a, b = SPAN[cycle]
     return [EcosPoint(metric=metric, ym=t, value=v, unit=u)
-            for t, v, u in fetch_table(code, item, cycle, start_ym, end_ym)]
+            for t, v, u in fetch_table(code, item, cycle, start_ym or a, end_ym or b)]
