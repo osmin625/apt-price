@@ -31,6 +31,7 @@
 | [docs/analysis/tenure.md](docs/analysis/tenure.md) | 같은 집의 매매·전세·월세 월 비용과 금리에 따른 수요 이동 (매매·전세·월세 탭) | 그 탭의 계산·그림을 바꿀 때 |
 | [docs/stock/indices.md](docs/stock/indices.md) | 주식 지수 구간 예측 — 출처·후보·평가 장치 (지수 분석 탭 아래 접힌 카드) | 주식 출처·예측 후보·평가를 건드릴 때 |
 | [docs/stock/effects.md](docs/stock/effects.md) | 경제지표가 지수에 미친 영향 — 지표·짝·발표 시차·범위를 재는 법 (지수 분석 탭 맨 위) | 지표를 더하거나 영향을 재는 법을 바꿀 때 |
+| [docs/stock/tech-value.md](docs/stock/tech-value.md) | 기술주 가치 탭 — 시가총액을 지금 사업·기대 기술·설명 안 된 몫으로, 역산·실현 때 주가, 종목 주가·EDGAR 재무 출처 | 종목·시나리오를 더하거나 분해 식을 바꿀 때 |
 | [docs/stock/valuation.md](docs/stock/valuation.md) | 장기 투자 탭 — 가치평가 기법 저장소, 지수 평가의 출처, 가상 회사 예시 | 장기 기법을 더하거나 지수 평가를 붙일 때 |
 | [docs/stock/trading.md](docs/stock/trading.md) | 단기 매매 탭 — 차트 기법 저장소, 합성 예시를 만드는 법, grilling 으로 정한 것 | 단기 기법을 더하거나 실제 성적을 붙일 때 |
 | [docs/engineering/architecture.md](docs/engineering/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |

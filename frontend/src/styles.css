@@ -1171,3 +1171,16 @@ tr.is-deleting td { opacity: 0.4; }
 /* 상세 안의 표는 줄바꿈하지 않고 가로로 넘긴다. 휴대폰 폭에서 칸이 좁아지면
    '역까지 도보' 가 한 글자씩 세로로 쪼개졌다. */
 .mf-detail .coef td, .mf-detail .coef th { white-space: nowrap; }
+
+/* 기술주 가치 — 시가총액 분해 막대(stock/views/TechValueView.jsx) */
+.tv-bar-wrap { margin: 10px 0 4px; }
+.tv-bar { position: relative; height: 26px; border-radius: var(--radius); background: color-mix(in srgb, var(--border) 40%, transparent); overflow: hidden; }
+.tv-bar span { position: absolute; top: 0; bottom: 0; }
+.tv-bar .tv-rest, .tv-rest-swatch { background: repeating-linear-gradient(45deg, var(--border) 0 4px, transparent 4px 8px); }
+.tv-bar .tv-cap { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); }
+.tv-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 12.5px; }
+.tv-legend b { font-variant-numeric: tabular-nums; }
+.tv-legend .swatch, .tv-table .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.tv-num { font: inherit; font-variant-numeric: tabular-nums; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
+.tv-table td { vertical-align: top; }
+.tv-table td:first-child { min-width: 150px; }

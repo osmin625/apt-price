@@ -34,8 +34,14 @@ backend/
     stock/effects.py        지표 → 지수 영향(평소 폭 막대·등분산 Hansen–Hodrick 95% 범위·시기 나누기·함께 넣은 값)
     stock/service.py        지수 분석 응답 — 지표 영향 + 지금 구간 + 같은 장치로 잰 과거 성적 · 단기 매매 응답
     stock/trading.py        단기 매매 — 종가로 재는 기법 12개를 지수에 돌린 지금 상태·기저율 대비 성적·실제 사례(지그재그 패턴 탐지)
+    stock/companies.py      기술주 가치 탭의 종목(티커·CIK) — 알파벳·테슬라·IBM·디웨이브
+    stock/clients/alphavantage.py   종목 주가 — 최근 100일 일봉·상장 때부터 월봉 수정 종가(무료 키)
+    stock/clients/edgar.py  SEC EDGAR companyfacts — 순이익·매출·영업이익·주식 수(키 없음)
+    stock/fundamentals.py   EDGAR 줄 → 분기 값(4분기 = 1년 − 9개월)·지난 12개월·주식 수, 그날 알던 값/지금 아는 값
+    stock/scenarios.py      기대 기술 시나리오 기본값(근거 문구 + 가정)
+    stock/techvalue.py      기술주 가치 재료 — 지금 주가·주식 수·12개월 이익·베타·10년 국채·월봉 이력
     stock/valuation.py      장기 투자 — 지수 평가 넷(버핏 지표·이익 수익률 vs 국채·CAPE·추세 대비)의 지금 백분위·뒤 5·10년 수익(가짜 경로 범위)
-    stock/routers/indices.py   /api/stock/indices · /api/stock/long-term · /api/stock/short-term
+    stock/routers/indices.py   /api/stock/indices · /api/stock/tech-value · /api/stock/long-term · /api/stock/short-term
 
     realestate/             부동산
     realestate/CLAUDE.md    부동산 지침서 — 이 자산의 라우팅 표와 규칙(아래 '자산 구조')
@@ -119,6 +125,7 @@ backend/
     verify_lookahead.py     지수 예측이 기점 뒤 값을 바꿔도 그대로인지(미래를 보지 않는지)
     verify_index_effects.py 지표 영향의 95% 범위가 참값을 덮는지·헛짚음·발표 시차 (합성 자료)
     verify_short_rules.py   단기 기법·패턴 신호가 미래를 안 보는지·비용·기저율 범위·지표가 synth.js 와 같은지 (합성 자료)
+    verify_tech_value.py    12개월 이익(4분기 차·고쳐진 값·빠진 분기)·베타·가치 분해가 파이썬 식 = model.js·역산이 몫을 0 으로
     verify_valuation.py     지수 평가가 미래(발표 시차 포함)를 안 보는지·범위가 5% 안팎인지·CAPE 가 실러 열과 같은지
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
@@ -155,6 +162,8 @@ frontend/
   src/stock/views/TechniqueView.jsx  장기 투자·단기 매매 두 탭이 같이 쓰는 저장소 화면
   src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
   src/stock/components/LiveSection.jsx    창의 '실제 지수에서' — 지금 상태·신호 뒤 성적·규칙대로 vs 사서 들고 있기
+  src/stock/views/TechValueView.jsx   기술주 가치 — 시가총액 분해 막대·기대 기술 표(가정·역산·실현 때 주가)·주가 그림
+  src/stock/techvalue/model.js   가치 분해 계산(지금 사업·기술의 지금 값·역산·실현 때 주가) — 화면에서 시나리오를 바꿔 본다
   src/stock/components/ValuationSection.jsx   장기 지수 평가 창의 '실제 지수에서' — 지금 값·역사 백분위·백분위 칸별 뒤 5·10년 수익
   src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)

@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # 없으면 `sample` 키로 10행씩 받아 느리지만 돌기는 한다 — macro/clients/ecos.py 참조.
     ecos_api_key: str = ""
 
+    # Alpha Vantage 무료 키. https://www.alphavantage.co/support/#api-key
+    # 기술주 가치 탭의 미국 종목 주가 출처(최근 일봉·월봉 수정 종가). 무료는 하루 25번 — 종목당 두 번 쓴다.
+    # 없으면 종목 주가를 못 받고 적재가 [X] 로 알린다 — app/stock/clients/alphavantage.py.
+    alphavantage_api_key: str = ""
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     def sibling_url(self, name: str, explicit: str = "") -> str:

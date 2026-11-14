@@ -2,6 +2,7 @@ import { api } from '../api'
 import * as LONG from './techniques/long'
 import * as SHORT from './techniques/short'
 import IndexView from './views/IndexView'
+import TechValueView from './views/TechValueView'
 import TechniqueView from './views/TechniqueView'
 
 /**
@@ -11,8 +12,9 @@ import TechniqueView from './views/TechniqueView'
  * 첫 조각은 지수 둘이다. 맨 위는 경제지표의 영향(docs/stock/effects.md), 아래는 구간 예측(docs/stock/indices.md).
  * 2026-11 에 id 를 'indices'(지수 예측)에서 바꿨다 — 옛 주소는 App.jsx 의 `TAB_ALIAS` 가 이리로 보낸다.
  *
- * 순서는 부동산과 같은 원칙(큰 틀에서 상세로) — 시장 전체(지수 분석) → 몇 년을 보는 기법(장기 투자) → 며칠~몇 주를
- * 보는 기법(단기 매매). 뒤의 둘은 기법 저장소다(2026-11-12 합의, docs/stock/valuation.md · trading.md).
+ * 순서는 부동산과 같은 원칙(큰 틀에서 상세로) — 시장 전체(지수 분석) → 종목 하나(기술주 가치) → 몇 년을 보는
+ * 기법(장기 투자) → 며칠~몇 주를 보는 기법(단기 매매). 뒤의 둘은 기법 저장소다(2026-11-12 합의,
+ * docs/stock/valuation.md · trading.md). 기술주 가치는 2026-11-14 요청(docs/stock/tech-value.md).
  * '단타' 대신 '단기 매매' 인 것은 받는 자료가 일봉이라 며칠~몇 주 매매가 중심이어서다.
  */
 const LONG_NOTES = [
@@ -30,6 +32,7 @@ const SHORT_NOTES = [
 
 export const TABS = [
   { id: 'index-analysis', label: '지수 분석', static: true, render: () => <IndexView /> },
+  { id: 'tech-value', label: '기술주 가치', static: true, render: () => <TechValueView /> },
   {
     id: 'long-term', label: '장기 투자', static: true,
     render: () => <TechniqueView title="장기 투자 — 가치평가 기법" notes={LONG_NOTES} catalog={LONG} load={api.stockLongTerm} />,
