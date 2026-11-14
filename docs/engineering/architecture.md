@@ -152,7 +152,8 @@ frontend/
   src/realestate/CLAUDE.md  백엔드 쪽 부동산 지침서를 `@` 로 가져오는 한 줄
   src/realestate/tabs.jsx   부동산의 탭 — 이름·순서·정적 여부와 각 탭이 그리는 화면(render)이 한 곳에
   src/realestate/views/     매물 분석 / 가격 분석 / 공급 분석 / 거시 분석 / 매매·전세·월세 / 단지 상세
-                            / 호가 입력 / 호가 분석 / 지도 / 분해 모델
+                            / 호가 입력 / 호가 분석 / 지도 / 분해 모델 / 집 구하기
+  src/realestate/lib/buyGuide.js            집 구하기 탭의 단계·항목 목록 — 출처와 일부러 안 적은 숫자가 머리 주석에
   src/realestate/components/ScatterFit.jsx   산점도 + 적합 곡선 + 신뢰밴드 + 시드 참값 점선
   src/realestate/components/KakaoMap.jsx     카카오맵 래퍼 (CustomOverlay 마커 → 다크모드 자동)
   src/realestate/components/ModelFormula.jsx 분해 모델 맨 위 수식 — 항을 누르면 그 항의 계수·추정 방법

@@ -1,5 +1,6 @@
 import { STATIC_MAP } from '../api'
 import CompareView from './views/CompareView'
+import GuideView from './views/GuideView'
 import MacroView from './views/MacroView'
 import MapView from './views/MapView'
 import MarketView from './views/MarketView'
@@ -92,4 +93,8 @@ export const TABS = [
       />
     ),
   },
+  // 앞의 탭들이 '얼마가 맞나' 를 보여 준다면, 여기는 '그래서 사려면 무엇을 하나' 다. 분석이 아니라 할 일
+  // 목록이라 순서 원칙(큰 틀에서 상세로)의 끝 — 매물 하나하나를 본 다음 — 에 둔다. 서버를 부르지 않아
+  // 정적 사이트에도 그대로 실린다(export_static 에 더할 응답이 없다).
+  { id: 'buy-guide', label: '집 구하기', static: true, render: () => <GuideView /> },
 ]
