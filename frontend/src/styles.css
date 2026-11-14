@@ -1184,3 +1184,48 @@ tr.is-deleting td { opacity: 0.4; }
 .tv-num { font: inherit; font-variant-numeric: tabular-nums; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
 .tv-table td { vertical-align: top; }
 .tv-table td:first-child { min-width: 150px; }
+
+/* 집 구하기 — 단계별 할 일 목록(realestate/views/GuideView.jsx).
+   진척 막대는 데이터가 아니라 장식이라 `--accent` 를 쓴다 — 오름·내림의 초록·빨강과 섞이지 않게.
+   이름은 `buy-` 로 시작한다 — `guide-*` 는 가격 분석의 '읽는 법' 이 먼저 쓰고 있어, 처음에 같은 이름을 썼다가
+   그쪽 상자 테두리가 이 목록에 씌워졌다.
+   끝낸 단계는 흐리게만 한다. 초록으로 칠하면 화면의 다른 초록('올랐다')과 뜻이 겹친다. */
+.buy-progress { display: flex; align-items: center; gap: 10px; margin: 12px 0 10px; max-width: 520px; }
+.buy-bar { flex: 1; height: 8px; background: color-mix(in srgb, var(--border) 60%, transparent); }
+.buy-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+.buy-count { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.buy-phases { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+.buy-phase {
+  display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; cursor: pointer;
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: transparent; color: var(--text-primary);
+}
+.buy-phase:hover { border-color: var(--accent); color: var(--accent); }
+.buy-phase.is-done { color: var(--text-muted); }
+.buy-phase-no {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border-radius: 50%; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--on-accent);
+}
+.buy-phase-count, .buy-step-count { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+.buy-tools { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+.buy-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.buy-section { scroll-margin-top: 12px; }
+.buy-section-title { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 22px 0 10px; }
+/* 카드 높이가 항목 수만큼 제각각이라 줄마다 늘이지 않는다(align-items: start). */
+.buy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 0 16px; align-items: start; }
+.buy-step > h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.buy-step > h2 .chart-link { margin-left: 0; }
+.buy-step-count { margin-left: auto; }
+.buy-step-no { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.buy-step.is-done > h2 { color: var(--text-muted); }
+.buy-tag { font-weight: 400; }
+.buy-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.buy-items li { display: grid; grid-template-columns: 15px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--grid); font-size: 13.5px; line-height: 1.5; }
+.buy-items li:first-child { border-top: 0; }
+.buy-items input[type='checkbox'] { margin: 3px 0 0; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.buy-body > * + * { margin-left: 6px; }
+.buy-text { cursor: pointer; }
+.buy-items li.is-checked .buy-text { color: var(--text-muted); text-decoration: line-through; }
+.buy-go { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.buy-go:hover { text-decoration: underline; }
+.buy-all-done { margin: 0; }
