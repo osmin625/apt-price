@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-11-14T18:54:22+09:00",
+  "git_head": "346064a",
+  "months": [
+    12,
+    24,
+    36
+  ],
+  "includes_quotes": true,
+  "data": {
+    "trades": 124467,
+    "complexes": 2483,
+    "quotes": 1157,
+    "latest_deal_date": "2026-11-07"
+  },
+  "files": 2195,
+  "walk_paths_absent": 0,
+  "bytes": 17079845,
+  "export_seconds": 94.1,
+  "failures": []
+}
