@@ -169,8 +169,22 @@ def long_term() -> dict:
     return got
 
 
+_tech: dict[tuple, dict] = {}
+
+
 def tech_value() -> dict:
-    """기술주 가치 탭 — 종목마다 지금 주가·주식 수·지난 12개월 이익·베타·시나리오(`techvalue.py`). 계산이 가벼워
-    캐시하지 않는다(종목 넷의 재무 줄을 읽는 데 1초 안쪽)."""
-    return TV.overview()
+    """기술주 가치 탭 — 종목마다 지금 주가·주식 수·지난 12개월 이익·베타·시나리오와 반영 분해(`techvalue.py`).
+
+    반영 분해가 종목마다 부트스트랩 400번이라 몇 초 걸린다. 주가 마지막 날·재무 마지막 제출·거시 마지막 달로 기억한다.
+    """
+    from .indicators import PAIRS
+
+    key = (tuple(sorted(store.last_dates().items())), tuple(sorted(store.last_filed().items())),
+           tuple(sorted(macro_store.last_period(list(PAIRS["spx"])).items())))
+    got = _tech.get(key)
+    if got is None:
+        got = TV.overview()
+        _tech.clear()
+        _tech[key] = got
+    return got
 
