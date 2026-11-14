@@ -302,8 +302,114 @@ export default function TechValueView() {
             </h2>
             <PriceChart co={co} d={d} r={R} now={now} />
           </section>
+          <ReflectCard co={co} />
         </>
       )}
     </>
+  )
+}
+
+const pp = (v, d = 1) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}`)
+
+/** 지난 1년 주가 변화를 거시·실적·설명 안 된 몫으로(backend/app/stock/reflect.py). 시나리오와 달리 잰 값이다. */
+function ReflectCard({ co }) {
+  const rf = co.reflect
+  const head = (
+    <h2>
+      주가 1년 변화 — 요인별로 나누면
+      <Hint
+        wide
+        notes={[
+          '1년 주가 변화 = 모든 요인이 평균일 때 + 요인별 몫 + 설명 안 된 몫. 같은 달에 같이 움직인 크기이지 원인의 크기가 아닙니다. 예측도 아닙니다.',
+          '거시 요인은 지수 분석의 미국 지표 그대로이고, 오를 때 주가가 같이 가는지 거꾸로 가는지(방향)는 재기 전에 상식으로 정했습니다. 크기만 데이터로 재고, 데이터가 그 방향과 반대로 움직였으면 크기가 0(반영 안 보임)이 됩니다.',
+          '실적 요인은 지난 12개월 매출 상승률과 이익률 변화입니다. 그달 말까지 처음 제출된 값만 씁니다 — 나중에 고쳐진 숫자로 과거를 설명하지 않습니다.',
+          rf?.available
+            ? `범위는 ${rf.boot.block}달 덩어리 부트스트랩 ${rf.boot.n}번의 ${Math.round(rf.boot.q[0] * 100)}~${Math.round(rf.boot.q[1] * 100)}% 입니다. 합성 자료에 참값을 심어 재 보니 이 범위가 참값을 80% 안팎 덮었습니다 — 그래서 '80% 범위' 라고 부릅니다.`
+            : null,
+          rf?.available
+            ? `기간을 반으로 나눠 맞추면 설명력이 ${rf.halves.map((h) => `${ym(h.from)}~ ${fmt(h.r2, 2)}`).join(', ')} 입니다. 반쪽마다 크기가 크게 다르면 얽힌 요인끼리 몫을 주고받는 것입니다.`
+            : null,
+        ]}
+      />
+    </h2>
+  )
+  if (!rf?.available) {
+    return <section className="card">{head}<p className="empty">{rf?.note || '자료가 없습니다.'}</p></section>
+  }
+  const sum = (g) => rf.factors.filter((f) => f.group === g).reduce((a, f) => a + f.contrib, 0)
+  return (
+    <section className="card">
+      {head}
+      <p className="tq-now">
+        <b>{ym(rf.now)}</b> {co.label} 1년 변화 <b className={rf.actual >= 0 ? 'tone-pos' : 'tone-neg'}>{pp(rf.actual)}%</b>
+        {' '}= 평균일 때 {pp(rf.base)} · 거시 {pp(sum('거시'))} · 실적 {pp(sum('실적'))} · 설명 안 된 몫{' '}
+        <b>{pp(rf.residual)}</b>%p
+      </p>
+      <p className="muted small">{ym(rf.from)}~{ym(rf.now)} {rf.months}달 · 설명력(R²) {fmt(rf.r2, 2)}</p>
+      <div className="table-wrap">
+        <table className="coef tv-table">
+          <thead>
+            <tr><th>요인</th><th>방향</th><th>지금 움직임</th><th>위치(σ)</th><th>지금의 몫(%p)</th><th>1σ 당(%p)</th></tr>
+          </thead>
+          <tbody>
+            {rf.factors.map((f) => (
+              <tr key={f.key}>
+                <td>{f.label} <span className="muted small">{f.group}</span></td>
+                <td>{f.sign > 0 ? '▲ 정방향' : '▼ 역방향'}</td>
+                <td>{pp(f.x, 2)}{f.unit}</td>
+                <td>{pp(f.z, 2)}</td>
+                <td>
+                  {f.b > 0 ? <b className={f.contrib >= 0 ? 'tone-pos' : 'tone-neg'}>{pp(f.contrib)}</b> : <span className="muted">반영 안 보임</span>}
+                  <div className="muted small">80% 범위 {pp(f.lo)} ~ {pp(f.hi)}</div>
+                </td>
+                <td>
+                  {fmt(f.b, 1)}
+                  <div className="muted small">{f.b_lo === 0 ? `0 이 된 비율 ${f.zero_pct}%` : `${fmt(f.b_lo, 1)}~${fmt(f.b_hi, 1)}`}</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ReflectChart s={rf.series} />
+    </section>
+  )
+}
+
+function ReflectChart({ s }) {
+  const [ref, width] = useMeasure()
+  const W = Math.max(width || 640, 300)
+  const H = 200
+  const P = { l: 8, r: 44, t: 10, b: 20 }
+  const fitted = s.actual.map((_, i) => s.base + s.macro[i] + s.fund[i])
+  const vals = [...s.actual, ...fitted, 0]
+  const lo = Math.min(...vals)
+  const hi = Math.max(...vals)
+  const n = s.months.length
+  const sx = (i) => P.l + (i / Math.max(1, n - 1)) * (W - P.l - P.r)
+  const sy = (v) => P.t + (1 - (v - lo) / (hi - lo || 1)) * (H - P.t - P.b)
+  const path = (vs) => vs.map((v, i) => `${i ? 'L' : 'M'}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join('')
+  const step = [10, 20, 50, 100, 200, 500].find((k) => (hi - lo) / k <= 5) || 1000
+  const ticks = []
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v)
+  return (
+    <div ref={ref}>
+      <div className="ex-legend">
+        <span><i className="swatch" style={{ background: 'var(--text-primary)' }} />실제 1년 변화</span>
+        <span><i className="swatch" style={{ background: 'var(--series-1)' }} />거시·실적으로 맞춘 값</span>
+      </div>
+      <svg width={W} height={H} role="img" aria-label="1년 주가 변화와 요인으로 맞춘 값">
+        {ticks.map((v) => (
+          <g key={v}>
+            <line x1={P.l} x2={W - P.r} y1={sy(v)} y2={sy(v)} stroke="var(--border)" strokeDasharray={v === 0 ? '' : '2 3'} />
+            <text x={W - P.r + 4} y={sy(v) + 4} fontSize="10.5" fill="var(--text-muted)">{v}%</text>
+          </g>
+        ))}
+        <path d={path(fitted)} fill="none" stroke="var(--series-1)" strokeWidth={1.6} />
+        <path d={path(s.actual)} fill="none" stroke="var(--text-primary)" strokeWidth={1.4} />
+        <text x={P.l} y={H - 5} fontSize="10.5" fill="var(--text-muted)">{ym(s.months[0])}</text>
+        <text x={W - P.r} y={H - 5} fontSize="10.5" textAnchor="end" fill="var(--text-muted)">{ym(s.months[n - 1])}</text>
+      </svg>
+    </div>
   )
 }

@@ -20,6 +20,7 @@ import math
 
 from ..macro import store as macro_store
 from . import fundamentals as FU
+from . import reflect as RF
 from . import store
 from .companies import COMPANIES
 from .scenarios import SCENARIOS
@@ -89,6 +90,8 @@ def company(co, spx_month: dict[str, float]) -> dict:
         "beta": beta(monthly, spx_month),
         "history": {"months": [m for m, _ in hist], "close": [round(a, 4) for _, a in hist]},
         "scenarios": SCENARIOS.get(co.id, []),
+        # 과거 1년 주가 변화를 거시·실적·설명 안 된 몫으로 나눈 것(reflect.py) — 시나리오와 달리 잰 값이다.
+        "reflect": RF.of_company(co),
     }
 
 

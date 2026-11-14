@@ -14,7 +14,7 @@
 |---|---|---|
 | `stock/` 주식 | 지수·종목 출처, 예측 후보, 평가 방법을 건드린다 | [stock/indices.md](../../../docs/stock/indices.md) |
 | | 경제지표의 영향(지표·짝·발표 시차·범위를 재는 법)을 건드린다 | [stock/effects.md](../../../docs/stock/effects.md) |
-| | 기술주 가치 탭(가치 분해·기대 기술 시나리오·역산·종목 주가·EDGAR 재무)을 건드린다 | [stock/tech-value.md](../../../docs/stock/tech-value.md) |
+| | 기술주 가치 탭(가치 분해·기대 기술 시나리오·역산·반영 분해·종목 주가·EDGAR 재무)을 건드린다 | [stock/tech-value.md](../../../docs/stock/tech-value.md) |
 | | 장기 투자 탭(가치평가 기법 저장소·지수 평가 출처)을 건드린다 | [stock/valuation.md](../../../docs/stock/valuation.md) |
 | | 단기 매매 탭(차트 기법 저장소·합성 예시·실제 지수 성적·패턴 탐지 규칙)을 건드린다 | [stock/trading.md](../../../docs/stock/trading.md) |
 
