@@ -180,6 +180,7 @@ def tech_value() -> dict:
     from .indicators import PAIRS
 
     key = (tuple(sorted(store.last_dates().items())), tuple(sorted(store.last_filed().items())),
+           tuple(sorted(store.last_release().items())),
            tuple(sorted(macro_store.last_period(list(PAIRS["spx"])).items())))
     got = _tech.get(key)
     if got is None:

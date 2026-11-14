@@ -40,7 +40,8 @@ backend/
     stock/fundamentals.py   EDGAR 줄 → 분기 값(4분기 = 1년 − 9개월)·지난 12개월·주식 수, 그날 알던 값/지금 아는 값
     stock/scenarios.py      기대 기술 시나리오 기본값(근거 문구 + 가정)
     stock/reflect.py        기술주 반영 분해 — 1년 주가 변화 = 평균 + 거시 여섯·실적 둘의 몫(방향 고정, nnls) + 설명 안 된 몫, 80% 범위
-    stock/techvalue.py      기술주 가치 재료 — 지금 주가·주식 수·12개월 이익·베타·10년 국채·월봉 이력
+    stock/techvalue.py      기술주 가치 재료 — 지금 주가·마지막 실적 발표 때의 주식 수·12개월 이익·베타·10년 국채·월봉 이력
+    stock/earnings.py       실적 발표(8-K 2.02)를 분기와 짝짓고, 재무가 알려진 날을 발표일로 당긴다 — 발표마다 내용·그때의 할인율 재료
     stock/valuation.py      장기 투자 — 지수 평가 넷(버핏 지표·이익 수익률 vs 국채·CAPE·추세 대비)의 지금 백분위·뒤 5·10년 수익(가짜 경로 범위)
     stock/routers/indices.py   /api/stock/indices · /api/stock/tech-value · /api/stock/long-term · /api/stock/short-term
 
@@ -127,6 +128,7 @@ backend/
     verify_index_effects.py 지표 영향의 95% 범위가 참값을 덮는지·헛짚음·발표 시차 (합성 자료)
     verify_short_rules.py   단기 기법·패턴 신호가 미래를 안 보는지·비용·기저율 범위·지표가 synth.js 와 같은지 (합성 자료)
     verify_stock_reflect.py 종목 반영 분해 — nnls = 부동산 nnls_cd, 몫이 합쳐지는지, 80% 범위가 참값을 80% 안팎 덮는지, 그날 알던 실적
+    verify_earnings.py      발표일 짝짓기(마지막 2.02·못 찾음·고쳐 낸 제출)·발표 뒤 제출을 흔들어도 같은지·SPY 대조·valueAt = 파이썬 식·분할 단위
     verify_tech_value.py    12개월 이익(4분기 차·고쳐진 값·빠진 분기)·베타·가치 분해가 파이썬 식 = model.js·역산이 몫을 0 으로
     verify_valuation.py     지수 평가가 미래(발표 시차 포함)를 안 보는지·범위가 5% 안팎인지·CAPE 가 실러 열과 같은지
     export_static.py        정적 사이트용 스냅샷
@@ -166,7 +168,7 @@ frontend/
   src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
   src/stock/components/LiveSection.jsx    창의 '실제 지수에서' — 지금 상태·신호 뒤 성적·규칙대로 vs 사서 들고 있기
   src/stock/views/TechValueView.jsx   기술주 가치 — 시가총액 분해 막대·기대 기술 표(가정·역산·실현 때 주가)·주가 그림
-  src/stock/techvalue/model.js   가치 분해 계산(지금 사업·기술의 지금 값·역산·실현 때 주가) — 화면에서 시나리오를 바꿔 본다
+  src/stock/techvalue/model.js   가치 분해 계산(지금 사업·기술의 지금 값·역산·실현 때 주가·발표 때 주당 가치) — 화면에서 시나리오를 바꿔 본다
   src/stock/components/ValuationSection.jsx   장기 지수 평가 창의 '실제 지수에서' — 지금 값·역사 백분위·백분위 칸별 뒤 5·10년 수익
   src/stock/components/EffectModal.jsx   지표 카드를 누르면 — 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값
   src/stock/components/ForecastCard.jsx  접힌 구간 예측 카드(후보별 성적표·실제 대 구간 그림)

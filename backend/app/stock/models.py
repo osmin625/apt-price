@@ -62,3 +62,17 @@ class MonthBar(StockBase):
     adj_close: Mapped[float] = mapped_column(Float)            # 수정 종가 — 수익률은 이것으로
     source: Mapped[str] = mapped_column(String(8))
     fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Release(StockBase):
+    """실적 발표 — 항목 2.02 가 붙은 8-K 하나(`clients/edgar.releases`). 어느 분기의 것인지는 `earnings.py` 가 정한다."""
+    __tablename__ = "releases"
+    __table_args__ = (UniqueConstraint("symbol", "accession"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    date: Mapped[str] = mapped_column(String(8))         # YYYYMMDD — 공시 목록의 filingDate(미국 동부)
+    accepted: Mapped[str] = mapped_column(String(32))    # 접수 시각(UTC) — 장 전·장 뒤를 가른다
+    accession: Mapped[str] = mapped_column(String(24))
+    items: Mapped[str] = mapped_column(String(64))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

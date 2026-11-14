@@ -23,6 +23,21 @@
 그래서 **제출일(filed)을 키에 넣어 다 받고**, 읽는 쪽이 '그날 알던 값'(가장 이른 제출) 또는 '지금 아는 값'
 (가장 늦은 제출)을 고른다.
 
+## 실적 발표일 — 재무와 따로 온다
+
+companyfacts 의 `filed` 는 10-Q·10-K 를 낸 날이다. **시장이 실적을 아는 날은 그보다 며칠 이르다** — 회사가 실적 보도자료를
+8-K(항목 2.02 'Results of Operations and Financial Condition')로 먼저 낸다. 알파벳은 2026-10-28 장 마감 뒤에 8-K 를 내고
+10-Q 는 다음 날 냈다. 그래서 공시 목록(submissions)에서 항목 2.02 가 붙은 8-K 의 날짜를 따로 받는다(`releases`).
+
+    https://data.sec.gov/submissions/CIK##########.json
+
+최근 1,000건만 `filings.recent` 에 있고 그 앞은 `filings.files` 의 파일로 나뉘어 있다(알파벳 2015~2023, IBM 은 넷).
+재무(XBRL)가 2009 년부터라 그 뒤를 덮는 파일만 받는다.
+
+**2.02 가 다 분기 실적은 아니다.** 테슬라는 분기 인도 대수(2026-10-02)를, IBM 은 다른 발표(2026-07-14)를 같은 항목으로
+냈다. 어느 것이 그 분기 실적인지는 읽는 쪽이 정한다(`earnings.py` — 분기 끝 뒤, 10-Q 제출 전의 **마지막** 2.02).
+보도자료의 숫자는 XBRL 이 아니라(첨부 99.1) 받지 않는다. 내용은 뒤따르는 10-Q·10-K 의 값이다.
+
 ## 요청 머리
 
 SEC 는 자동 요청에 User-Agent 를 요구한다. 개인 정보 없이 일반 이름을 단다(2026-11-14 에 이것으로 200).
@@ -38,6 +53,9 @@ import urllib.error
 import urllib.request
 
 BASE = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
+SUBMISSIONS = "https://data.sec.gov/submissions/{name}"
+RELEASE_ITEM = "2.02"
+RELEASES_FROM = "2009-01-01"   # XBRL 재무가 이때부터다
 HEADERS = {"User-Agent": "apt-price-research/1.0", "Accept-Encoding": "gzip"}
 
 # 우리 이름 → (택소노미, 개념 후보 — 앞의 것이 먼저, 단위)
@@ -54,18 +72,45 @@ class EdgarError(RuntimeError):
     pass
 
 
-def fetch(cik: int) -> dict:
-    req = urllib.request.Request(BASE.format(cik=cik), headers=HEADERS)
+def _get(url: str) -> dict:
+    req = urllib.request.Request(url, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             raw = r.read()
             if r.headers.get("Content-Encoding") == "gzip":
                 raw = gzip.decompress(raw)
     except urllib.error.URLError as exc:
-        raise EdgarError(f"EDGAR CIK {cik}: {exc}") from exc
+        raise EdgarError(f"EDGAR {url}: {exc}") from exc
     finally:
         time.sleep(0.2)
     return json.loads(raw.decode("utf-8"))
+
+
+def fetch(cik: int) -> dict:
+    return _get(BASE.format(cik=cik))
+
+
+def _rows(block: dict) -> list[dict]:
+    out = []
+    for i, form in enumerate(block.get("form", [])):
+        items = block["items"][i] or ""
+        if form != "8-K" or RELEASE_ITEM not in items.split(","):
+            continue
+        out.append({"date": block["filingDate"][i].replace("-", ""), "accepted": block["acceptanceDateTime"][i],
+                    "accession": block["accessionNumber"][i], "items": items})
+    return out
+
+
+def releases(cik: int) -> list[dict]:
+    """항목 2.02 가 붙은 8-K — date(YYYYMMDD, 미국 동부 날짜)·accepted(UTC 시각)·accession·items. 날짜순."""
+    body = _get(SUBMISSIONS.format(name=f"CIK{cik:010d}.json"))
+    out = _rows(body["filings"]["recent"])
+    for f in body["filings"].get("files", []):
+        if f["filingTo"] >= RELEASES_FROM:
+            out += _rows(_get(SUBMISSIONS.format(name=f["name"])))
+    if not out:
+        raise EdgarError(f"{body.get('name')}: 항목 2.02 8-K 가 하나도 없다 — 목록 꼴이 바뀌었는지 보세요")
+    return sorted({r["accession"]: r for r in out}.values(), key=lambda r: r["date"])
 
 
 def extract(body: dict) -> list[dict]:

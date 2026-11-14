@@ -103,6 +103,29 @@ def company_problems(daily: list[tuple[str, float]], monthly: list[tuple[str, fl
     return out
 
 
+MAX_MARKET_GAP = 0.02   # SPY 수정 종가 vs S&P 500 지수 월말의 월 로그 수익률 차 — 배당은 달 0.2% 안팎이다
+
+
+def market_problems(spy: list[tuple[str, float, float]], spx_daily: list[tuple[str, float]]) -> list[str]:
+    """SPY 월봉이 S&P 500 지수를 따라가는지 — 끝난 달끼리 월 수익률을 견준다. 겹치는 달이 2년이 안 되면 못 믿는다."""
+    import math
+
+    if len(spy) < 120:
+        return [f"SPY 월봉이 {len(spy)}달뿐"]
+    idx: dict[str, float] = {}
+    for d, c in spx_daily:
+        idx[d[:6]] = c
+    adj = {m: a for m, _, a in spy}
+    months = sorted(set(adj) & set(idx))[:-1]   # 이번 달은 진행 중
+    pairs = [(a, b) for a, b in zip(months, months[1:]) if int(b) - int(a) in (1, 89)]
+    if len(pairs) < 24:
+        return [f"S&P 500 지수와 겹치는 달이 {len(pairs)}쌍뿐"]
+    worst = max((abs(math.log(adj[b] / adj[a]) - math.log(idx[b] / idx[a])), b) for a, b in pairs)
+    if worst[0] > MAX_MARKET_GAP:
+        return [f"{worst[1]} 월 수익률이 지수와 {worst[0]:.3f} 어긋남"]
+    return []
+
+
 def shiller_problems(got: dict[str, list[tuple[str, float]]]) -> list[str]:
     """실러 자료를 공식 출처와 맞춰 본다. 마지막 달은 빼고 본다 — 실러가 그 달 첫 거래일 하나로 채운다(표 각주).
 
@@ -189,6 +212,34 @@ def main() -> int:
             db.commit()
             last = max(r["filed"] for r in rows)
             print(f"      {co.label:<8} {n:>5}줄  마지막 제출 {last}  EDGAR  {time.perf_counter() - t0:.1f}s")
+            t0 = time.perf_counter()
+            try:
+                rel = with_retry(lambda co=co: edgar.releases(co.cik), f"EDGAR 발표 {co.symbol}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  [X] {co.label:<8} 실적 발표 {exc}")
+                bad += 1
+                continue
+            store.upsert_releases(db, co.symbol, rel)
+            db.commit()
+            print(f"      {co.label:<8} 발표 {len(rel):>3}건  {rel[0]['date']}~{rel[-1]['date']}  EDGAR 8-K 2.02"
+                  f"  {time.perf_counter() - t0:.1f}s")
+
+        # 베타의 시장(techvalue.MARKET) — SPY 수정 종가 월봉. 지수 일봉(FRED SP500)은 10년치뿐이라 과거 실적 발표 때의 베타를
+        # 60달로 못 잰다. 받을 때 같은 달의 S&P 500 지수 월말과 월 수익률을 맞춰 본다 — 배당(달 0.2% 안팎)만큼만 달라야 한다.
+        from app.stock.techvalue import MARKET
+        t0 = time.perf_counter()
+        try:
+            spy = alphavantage.monthly(MARKET[1])
+            why = market_problems(spy, store.daily("US", "SPX"))
+        except Exception as exc:  # noqa: BLE001 — 하루 25번 한도라 재시도하지 않는다
+            spy, why = [], [str(exc)]
+        if why:
+            print(f"  [X] 시장 {MARKET[1]:<6} 쓰지 않음 — {'; '.join(why)}")
+            bad += 1
+        else:
+            store.upsert_monthly(db, *MARKET, "AV", spy)
+            db.commit()
+            print(f"      시장 {MARKET[1]:<6} 월봉 {len(spy)}달 {spy[0][0]}~  Alpha Vantage  {time.perf_counter() - t0:.1f}s")
 
     with macro_store.writer() as mdb:
         # 지수 분석이 견주는 한국은행 계열(app/stock/indicators.py). ingest_macro 도 받지만 그쪽은

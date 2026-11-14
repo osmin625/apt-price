@@ -1184,6 +1184,10 @@ tr.is-deleting td { opacity: 0.4; }
 .tv-num { font: inherit; font-variant-numeric: tabular-nums; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
 .tv-table td { vertical-align: top; }
 .tv-table td:first-child { min-width: 150px; }
+.tv-rel { cursor: pointer; }
+.tv-rel-detail { margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12.5px; line-height: 1.6; }
+.tv-rel-detail .t-title { font-weight: 600; margin-bottom: 2px; }
+.tv-rel-detail b { font-variant-numeric: tabular-nums; }
 
 /* 집 구하기 — 단계별 할 일 목록(realestate/views/GuideView.jsx).
    진척 막대는 데이터가 아니라 장식이라 `--accent` 를 쓴다 — 오름·내림의 초록·빨강과 섞이지 않게.

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { api } from '../../api'
-import { fmt, useMeasure } from '../../shared/Charts'
+import { fmt, useMeasure, useTooltip } from '../../shared/Charts'
 import Hint from '../../shared/Hint'
-import { baseEarnings, decompose, rate, yearOf } from '../techvalue/model'
+import { baseEarnings, decompose, rate, valueAt, yearOf } from '../techvalue/model'
 
 /**
  * 기술주 가치 — 시가총액을 '지금 사업 + 기대 기술 + 설명 안 된 몫' 으로 나누고, 기술마다 실현 때 주가를 지금 주가와
@@ -125,18 +125,54 @@ function TechTable({ d, co, setTech, r, price }) {
   )
 }
 
-function PriceChart({ co, d, r, now }) {
+const pct = (v) => (v == null ? '' : ` (1년 전보다 ${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 1)}%)`)
+const perShare = (v) => `$${fmt(v, v < 20 ? 2 : 0)}`
+
+/** 실적 발표 하나의 내용 — 그림의 툴팁과 그림 아래 칸이 같이 쓴다. */
+function ReleaseBody({ rel, val }) {
+  if (rel.pending) return <div className="t-row">숫자는 10-Q·10-K 가 실리면 나옵니다</div>
+  const q = rel.quarter
+  const margin = q.operating_income != null && q.revenue ? (q.operating_income / q.revenue) * 100 : null
+  return (
+    <>
+      <div className="t-row">매출 <b>{usd(q.revenue)}</b>{pct(rel.yoy.revenue)}</div>
+      {q.operating_income != null && (
+        <div className="t-row">
+          영업이익 <b>{usd(q.operating_income)}</b>{pct(rel.yoy.operating_income)}
+          {margin != null && ` · 이익률 ${fmt(margin, 1)}%`}
+        </div>
+      )}
+      <div className="t-row">순이익 <b>{usd(q.net_income)}</b></div>
+      {val && (
+        <div className="t-row">
+          발표 때 주당 가치 — 지금 사업 <b>{perShare(val.base)}</b> · 기대 기술 포함 <b>{perShare(val.total)}</b>
+        </div>
+      )}
+    </>
+  )
+}
+
+const relHead = (rel) =>
+  `${day(rel.date)}${rel.session ? ` ${rel.session}` : ''} 실적 발표` +
+  (rel.pending ? '' : ` · ${ym(rel.end)} 끝 분기(${rel.form})`) +
+  (rel.estimated ? ' · 발표 8-K 를 못 찾아 제출일' : '')
+
+function PriceChart({ co, d, r, vals, sel, setSel }) {
   const [ref, width] = useMeasure()
+  const tip = useTooltip()
   const W = Math.max(width || 640, 300)
-  const H = 260
-  const P = { l: 8, r: 52, t: 12, b: 22 }
+  const H = 280
+  const P = { l: 8, r: 52, t: 12, b: 34 }
   const h = co.history
   const t0 = yearOf(`${h.months[0]}15`)
   const price = co.price.close
-  const end = Math.max(now + 1, ...d.techs.map((t) => t.year + 1.5))
+  const pnow = yearOf(co.price.date)
+  const end = Math.max(pnow + 1, ...d.techs.map((t) => t.year + 1.5))
   const pts = d.techs.map((t, k) => ({ x: t.year + 0.5, y: t.priceAt, k, ok: t.cagr != null && t.cagr >= r, name: t.name }))
-  const req = (x) => price * (1 + r / 100) ** (x - now)
-  const ys = [...h.close, price, req(end), ...pts.map((p) => p.y)].filter((v) => v > 0)
+  const req = (x) => price * (1 + r / 100) ** (x - pnow)
+  const rels = co.releases.map((rel, i) => ({ rel, i, x: yearOf(rel.date), v: vals[i] })).filter((p) => p.x >= t0)
+  const steps = rels.filter((p) => p.v)
+  const ys = [...h.close, price, req(end), ...pts.map((p) => p.y), ...steps.flatMap((p) => [p.v.base, p.v.total])].filter((v) => v > 0)
   const lo = Math.log(Math.min(...ys)) - 0.1
   const hi = Math.log(Math.max(...ys)) + 0.1
   const sx = (x) => P.l + ((x - t0) / (end - t0)) * (W - P.l - P.r)
@@ -148,18 +184,44 @@ function PriceChart({ co, d, r, now }) {
       if (Math.log(v) >= lo && Math.log(v) <= hi) ticks.push(v)
     }
   }
-  const hist = h.months.map((m, i) => `${i ? 'L' : 'M'}${sx(yearOf(`${m}15`)).toFixed(1)},${sy(h.close[i]).toFixed(1)}`).join('')
-  const reqLine = [now, end].map((x, i) => `${i ? 'L' : 'M'}${sx(x).toFixed(1)},${sy(req(x)).toFixed(1)}`).join('')
+  const xs = h.months.map((m) => yearOf(`${m}15`))
+  const hist = xs.map((x, i) => `${i ? 'L' : 'M'}${sx(x).toFixed(1)},${sy(h.close[i]).toFixed(1)}`).join('')
+  const reqLine = [pnow, end].map((x, i) => `${i ? 'L' : 'M'}${sx(x).toFixed(1)},${sy(req(x)).toFixed(1)}`).join('')
+  // 계단 — 발표 때 값이 다음 발표까지(마지막은 지금까지) 그대로다. 0 이하(적자라 지금 사업 0)는 로그 눈금에 못 놓아 끊는다.
+  const stair = (key) => {
+    let out = ''
+    steps.forEach((p, j) => {
+      const v = p.v[key]
+      if (!(v > 0)) return
+      const x1 = j + 1 < steps.length ? steps[j + 1].x : pnow
+      const join = j > 0 && steps[j - 1].v[key] > 0
+      out += `${join ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(v).toFixed(1)}L${sx(x1).toFixed(1)},${sy(v).toFixed(1)}`
+    })
+    return out
+  }
+  // 발표 날의 주가 자리 — 월말 수정 종가 사이를 로그로 잇는다(일봉은 최근 100일뿐이다).
+  const priceAt = (x) => {
+    const k = xs.findIndex((v) => v >= x)
+    if (k < 0) return h.close[h.close.length - 1]
+    if (k === 0) return h.close[0]
+    const f = (x - xs[k - 1]) / (xs[k] - xs[k - 1])
+    return Math.exp(Math.log(h.close[k - 1]) * (1 - f) + Math.log(h.close[k]) * f)
+  }
   const years = []
   for (let y = Math.ceil(t0 / 5) * 5; y <= end; y += 5) years.push(y)
+  const axis = H - P.b
+  const cur = co.releases[sel]
   return (
     <div ref={ref}>
       <div className="ex-legend">
         <span><i className="swatch" style={{ background: 'var(--text-primary)' }} />수정 종가(월말)</span>
+        <span><b style={{ color: 'var(--series-1)' }}>▲</b> 실적 발표</span>
+        <span><i className="swatch" style={{ background: 'var(--series-3)' }} />발표 때 가치 — 지금 사업</span>
+        <span><i className="swatch" style={{ background: 'var(--series-4)' }} />+ 기대 기술</span>
         <span><i className="swatch is-dash" style={{ color: 'var(--series-2)' }} />지금 주가가 할인율로 자라는 선</span>
         <span><b className="tone-pos">●</b> 실현 때 주가가 선 위 · <b className="tone-neg">●</b> 아래</span>
       </div>
-      <svg width={W} height={H} role="img" aria-label={`${co.label} 주가와 기술별 실현 때 주가`}>
+      <svg width={W} height={H} role="img" aria-label={`${co.label} 주가, 실적 발표, 발표 때 가치와 기술별 실현 때 주가`}>
         {ticks.map((v) => (
           <g key={v}>
             <line x1={P.l} x2={W - P.r} y1={sy(v)} y2={sy(v)} stroke="var(--border)" strokeDasharray="2 3" />
@@ -167,19 +229,42 @@ function PriceChart({ co, d, r, now }) {
           </g>
         ))}
         {years.map((y) => (
-          <text key={y} x={sx(y)} y={H - 6} fontSize="10.5" textAnchor="middle" fill="var(--text-muted)">{y}</text>
+          <text key={y} x={sx(y)} y={H - 4} fontSize="10.5" textAnchor="middle" fill="var(--text-muted)">{y}</text>
         ))}
-        <line x1={sx(now)} x2={sx(now)} y1={P.t} y2={H - P.b} stroke="var(--border)" />
+        <line x1={sx(pnow)} x2={sx(pnow)} y1={P.t} y2={axis} stroke="var(--border)" />
+        <path d={stair('total')} fill="none" stroke="var(--series-4)" strokeWidth={1.6} />
+        <path d={stair('base')} fill="none" stroke="var(--series-3)" strokeWidth={1.6} />
         <path d={hist} fill="none" stroke="var(--text-primary)" strokeWidth={1.4} />
         <path d={reqLine} fill="none" stroke="var(--series-2)" strokeWidth={1.4} strokeDasharray="5 4" />
+        {rels.map((p) => {
+          const on = p.i === sel
+          const x = sx(p.x)
+          const fill = p.rel.pending ? 'var(--surface-1)' : 'var(--series-1)'
+          return (
+            <g key={p.rel.date} className="tv-rel" onClick={() => setSel(p.i)} onMouseLeave={tip.hide}
+               onMouseMove={(e) => tip.show(e, <><div className="t-title">{relHead(p.rel)}</div><ReleaseBody rel={p.rel} val={p.v} /></>)}>
+              {on && <line x1={x} x2={x} y1={P.t} y2={axis} stroke="var(--series-1)" strokeDasharray="2 2" />}
+              <circle cx={x} cy={sy(priceAt(p.x))} r={on ? 4 : 2.5} fill={fill} stroke="var(--series-1)" strokeWidth={1.2} />
+              <path d={`M${x.toFixed(1)},${axis + 2}l-4.5,8h9z`} fill={fill} stroke="var(--series-1)" opacity={on ? 1 : 0.6} />
+              <rect x={x - 6} y={P.t} width={12} height={axis - P.t + 12} fill="transparent" />
+            </g>
+          )
+        })}
         {pts.map((p) => (
           <g key={p.k}>
-            <line x1={sx(now)} y1={sy(price)} x2={sx(p.x)} y2={sy(p.y)} stroke={SEG[p.k % SEG.length]} strokeWidth={1} opacity={0.5} />
+            <line x1={sx(pnow)} y1={sy(price)} x2={sx(p.x)} y2={sy(p.y)} stroke={SEG[p.k % SEG.length]} strokeWidth={1} opacity={0.5} />
             <circle cx={sx(p.x)} cy={sy(p.y)} r={5} fill={p.ok ? 'var(--good)' : 'var(--neg)'} stroke={SEG[p.k % SEG.length]} strokeWidth={2} />
             <text x={sx(p.x) - 7} y={sy(p.y) + 4} fontSize="11" textAnchor="end" fill="var(--text-secondary)">{p.name}</text>
           </g>
         ))}
       </svg>
+      {tip.node}
+      {cur && (
+        <div className="tv-rel-detail">
+          <div className="t-title">{relHead(cur)}</div>
+          <ReleaseBody rel={cur} val={vals[sel]} />
+        </div>
+      )}
     </div>
   )
 }
@@ -192,6 +277,7 @@ export default function TechValueView() {
   const [erp, setErp] = useState(null)
   const [g, setG] = useState(0)
   const [edits, setEdits] = useState({})
+  const [sel, setSel] = useState({})
 
   useEffect(() => {
     let alive = true
@@ -204,13 +290,22 @@ export default function TechValueView() {
   const co = data?.companies.find((c) => c.id === pick) || data?.companies[0]
   const techs = co ? edits[co.id] || co.scenarios : []
   const ready = co && !co.missing
-  const R = data && ready && co.beta ? rate({ y10: data.rate.y10, beta: co.beta.value, erp: erp ?? data.rate.erp }) : null
-  const now = ready ? yearOf(co.price.date) : 0
+  const R = data && ready && co.beta ? rate({ y10: co.basis.y10, beta: co.beta.value, erp: erp ?? data.rate.erp }) : null
+  // 가치는 마지막 실적 발표 때 것으로 잰다 — 할인의 기준도 그 발표일이다. 연 수익률만 지금 주가의 날에서 센다.
+  const now = ready ? yearOf(co.basis.date) : 0
+  const pnow = ready ? yearOf(co.price.date) : 0
   const e0 = ready ? baseEarnings(co.ttm, mode, data.rate.tax) : 0
-  const args = ready && R != null ? { cap: co.cap, shares: co.shares.value, price: co.price.close, e0, g, now, techs } : null
+  const args = ready && R != null ? { cap: co.cap, shares: co.shares.value, price: co.price.close, e0, g, now, pnow, techs } : null
   const d = useMemo(() => args && decompose({ ...args, r: R }), [JSON.stringify(args), R]) // eslint-disable-line react-hooks/exhaustive-deps
   const up = useMemo(() => args && decompose({ ...args, r: R + 1 }), [JSON.stringify(args), R]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vals = useMemo(
+    () => (args ? co.releases.map((rel) => valueAt(rel, { mode, tax: data.rate.tax, erp: erp ?? data.rate.erp, g, techs })) : []),
+    [JSON.stringify(args), mode, erp], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
+  // 고른 발표 — 처음에는 내용이 있는 마지막 발표
+  const lastRel = ready ? co.releases.reduce((a, x, i) => (x.pending ? a : i), -1) : -1
+  const selRel = ready ? sel[co.id] ?? lastRel : -1
   if (error) return <section className="card"><p className="empty">{error.message}</p></section>
   if (!data) return <section className="card"><p className="empty">불러오는 중…</p></section>
 
@@ -228,9 +323,10 @@ export default function TechValueView() {
             notes={[
               '시가총액 = 지금 사업의 값 + 기대 기술마다의 지금 값 + 설명 안 된 몫. 지금 사업은 지난 12개월 이익이 앞으로도 그대로(또는 고른 성장률로) 이어질 때의 값이고, 기술은 확률 × (실현 해의 순이익 × 그때 PER) 을 지금으로 할인한 값입니다.',
               '설명 안 된 몫이 크면 주가가 시나리오보다 더 큰 기대를 담고 있다는 뜻이고, 음수면 시나리오가 주가보다 낙관적이라는 뜻입니다.',
-              '할인율 = 미국 10년 국채(지수 분석과 같은 월평균) + 베타 × 주식 위험 프리미엄. 베타는 최근 최대 60달 종목 월 수익률을 S&P 500 에 회귀한 기울기입니다. 위험 프리미엄 기본값은 관례이지 잰 값이 아닙니다.',
+              '할인율 = 미국 10년 국채(지수 분석과 같은 월평균) + 베타 × 주식 위험 프리미엄. 베타는 최근 최대 60달 종목 월 수익률을 시장(SPY — 배당까지 든 S&P 500)에 회귀한 기울기입니다. 위험 프리미엄 기본값은 관례이지 잰 값이 아닙니다.',
               '이익 기준: 영업이익 세후(미국 연방 법정 세율)는 영업 밖의 일회성 손익(보유 지분 평가 이익 등)을 뺍니다. 영업이익을 따로 내지 않는 회사는 순이익을 씁니다. 적자면 지금 사업의 값을 0 으로 둡니다 — 적자를 기대 기술에 쓰는 돈으로 봅니다.',
-              '주가는 Alpha Vantage, 재무는 미국 SEC EDGAR 입니다. 시나리오의 근거 문구는 발표된 사실이고, 숫자는 가정입니다.',
+              '가치는 실적 발표 때에만 다시 잽니다. 이익·주식 수는 마지막 실적 발표(8-K) 때 알려진 값, 10년 국채는 그 발표 전달 평균, 베타는 그 전달까지의 월봉입니다. 발표와 발표 사이에는 주가만 움직이고, 그 움직임은 설명 안 된 몫에 들어갑니다.',
+              '주가는 Alpha Vantage, 재무와 실적 발표일은 미국 SEC EDGAR 입니다. 시나리오의 근거 문구는 발표된 사실이고, 숫자는 가정입니다.',
             ]}
           />
         </h2>
@@ -243,6 +339,7 @@ export default function TechValueView() {
           <>
             <p className="tq-now">
               <b>{day(co.price.date)}</b> {co.symbol} ${fmt(co.price.close, 2)} · 시가총액 {usd(co.cap)}
+              {' '}· 가치 기준 <b>{day(co.basis.date)}</b> 실적 발표({ym(co.basis.end)} 끝 분기)
               {' '}· {co.shares.kind} {fmt(co.shares.value / 1e8, 1)}억 주({ym(co.shares.end)}) · 지난 12개월{' '}
               {usesOp ? '영업이익 세후' : '순이익'} {usd(e0)}({ym((usesOp ? co.ttm.operating_income : co.ttm.net_income).end)})
             </p>
@@ -267,7 +364,7 @@ export default function TechValueView() {
             {R == null ? <p className="empty">베타를 잴 월봉이 모자랍니다.</p> : (
               <>
                 <p className="muted small">
-                  할인율 <b>{fmt(R, 1)}%</b> = 10년 국채 {fmt(data.rate.y10, 2)}%({ym(data.rate.y10_month)}) + 베타 {fmt(co.beta.value, 2)}
+                  할인율 <b>{fmt(R, 1)}%</b> = 10년 국채 {fmt(co.basis.y10, 2)}%({ym(co.basis.y10_month)}) + 베타 {fmt(co.beta.value, 2)}
                   ({co.beta.months}달) × 위험 프리미엄 {fmt(erp ?? data.rate.erp, 1)}%
                 </p>
                 <Bar d={d} />
@@ -297,10 +394,17 @@ export default function TechValueView() {
           </section>
           <section className="card">
             <h2>
-              주가 — 지금과 실현 때
-              <Hint notes={['로그 눈금입니다. 점선은 지금 주가가 할인율만큼 해마다 자라는 길 — 기대 수익을 받으려면 주가가 가야 할 길입니다. 점이 선 위면 그 기술이 실현됐을 때 할인율보다 더 번다는 뜻입니다(확률은 넣지 않음).']} />
+              주가 — 실적 발표와 실현 때
+              <Hint
+                wide
+                notes={[
+                  '로그 눈금입니다. ▲ 가 실적 발표(8-K 항목 2.02)입니다. 올려 보거나 누르면 그 분기의 매출·영업이익·순이익과 1년 전 같은 분기 대비 변화가 나옵니다. 숫자는 뒤따른 10-Q·10-K 에 처음 실린 값입니다 — 보도자료의 숫자는 기계가 읽는 꼴이 아니라 못 읽습니다.',
+                  '계단은 발표 때마다 다시 잰 주당 가치입니다. 그 발표 때 알던 이익·주식 수·금리·베타로 위와 같은 분해를 하고 다음 발표까지 그대로 둡니다. 기대 기술 몫은 지금의 시나리오를 그때로 할인한 것이라 그때 사람들의 기대가 아닙니다. 적자라 지금 사업이 0 인 동안은 계단이 끊깁니다.',
+                  '점선은 지금 주가가 할인율만큼 해마다 자라는 길 — 기대 수익을 받으려면 주가가 가야 할 길입니다. 점이 선 위면 그 기술이 실현됐을 때 할인율보다 더 번다는 뜻입니다(확률은 넣지 않음).',
+                ]}
+              />
             </h2>
-            <PriceChart co={co} d={d} r={R} now={now} />
+            <PriceChart co={co} d={d} r={R} vals={vals} sel={selRel} setSel={(i) => setSel({ ...sel, [co.id]: i })} />
           </section>
           <ReflectCard co={co} />
         </>

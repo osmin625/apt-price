@@ -18,6 +18,9 @@
  *
  * 실현 때 주가 = (그때의 지금 사업 이익 + 기술 이익) × PER / 주식 수. 확률은 넣지 않는다(실현됐다면).
  * 지금 주가에서 그 주가까지의 연 수익률을 할인율과 견준다 — 할인율보다 낮으면 그 기술만으로는 지금 주가가 안 맞는다.
+ *
+ * 가치는 실적 발표 때에만 다시 잰다(backend/app/stock/earnings.py). 그래서 할인의 기준 시점 `now` 는 마지막 발표일이고,
+ * 연 수익률의 기준 `pnow` 는 지금 주가의 날이다(없으면 now).
  */
 
 export const MID = 0.5
@@ -40,7 +43,7 @@ export function baseEarnings(ttm, mode, tax) {
   return ttm.net_income ? ttm.net_income.value : 0
 }
 
-export function decompose({ cap, shares, price, e0, g, r, now, techs }) {
+export function decompose({ cap, shares, price, e0, g, r, now, pnow, techs }) {
   const R = r / 100
   const G = g / 100
   const base = e0 > 0 && R > G ? e0 / (R - G) : 0
@@ -60,7 +63,23 @@ export function decompose({ cap, shares, price, e0, g, r, now, techs }) {
     t.needYear = gap > 0 && t.prob * t.value > gap ? now + Math.log((t.prob * t.value) / gap) / Math.log(1 + R) - MID : null
     const eT = Math.max(e0, 0) * (1 + G) ** t.dt + t.profit * 1e9
     t.priceAt = (eT * t.pe) / shares
-    t.cagr = t.dt > 0 ? ((t.priceAt / price) ** (1 / t.dt) - 1) * 100 : null
+    const dp = t.year + MID - (pnow ?? now)
+    t.cagr = dp > 0 ? ((t.priceAt / price) ** (1 / dp) - 1) * 100 : null
   }
   return { cap, base, techs: rows, sum, residual, r }
+}
+
+/**
+ * 실적 발표 하나 때의 주당 가치 — 그 발표 때 알던 이익·주식 수·10년 국채·베타로 같은 분해를 한다. 시나리오는 지금 것이다.
+ * 그림의 주가가 수정 종가라 같은 눈금에 놓으려고 수정 종가 ÷ 종가를 곱한다(분할 전 주식 수로 나눈 값은 분할 전 주가 단위다).
+ * 재료가 모자라면(베타를 잴 월봉이 24달이 안 되는 등) null.
+ */
+export function valueAt(rel, { mode, tax, erp, g, techs }) {
+  if (rel.pending || !rel.shares || !rel.close || !rel.adj || rel.beta == null || rel.y10 == null) return null
+  const ttm = Object.fromEntries(Object.entries(rel.ttm).map(([k, v]) => [k, v == null ? null : { value: v }]))
+  const e0 = baseEarnings(ttm, mode, tax)
+  const r = rate({ y10: rel.y10, beta: rel.beta, erp })
+  const d = decompose({ cap: rel.close * rel.shares, shares: rel.shares, price: rel.close, e0, g, r, now: yearOf(rel.date), techs })
+  const k = rel.adj / rel.close / rel.shares
+  return { base: d.base * k, total: (d.base + d.sum) * k, r }
 }
