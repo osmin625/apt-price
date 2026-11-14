@@ -16,6 +16,7 @@ from . import effects as EF
 from . import forecast as F
 from . import store
 from . import trading as TR
+from . import techvalue as TV
 from . import valuation as VA
 from .indicators import BY_ID as INDICATOR, PAIRS, unit_of
 from .indices import INDICES, Index
@@ -166,4 +167,10 @@ def long_term() -> dict:
         _long.clear()
         _long[key] = got
     return got
+
+
+def tech_value() -> dict:
+    """기술주 가치 탭 — 종목마다 지금 주가·주식 수·지난 12개월 이익·베타·시나리오(`techvalue.py`). 계산이 가벼워
+    캐시하지 않는다(종목 넷의 재무 줄을 읽는 데 1초 안쪽)."""
+    return TV.overview()
 

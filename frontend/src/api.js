@@ -218,6 +218,7 @@ export const api = {
   stockIndices: () => request('/stock/indices'),
   stockShortTerm: () => request('/stock/short-term'),
   stockLongTerm: () => request('/stock/long-term'),
+  stockTechValue: () => request('/stock/tech-value'),
   macroInsights: (params) => request(`/macro/insights${qs(params)}`),
 
   mapComplexes: (params) => request(`/map/complexes${qs(params)}`),

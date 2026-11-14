@@ -1,7 +1,8 @@
 # 주식 — 지침서
 
-미국·국내 지수(다음에 종목)를 다루는 자산이다 — **경제지표가 지수에 미친 영향**(화면 '지수 분석' 맨 위)과
-월~분기 수익률 **구간 예측**(그 아래 접힌 카드), 그리고 기법 저장소 두 탭(장기 투자·단기 매매). 루트
+미국·국내 지수와 기술주 종목을 다루는 자산이다 — **경제지표가 지수에 미친 영향**(화면 '지수 분석' 맨 위)과
+월~분기 수익률 **구간 예측**(그 아래 접힌 카드), 종목의 **가치 분해**(기술주 가치), 그리고 기법 저장소 두 탭
+(장기 투자·단기 매매). 루트
 [CLAUDE.md](../../../CLAUDE.md) 의 방식은 그대로 따르고, 여기에는 **이 자산에만 있는 것**을 적는다.
 
 코드는 이 폴더(`backend/app/stock/`)와 `frontend/src/stock/` 에 있다. 프론트 쪽 CLAUDE.md 는
@@ -13,6 +14,7 @@
 |---|---|---|
 | `stock/` 주식 | 지수·종목 출처, 예측 후보, 평가 방법을 건드린다 | [stock/indices.md](../../../docs/stock/indices.md) |
 | | 경제지표의 영향(지표·짝·발표 시차·범위를 재는 법)을 건드린다 | [stock/effects.md](../../../docs/stock/effects.md) |
+| | 기술주 가치 탭(가치 분해·기대 기술 시나리오·역산·종목 주가·EDGAR 재무)을 건드린다 | [stock/tech-value.md](../../../docs/stock/tech-value.md) |
 | | 장기 투자 탭(가치평가 기법 저장소·지수 평가 출처)을 건드린다 | [stock/valuation.md](../../../docs/stock/valuation.md) |
 | | 단기 매매 탭(차트 기법 저장소·합성 예시·실제 지수 성적·패턴 탐지 규칙)을 건드린다 | [stock/trading.md](../../../docs/stock/trading.md) |
 
@@ -45,9 +47,12 @@
 ## 출처는 공식, 대조는 비공식
 
 받는 것은 공식 출처(한국은행 ECOS·FRED, 다음은 공공데이터포털·DART·EDGAR)다. 비공식(야후 등)은
-`scripts/probe_stock_crosscheck.py` 로 **같은 날 종가를 맞춰 보는 데만** 쓴다. **예외는 실러 자료 하나**다
+`scripts/probe_stock_crosscheck.py` 로 **같은 날 종가를 맞춰 보는 데만** 쓴다. **예외는 둘**이다. 실러 자료
 (2026-11-12 합의 — S&P 500 주당 이익과 1871년부터의 주가는 공식 무료 출처가 없다). 그 대신 받을 때마다
-공식 출처(FRED SP500·GS10)와 맞춰 보고 어긋나면 넣지 않는다(`scripts/ingest_stock.py` 의 `shiller_problems`). 계열 코드는 기억이
+공식 출처(FRED SP500·GS10)와 맞춰 보고 어긋나면 넣지 않는다(`scripts/ingest_stock.py` 의 `shiller_problems`).
+**미국 개별 종목 주가**도 공식 무료 출처가 없어 Alpha Vantage(문서가 있는 API, 무료 키)를 쓴다(2026-11-14 합의) —
+받을 때 일봉·월봉을 서로 맞춰 본다(`company_problems`). **브라우저인 척해야 받는 출처는 쓰지 않는다** — Nasdaq 사이트
+API 를 주 출처로 정했다가 파이썬 요청에 403 이 와서 버렸다(docs/stock/tech-value.md '출처'). 계열 코드는 기억이
 아니라 목록에서 고른다 — ECOS 의 같은 표에 KOSPI 와 KOSDAQ 이 나란히 있다.
 
 ## 통화

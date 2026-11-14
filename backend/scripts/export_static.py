@@ -156,6 +156,8 @@ def build_plan(with_quotes: bool) -> list[Req]:
         Req("/api/stock/short-term", {}),
         # 주식 장기 투자 — 지수 평가 넷의 지금 상태·과거 성적. 파라미터가 없다.
         Req("/api/stock/long-term", {}),
+        # 주식 기술주 가치 — 종목 재료와 시나리오 기본값. 나누는 계산은 화면이 한다(파라미터 없음).
+        Req("/api/stock/tech-value", {}),
     ]
 
     # 매크로 인사이트.

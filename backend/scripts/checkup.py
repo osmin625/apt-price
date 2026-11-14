@@ -93,6 +93,9 @@ STALE = {
     # 지수 일봉(stock.db). ECOS·FRED 모두 다음 영업일에 전날 종가가 들어온다. 설·추석 연휴
     # (최장 5거래일)에 주말이 붙으면 9일까지 빈다 — 10일을 넘기면 적재가 멈췄다.
     "stock_days": 10,
+    # EDGAR 재무(기술주 가치 탭). 마지막 기간 끝에서 며칠인가로 본다. 3분기(9월 말) 뒤 다음 값은 연간 보고서(10-K)인데,
+    # 기한이 연말에서 60일(대형)~90일(소형 — 디웨이브)이다. 9월 말 + 92일 + 90일 = 182일까지가 정상이라 190일.
+    "edgar_days": 190,
     # FRED 미국 3개월 국채(월평균)는 다음 달 첫 영업일께 나온다. ECOS 기준금리와 같은 45일.
     "fred_days": {"us_tbill3m": 45,
                   # 금리 월평균·실업률은 다음 달 첫 주에 나온다 — 45일.
@@ -338,6 +341,20 @@ def check_fresh(rep: Report, today: dt.date) -> None:
         d = dt.date(int(last[:4]), int(last[4:6]), int(last[6:8])) if last else None
         say(f"지수 {ix.label}", days_since(d, today), STALE["stock_days"],
             "python -m scripts.ingest_stock")
+
+    from app.stock.companies import COMPANIES
+
+    try:
+        filed = stock_store.last_filed()
+    except stock_store.StockMissing:
+        filed = {}
+    for co in COMPANIES:
+        last = last_bar.get((co.market, co.symbol))
+        d = dt.date(int(last[:4]), int(last[4:6]), int(last[6:8])) if last else None
+        say(f"종목 {co.label}", days_since(d, today), STALE["stock_days"], "python -m scripts.ingest_stock")
+        end = filed.get(co.symbol, (None, None))[1]
+        d = dt.date(int(end[:4]), int(end[4:6]), int(end[6:8])) if end else None
+        say(f"재무 {co.label}", days_since(d, today), STALE["edgar_days"], "python -m scripts.ingest_stock")
 
     amen_age = days_since(oldest_amen.date() if oldest_amen else None, today)
     say("입지 수집", amen_age, STALE["amenity_days"],
