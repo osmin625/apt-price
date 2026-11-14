@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import settings
 from ..core.dbfile import DbFile, DbMissing
-from .models import Bar, Fact, MonthBar, StockBase
+from .models import Bar, Fact, MonthBar, Release, StockBase
 
 StockMissing = DbMissing
 
@@ -103,3 +103,38 @@ def monthly(market: str, symbol: str) -> list[tuple[str, float]]:
             .where(MonthBar.market == market, MonthBar.symbol == symbol)
             .order_by(MonthBar.month)).all()]
 
+
+
+def upsert_releases(db: Session, symbol: str, rows: Iterable[dict]) -> int:
+    """실적 발표 8-K(`clients/edgar.releases`). 같은 접수 번호면 덮는다."""
+    rows = [{"symbol": symbol, **r} for r in rows]
+    for i in range(0, len(rows), 2000):
+        stmt = sqlite_insert(Release).values(rows[i:i + 2000])
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["symbol", "accession"],
+            set_={"date": stmt.excluded.date, "accepted": stmt.excluded.accepted, "items": stmt.excluded["items"],  # .items 는 컬렉션의 메서드다
+                  "fetched_at": func.now()},
+        )
+        db.execute(stmt)
+    return len(rows)
+
+
+def releases(symbol: str) -> list[dict]:
+    with reader() as db:
+        return [{"date": d, "accepted": a, "accession": n, "items": it} for d, a, n, it in db.execute(
+            select(Release.date, Release.accepted, Release.accession, Release.items)
+            .where(Release.symbol == symbol).order_by(Release.date)).all()]
+
+
+def last_release() -> dict[str, str]:
+    with reader() as db:
+        return dict(db.execute(select(Release.symbol, func.max(Release.date)).group_by(Release.symbol)).all())
+
+
+def monthly_bars(market: str, symbol: str) -> list[tuple[str, float, float]]:
+    """(YYYYMM, 종가, 수정 종가) — 그때의 주식 수와 곱할 때는 조정 안 된 종가를 쓴다(분할 전 주식 수에는 분할 전 주가)."""
+    with reader() as db:
+        return [(m, float(c), float(a)) for m, c, a in db.execute(
+            select(MonthBar.month, MonthBar.close, MonthBar.adj_close)
+            .where(MonthBar.market == market, MonthBar.symbol == symbol)
+            .order_by(MonthBar.month)).all()]

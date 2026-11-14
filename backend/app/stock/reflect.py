@@ -17,7 +17,7 @@
 ## 시차 — 부동산과 다르다
 
 부동산은 금리가 수요로 전달되는 데 6개월을 뒀다. 주가는 알려지는 날 움직이므로 **발표 시차만** 둔다(물가·M2·실업률은
-다음 달에야 나와 1달). 실적은 **그달 말까지 제출된 값만**, 같은 기간이 여러 번 실렸으면 **처음 제출된 값**을 쓴다
+다음 달에야 나와 1달). 실적은 **그달 말까지 발표된 값만**(10-Q 제출일이 아니라 실적 발표 8-K 의 날, `earnings.known_rows`), 같은 기간이 여러 번 실렸으면 **처음 제출된 값**을 쓴다
 (`fundamentals.ttm(as_of=…, first=True)`) — 나중에 고쳐진 숫자로 과거를 설명하면 그때 몰랐던 것을 안 셈이다.
 
 ## 범위 — 참값을 80% 덮게
@@ -45,6 +45,7 @@ import numpy as np
 from scipy.optimize import nnls
 
 from ..macro import store as macro_store
+from . import earnings as EA
 from . import fundamentals as FU
 from . import store
 from .effects import _shift, movement
@@ -129,7 +130,9 @@ def factors_for(co) -> list[dict]:
         mv = movement(ind.kind, macro_store.monthly(iid))
         out.append({"key": iid, "label": ind.label, "group": "거시", "sign": ind.expect, "lag": ind.pub_lag,
                     "unit": "%" if ind.kind == "growth" else "%p", "x": {_shift(t, ind.pub_lag): v for t, v in mv.items()}})
-    rows = store.facts(co.symbol)
+    # 재무가 알려진 날은 10-Q 제출일이 아니라 실적 발표일이다(earnings.known_rows) — 발표가 그달 말 전이고 10-Q 가
+    # 다음 달이면 그 분기 실적은 발표한 달의 주가 변화와 짝지어진다.
+    rows = EA.known_rows(store.facts(co.symbol), store.releases(co.symbol))
     months = [m for m, _ in store.monthly(co.market, co.symbol)]
     fk = fundamentals_known(rows, months)
     out.append({"key": "revenue_growth", "label": "매출 1년 상승률", "group": "실적", "sign": 1, "lag": 0, "unit": "%",

@@ -14,7 +14,7 @@
 |---|---|---|
 | `stock/` 주식 | 지수·종목 출처, 예측 후보, 평가 방법을 건드린다 | [stock/indices.md](../../../docs/stock/indices.md) |
 | | 경제지표의 영향(지표·짝·발표 시차·범위를 재는 법)을 건드린다 | [stock/effects.md](../../../docs/stock/effects.md) |
-| | 기술주 가치 탭(가치 분해·기대 기술 시나리오·역산·반영 분해·종목 주가·EDGAR 재무)을 건드린다 | [stock/tech-value.md](../../../docs/stock/tech-value.md) |
+| | 기술주 가치 탭(가치 분해·기대 기술 시나리오·역산·반영 분해·실적 발표 기준·종목 주가·EDGAR 재무)을 건드린다 | [stock/tech-value.md](../../../docs/stock/tech-value.md) |
 | | 장기 투자 탭(가치평가 기법 저장소·지수 평가 출처)을 건드린다 | [stock/valuation.md](../../../docs/stock/valuation.md) |
 | | 단기 매매 탭(차트 기법 저장소·합성 예시·실제 지수 성적·패턴 탐지 규칙)을 건드린다 | [stock/trading.md](../../../docs/stock/trading.md) |
 
@@ -50,7 +50,7 @@
 `scripts/probe_stock_crosscheck.py` 로 **같은 날 종가를 맞춰 보는 데만** 쓴다. **예외는 둘**이다. 실러 자료
 (2026-11-12 합의 — S&P 500 주당 이익과 1871년부터의 주가는 공식 무료 출처가 없다). 그 대신 받을 때마다
 공식 출처(FRED SP500·GS10)와 맞춰 보고 어긋나면 넣지 않는다(`scripts/ingest_stock.py` 의 `shiller_problems`).
-**미국 개별 종목 주가**도 공식 무료 출처가 없어 Alpha Vantage(문서가 있는 API, 무료 키)를 쓴다(2026-11-14 합의) —
+**미국 개별 종목 주가**(와 베타의 시장으로 쓰는 SPY)도 공식 무료 출처가 없어 Alpha Vantage(문서가 있는 API, 무료 키)를 쓴다(2026-11-14 합의) —
 받을 때 일봉·월봉을 서로 맞춰 본다(`company_problems`). **브라우저인 척해야 받는 출처는 쓰지 않는다** — Nasdaq 사이트
 API 를 주 출처로 정했다가 파이썬 요청에 403 이 와서 버렸다(docs/stock/tech-value.md '출처'). 계열 코드는 기억이
 아니라 목록에서 고른다 — ECOS 의 같은 표에 KOSPI 와 KOSDAQ 이 나란히 있다.

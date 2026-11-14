@@ -96,6 +96,9 @@ STALE = {
     # EDGAR 재무(기술주 가치 탭). 마지막 기간 끝에서 며칠인가로 본다. 3분기(9월 말) 뒤 다음 값은 연간 보고서(10-K)인데,
     # 기한이 연말에서 60일(대형)~90일(소형 — 디웨이브)이다. 9월 말 + 92일 + 90일 = 182일까지가 정상이라 190일.
     "edgar_days": 190,
+    # 베타의 시장 SPY 월봉(techvalue.MARKET). 진행 중인 이번 달도 날마다 덮이므로 마지막 달의 1일에서 31일 + 적재가
+    # 하루이틀 밀리는 몫까지 40일. 넘기면 SPY 를 안 받고 있다.
+    "market_days": 40,
     # FRED 미국 3개월 국채(월평균)는 다음 달 첫 영업일께 나온다. ECOS 기준금리와 같은 45일.
     "fred_days": {"us_tbill3m": 45,
                   # 금리 월평균·실업률은 다음 달 첫 주에 나온다 — 45일.
@@ -348,6 +351,14 @@ def check_fresh(rep: Report, today: dt.date) -> None:
         filed = stock_store.last_filed()
     except stock_store.StockMissing:
         filed = {}
+    from app.stock.techvalue import MARKET
+
+    try:
+        mk = stock_store.monthly(*MARKET)
+    except stock_store.StockMissing:
+        mk = []
+    d = dt.date(int(mk[-1][0][:4]), int(mk[-1][0][4:]), 1) if mk else None
+    say(f"시장 {MARKET[1]} 월봉", days_since(d, today), STALE["market_days"], "python -m scripts.ingest_stock")
     for co in COMPANIES:
         last = last_bar.get((co.market, co.symbol))
         d = dt.date(int(last[:4]), int(last[4:6]), int(last[6:8])) if last else None

@@ -7,8 +7,11 @@
 
 ## 할인율에 거시가 들어간다
 
-할인율 = 미국 10년 국채(지수 분석과 같은 FRED GS10 월평균) + 베타 × 주식 위험 프리미엄. 베타는 종목 월 수익률을
-S&P 500 월 수익률에 회귀한 기울기다(최근 60달, 적어도 24달). 금리가 오르면 먼 해의 이익일수록 지금 값이 크게
+할인율 = 미국 10년 국채(지수 분석과 같은 FRED GS10 월평균, 마지막 실적 발표 전달) + 베타 × 주식 위험 프리미엄. 베타는 종목 월 수익률을
+시장 월 수익률에 회귀한 기울기다(최근 60달, 적어도 24달). 시장은 SPY(S&P 500 ETF)의 수정 종가다 — 처음에는 S&P 500 지수 월말
+(FRED SP500)을 썼는데 FRED 가 10년치만 줘서(2016-11 부터) 과거 발표 때의 베타를 24~30달로 재야 했다. 그렇게 잰 베타는 같은 때
+60달 베타와 평균 0.24~0.45, 크게는 1.31 어긋났다(테슬라 2019-04 발표 때 −0.33). 위험 프리미엄 5% 를 곱하면 할인율이 2~6%p
+흔들린다. SPY 는 1999 년부터 있고, 수정 종가라 배당까지 든 수익률이어서 종목 쪽(수정 종가)과 뜻도 같다. 금리가 오르면 먼 해의 이익일수록 지금 값이 크게
 줄어든다 — 기대 몫이 큰 종목이 금리에 예민한 까닭이 이 식에 그대로 보인다.
 
 위험 프리미엄의 기본 5% 는 관례이지 잰 값이 아니다. 화면에서 3~7% 로 바꿔 볼 수 있다.
@@ -18,7 +21,7 @@ from __future__ import annotations
 
 import math
 
-from ..macro import store as macro_store
+from . import earnings as EA
 from . import fundamentals as FU
 from . import reflect as RF
 from . import store
@@ -36,13 +39,7 @@ ERP = 5.0
 TAX = 21.0
 ERP_RANGE = (3.0, 7.0)
 HISTORY_YEARS = 10
-
-
-def _month_end(daily: list[tuple[str, float]]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for d, c in daily:
-        out[d[:6]] = c
-    return out
+MARKET = ("US", "SPY")   # 베타의 시장 — 위 머리말
 
 
 def beta(stock: list[tuple[str, float]], market: dict[str, float]) -> dict | None:
@@ -64,31 +61,47 @@ def beta(stock: list[tuple[str, float]], market: dict[str, float]) -> dict | Non
     return {"value": round(b, 2), "months": len(pairs), "from": pairs[0][0], "to": pairs[-1][0]}
 
 
+def _release_row(o: dict) -> dict:
+    """그림에 찍을 발표 하나 — 숫자만 추린다."""
+    if o.get("pending"):
+        return {"date": o["date"], "session": o["session"], "pending": True}
+    t = {k: (v["value"] if v else None) for k, v in o["ttm"].items()}
+    return {"date": o["date"], "session": o["session"], "estimated": o["estimated"], "end": o["end"],
+            "form": o["form"], "doc_filed": o["doc_filed"], "quarter": o["quarter"], "yoy": o["yoy"], "ttm": t,
+            "shares": o["shares"]["value"] if o["shares"] else None, "close": o["close"], "adj": o["adj"],
+            "y10": o["y10"], "beta": o["beta"]["value"] if o["beta"] else None}
+
+
 def company(co, spx_month: dict[str, float]) -> dict:
+    """가치의 재료는 **마지막 실적 발표 때** 것이다(`earnings.py`) — 이익·주식 수·10년 국채·베타. 주가만 오늘이다.
+
+    그래서 발표와 발표 사이에는 가치가 그대로이고 주가만 움직인다. 그 사이의 주가 움직임은 '설명 안 된 몫' 에 들어간다.
+    """
     daily = store.daily(co.market, co.symbol)
     monthly = store.monthly(co.market, co.symbol)
     rows = store.facts(co.symbol)
     if not daily or not monthly or not rows:
         return {"id": co.id, "label": co.label, "symbol": co.symbol, "missing": "주가나 재무가 아직 적재되지 않았습니다"}
+    items = EA.of_company(co, spx_month)
+    basis = EA.latest(items)
+    if basis is None or not basis["shares"] or basis["y10"] is None:
+        return {"id": co.id, "label": co.label, "symbol": co.symbol, "missing": "실적 발표와 재무를 아직 맞추지 못했습니다"}
     d, close = daily[-1]
-    sh = FU.shares(rows)
-    ttm = {}
-    for k in ("net_income", "revenue", "operating_income"):
-        t = FU.ttm(rows, k)
-        ttm[k] = {"value": t[-1][1], "end": t[-1][0]} if t else None
-    q = FU.quarters(rows, "net_income")
+    sh = basis["shares"]
     last = monthly[-1][0]
     first = f"{int(last[:4]) - HISTORY_YEARS}{last[4:]}"
     hist = [(m, a) for m, a in monthly if m >= first]
     return {
         "id": co.id, "label": co.label, "symbol": co.symbol, "currency": co.currency,
         "price": {"date": d, "close": close},
+        "basis": {"date": basis["date"], "session": basis["session"], "end": basis["end"], "form": basis["form"],
+                  "estimated": basis["estimated"], "y10": basis["y10"], "y10_month": EA.prev_month(basis["date"][:6])},
         "shares": sh,
-        "cap": close * sh["value"] if sh else None,
-        "ttm": ttm,
-        "quarters": [{"end": e, "value": v} for e, (_, v) in list(q.items())[-8:]],
-        "beta": beta(monthly, spx_month),
+        "cap": close * sh["value"],
+        "ttm": basis["ttm"],
+        "beta": basis["beta"],
         "history": {"months": [m for m, _ in hist], "close": [round(a, 4) for _, a in hist]},
+        "releases": [_release_row(o) for o in items if o["date"][:6] >= first],
         "scenarios": SCENARIOS.get(co.id, []),
         # 과거 1년 주가 변화를 거시·실적·설명 안 된 몫으로 나눈 것(reflect.py) — 시나리오와 달리 잰 값이다.
         "reflect": RF.of_company(co),
@@ -96,10 +109,8 @@ def company(co, spx_month: dict[str, float]) -> dict:
 
 
 def overview() -> dict:
-    spx = _month_end(store.daily("US", "SPX"))
-    y10 = macro_store.monthly("us_10y")
-    ym = max(y10)
+    spx = dict(store.monthly(*MARKET))
     return {
-        "rate": {"y10": y10[ym], "y10_month": ym, "erp": ERP, "erp_range": list(ERP_RANGE), "tax": TAX},
+        "rate": {"erp": ERP, "erp_range": list(ERP_RANGE), "tax": TAX},
         "companies": [company(co, spx) for co in COMPANIES],
     }
