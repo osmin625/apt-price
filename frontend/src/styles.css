@@ -1218,14 +1218,51 @@ tr.is-deleting td { opacity: 0.4; }
 .buy-step-count { margin-left: auto; }
 .buy-step-no { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .buy-step.is-done > h2 { color: var(--text-muted); }
-.buy-tag { font-weight: 400; }
 .buy-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.buy-items li { display: grid; grid-template-columns: 15px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--grid); font-size: 13.5px; line-height: 1.5; }
-.buy-items li:first-child { border-top: 0; }
+.buy-items > li { display: grid; grid-template-columns: 15px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--grid); font-size: 13.5px; line-height: 1.5; }
+.buy-items > li:first-child { border-top: 0; }
 .buy-items input[type='checkbox'] { margin: 3px 0 0; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
-.buy-body > * + * { margin-left: 6px; }
+.buy-items > li:not(.buy-decision) .buy-body > * + * { margin-left: 6px; }
 .buy-text { cursor: pointer; }
 .buy-items li.is-checked .buy-text { color: var(--text-muted); text-decoration: line-through; }
 .buy-go { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
 .buy-go:hover { text-decoration: underline; }
 .buy-all-done { margin: 0; }
+/* 갈림길 — 정해야 하는 것. 체크 칸 자리에 ◆ 를 두어 '고르는 일' 임을 할 일과 가른다. */
+.buy-items > li.buy-decision { padding: 9px 0 10px; }
+.buy-q-mark { font-size: 11px; line-height: 1.9; color: var(--accent); text-align: center; }
+.buy-q { font-weight: 600; }
+.buy-decision.is-compact .buy-q { font-weight: 400; color: var(--text-secondary); }
+.buy-multi { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.buy-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 7px 0 0; }
+.buy-option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; cursor: pointer;
+  font: inherit; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: transparent; color: var(--text-primary);
+}
+.buy-option:hover { border-color: var(--accent); }
+.buy-option.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); }
+.buy-option-label { font-size: 13px; font-weight: 600; }
+.buy-option-sub { font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; }
+.buy-info { margin-top: 8px; padding: 8px 11px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--surface-1)); font-size: 12.5px; }
+.buy-info > div + div { margin-top: 8px; }
+.buy-info-title { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px; }
+.buy-info ul { margin: 0; padding-left: 16px; }
+.buy-info li { margin: 2px 0; }
+.buy-info .hint { margin-left: 4px; }
+.buy-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0 0 10px; }
+.buy-choices-label { font-size: 12px; color: var(--text-muted); margin-right: 2px; }
+.buy-chip {
+  font: inherit; font-size: 12px; padding: 3px 8px; cursor: pointer; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; background: transparent;
+}
+.buy-chip b { color: var(--text-primary); font-weight: 600; }
+.buy-chip.is-open { border-style: dashed; }
+.buy-chip.is-open b { color: var(--accent); }
+.buy-chip:hover { border-color: var(--accent); }
+.buy-phase.is-off { opacity: 0.5; }
+.buy-waiting { font-size: 12.5px; color: var(--text-muted); margin: 0 0 16px; }
+.buy-waiting a { color: var(--accent); }
+.buy-step.is-waiting > h2 { color: var(--text-muted); }
+.buy-step.is-waiting .buy-waiting { margin: 0; }
+.buy-decision { scroll-margin-top: 80px; }
