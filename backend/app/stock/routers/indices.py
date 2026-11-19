@@ -1,4 +1,4 @@
-"""주식 — 지수 분석(영향·구간 예측), 기술주 가치, 장기 투자·단기 매매 탭의 실제 지수 계산."""
+"""주식 — 지수 분석(영향·구간 예측), 장기 투자·단기 매매 탭의 실제 지수 계산, 고른 종목의 비교(picks)."""
 
 from fastapi import APIRouter, HTTPException
 
@@ -34,10 +34,10 @@ def long_term():
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/tech-value")
-def tech_value():
+@router.get("/picks")
+def picks():
     try:
-        return service.tech_value()
+        return service.picks()
     except DbMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

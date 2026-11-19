@@ -17,6 +17,7 @@ import { fmt, useMeasure } from '../../shared/Charts'
  *   yTicks · yUnit      세로축 눈금 — 수준 자체가 기준인 것(CAPE 배수·금리 %)만
  *   xUnit               가로축 단위('일'·'개월'·'봉(5분)')
  *   axis · dates        실제 지수 사례 — 가격 눈금을 저절로 잡고, 가로축 양 끝에 날짜를 적는다
+ *   yDigits             세로축 숫자의 소수 자리 — 1달러 밑을 지나는 종목 주가(디웨이브)는 0 자리면 눈금이 겹친다
  *   markNames           ▲·▼ 의 이름(기본 진입·청산 — 패턴은 오름·내림 신호)
  *
  * 가격 축 숫자는 기본으로 적지 않는다 — 합성 가격이라 값에 뜻이 없고, 숫자가 있으면 실제 지수로 읽힌다.
@@ -102,7 +103,7 @@ export default function ExampleChart({ spec }) {
         {yTicks.map((v) => (
           <g key={`y${v}`}>
             <line x1={P.l} x2={W - P.r} y1={sy(v)} y2={sy(v)} stroke="var(--border)" strokeDasharray="2 3" />
-            <text x={W - P.r + 4} y={sy(v) + 4} fontSize="10.5" fill="var(--text-muted)">{fmt(v, spec.axis ? 0 : 1)}{spec.yUnit}</text>
+            <text x={W - P.r + 4} y={sy(v) + 4} fontSize="10.5" fill="var(--text-muted)">{fmt(v, spec.yDigits ?? (spec.axis ? 0 : 1))}{spec.yUnit}</text>
           </g>
         ))}
         {spec.band && (

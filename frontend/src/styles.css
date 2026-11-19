@@ -111,6 +111,12 @@ header.top h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .top-title h1 { margin: 0; }
 .asset-pick button { padding: 5px 14px; font-size: 13px; }
 .asset-empty { margin-top: 20px; }
+/* 주식 — 탭 위의 종목 고르기(stock/pick.jsx). 탭과 같은 줄 폭을 쓰고, 좁으면 단추 줄만 가로로 민다. */
+.stock-pick { display: flex; align-items: center; gap: 8px; margin-top: 14px; min-width: 0; }
+.stock-pick .seg { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+.stock-pick .seg::-webkit-scrollbar { display: none; }
+.stock-pick .seg button { white-space: nowrap; }
+.stock-pick > .muted { flex-shrink: 0; white-space: nowrap; }
 header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 /* 줄바꿈을 막고 넘치면 가로로 민다 — 폭과 상관없이. 예전에는 아래 '좁은 화면'(720px 이하)에서만
    막았는데, 탭이 열 개가 되자(매매·전세·월세, 2026-10-19) 830px 남짓에서도 '매물 분/석' 처럼 글자
@@ -772,6 +778,9 @@ tr.is-deleting td { opacity: 0.4; }
 .tq-one { margin: 5px 0 6px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); flex: 1; }
 .tq-badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .tq-state { list-style: none; margin: 0 0 6px; padding: 0; font-size: 12px; line-height: 1.55; }
+/* 고른 종목의 지금 값 — 지수 줄보다 위, 한 줄. 종목 하나에는 뜻이 없는 기법은 카드째 흐리게. */
+.tq-pick { font-size: 12px; line-height: 1.55; margin: 0 0 4px; font-weight: 600; }
+.tq-tile.is-na { opacity: 0.55; }
 .tq-perf tr.tq-here td {
   font-weight: 600;
 }
@@ -1171,23 +1180,6 @@ tr.is-deleting td { opacity: 0.4; }
 /* 상세 안의 표는 줄바꿈하지 않고 가로로 넘긴다. 휴대폰 폭에서 칸이 좁아지면
    '역까지 도보' 가 한 글자씩 세로로 쪼개졌다. */
 .mf-detail .coef td, .mf-detail .coef th { white-space: nowrap; }
-
-/* 기술주 가치 — 시가총액 분해 막대(stock/views/TechValueView.jsx) */
-.tv-bar-wrap { margin: 10px 0 4px; }
-.tv-bar { position: relative; height: 26px; border-radius: var(--radius); background: color-mix(in srgb, var(--border) 40%, transparent); overflow: hidden; }
-.tv-bar span { position: absolute; top: 0; bottom: 0; }
-.tv-bar .tv-rest, .tv-rest-swatch { background: repeating-linear-gradient(45deg, var(--border) 0 4px, transparent 4px 8px); }
-.tv-bar .tv-cap { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); }
-.tv-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 12.5px; }
-.tv-legend b { font-variant-numeric: tabular-nums; }
-.tv-legend .swatch, .tv-table .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
-.tv-num { font: inherit; font-variant-numeric: tabular-nums; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
-.tv-table td { vertical-align: top; }
-.tv-table td:first-child { min-width: 150px; }
-.tv-rel { cursor: pointer; }
-.tv-rel-detail { margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12.5px; line-height: 1.6; }
-.tv-rel-detail .t-title { font-weight: 600; margin-bottom: 2px; }
-.tv-rel-detail b { font-variant-numeric: tabular-nums; }
 
 /* 집 구하기 — 단계별 할 일 목록(realestate/views/GuideView.jsx).
    진척 막대는 데이터가 아니라 장식이라 `--accent` 를 쓴다 — 오름·내림의 초록·빨강과 섞이지 않게.

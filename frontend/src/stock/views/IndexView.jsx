@@ -6,6 +6,7 @@ import { fmt } from '../../shared/Charts'
 import Hint from '../../shared/Hint'
 import EffectModal from '../components/EffectModal'
 import ForecastCard from '../components/ForecastCard'
+import { usePicked } from '../pick'
 
 /**
  * 지수 분석 — 경제지표가 움직일 때 S&P 500·KOSPI 는 어땠나(맨 위), 그리고 다음 1·3개월 범위(접힌 카드).
@@ -28,6 +29,10 @@ import ForecastCard from '../components/ForecastCard'
  * (지표를 알게 된 뒤의 지수). 카드를 누르면 창에 산점도·오른/내린 시기·앞뒤 절반·함께 넣은 값이 나온다.
  *
  * 지수는 S&P 500 이 먼저다(2026-11-12 요청 — 주식의 모든 정보는 미국 우선, `indices.INDICES` 의 순서).
+ *
+ * 위에서 종목을 고르면 그 종목의 카드가 맨 위에 붙는다(2026-11-20, docs/stock/picks.md '지수 분석'). 지수 자리에
+ * **시장 몫을 뺀 수익률**(종목 − 베타 × SPY)을 넣어 같은 계산을 돌린 것이다 — 종목 수익률을 그대로 넣으면 대부분
+ * 시장이 움직인 몫이라 S&P 500 카드를 다시 보는 셈이 된다. 지표는 미국 것(S&P 500 의 짝)이다.
  */
 const HZ = [
   { id: 'same', label: '같은 1년' },
@@ -130,7 +135,7 @@ function IndicatorTile({ r, ext, onPick }) {
   )
 }
 
-function EffectCard({ ix }) {
+function EffectCard({ ix, stock }) {
   const [hz, setHz] = useState('same')
   const [pick, setPick] = useState(null)
   const e = ix.effects[hz]
@@ -145,10 +150,13 @@ function EffectCard({ ix }) {
   return (
     <section className="card">
       <h2>
-        {ix.label} — 경제지표와 함께
+        {stock ? `${stock.label} — 시장 몫을 뺀 수익률과 경제지표` : `${ix.label} — 경제지표와 함께`}
         <Hint
           wide
           notes={[
+            stock
+              ? `${stock.label} 의 월 수익률에서 베타(${fmt(stock.market_beta.value, 2)}, ${ym(stock.market_beta.from)}~${ym(stock.market_beta.to)} ${stock.market_beta.months}달로 맞춤) × SPY 월 수익률을 뺀 것을 이어 붙여, 지수 자리에 넣고 같은 계산을 돌렸습니다. 시장 전체가 움직인 몫을 빼고 이 종목만의 움직임이 지표와 어땠는지를 봅니다.`
+              : null,
             '정방향·역방향은 상식입니다 — 그 지표가 오를 때 주가가 같이 오른다고(정방향) 또는 내린다고(역방향) 흔히 말하는 쪽입니다. 잰 값이 아니라 잰 값과 견줄 기준이라 손으로 적었습니다. 이유는 카드의 ⓘ 에 있습니다.',
             '값은 지표가 평소 폭(1년 움직임의 표준편차)만큼 올랐을 때 지수 수익률이 평균 몇 % 달랐나입니다. 단위가 다른 지표를 같은 길이로 견주려고 평소 폭으로 맞췄습니다.',
             '띠의 가는 선은 95% 범위입니다. 범위가 0 을 넘지 않으면 초록(+)·빨강(−)이고 상식과 맞는지를 적습니다. 넘으면 회색(뚜렷하지 않음)이고 값이 상식 쪽인지 반대 쪽인지만 덧붙입니다. 한 지수 안의 띠는 같은 자입니다.',
@@ -156,7 +164,9 @@ function EffectCard({ ix }) {
             '금리·실업률은 1년 변화(%p), 물가·M2·환율은 1년 상승률(%)입니다. 미국 장단기 금리차만 수준(%p)입니다 — 역전 여부가 신호라서입니다.',
             '연관이지 원인이 아닙니다. 금리가 오른 해에 주가가 내렸어도 경기가 둘을 같이 움직였을 수 있습니다. 지표가 여럿이라 우연히 뚜렷해 보이는 것도 섞일 수 있습니다.',
             '시기에 따라 다름: 표본을 시간순으로 반 나눠 다시 재면 방향이 다릅니다.',
-            `지수는 현지 통화(${ix.currency})·배당을 뺀 가격 지수의 월말 종가입니다. 카드를 누르면 자세히 봅니다.`,
+            stock
+              ? '종목은 분할·배당을 반영한 수정 종가의 월봉입니다(Alpha Vantage). 짧은 종목일수록 범위가 넓어 뚜렷한 것이 드뭅니다. 카드를 누르면 자세히 봅니다.'
+              : `지수는 현지 통화(${ix.currency})·배당을 뺀 가격 지수의 월말 종가입니다. 카드를 누르면 자세히 봅니다.`,
           ]}
         />
         <ChartLink id={`${ix.id}-effects`} />
@@ -182,6 +192,24 @@ function EffectCard({ ix }) {
   )
 }
 
+/** 고른 종목의 카드 — EffectCard 에 종목을 지수처럼 넘긴다. 창의 축 이름에 '시장 몫 뺌' 이 붙는다. */
+function PickCard() {
+  const { sym, pick, error, loading } = usePicked()
+  if (!sym) return null
+  if (loading || error || !pick || pick.missing || !pick.effects) {
+    return (
+      <section className="card">
+        <h2>{pick ? pick.label : '고른 종목'}</h2>
+        <p className="empty">
+          {loading ? '불러오는 중…' : error ? error.message : pick?.missing || '월봉이 짧아 재지 않았습니다'}
+        </p>
+      </section>
+    )
+  }
+  const ix = { id: pick.id, label: `${pick.label}(시장 몫 뺌)`, currency: pick.currency, effects: pick.effects }
+  return <EffectCard key={pick.id} ix={ix} stock={pick} />
+}
+
 export default function IndexView() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -204,6 +232,7 @@ export default function IndexView() {
   }
   return (
     <>
+      <PickCard />
       {data.indices.map((ix) =>
         ix.available ? (
           <div key={ix.id}>

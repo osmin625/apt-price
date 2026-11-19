@@ -4,7 +4,7 @@
 
 받는 것은 `app/stock/indices.py` 의 지수, 지수 분석이 견주는 지표(`app/stock/indicators.py` —
 한국은행 계열 포함), 장기 투자의 지수 평가 재료(`app/stock/valuation.py` 의 `NEEDS` — ECOS·실러),
-FRED 계열 전부(`fred.SERIES`), 기술주 가치 탭의 종목 주가(Alpha Vantage)와 재무(EDGAR)(`app/stock/companies.py`).
+FRED 계열 전부(`fred.SERIES`), 고를 수 있는 종목의 주가(Alpha Vantage)와 재무·실적 발표(EDGAR)(`app/stock/companies.py`).
 매일 06:30 동기화(`sync_static.ps1`)가 부른다.
 
 ## 받은 값을 그대로 믿지 않는다
@@ -182,7 +182,7 @@ def main() -> int:
             print(f"      {ix.label:<8} {n:>5}일  {bars[0][0]}~{bars[-1][0]}  {ix.source}"
                   f"  {time.perf_counter() - t0:.1f}s")
 
-        # 기술주 가치 탭의 종목 — 주가(Alpha Vantage 최근 일봉·월봉)와 재무(EDGAR).
+        # 고를 수 있는 종목 — 주가(Alpha Vantage 최근 일봉·월봉)와 재무(EDGAR).
         for co in COMPANIES:
             t0 = time.perf_counter()
             try:
@@ -224,9 +224,9 @@ def main() -> int:
             print(f"      {co.label:<8} 발표 {len(rel):>3}건  {rel[0]['date']}~{rel[-1]['date']}  EDGAR 8-K 2.02"
                   f"  {time.perf_counter() - t0:.1f}s")
 
-        # 베타의 시장(techvalue.MARKET) — SPY 수정 종가 월봉. 지수 일봉(FRED SP500)은 10년치뿐이라 과거 실적 발표 때의 베타를
+        # 베타의 시장(earnings.MARKET) — SPY 수정 종가 월봉. 지수 일봉(FRED SP500)은 10년치뿐이라 과거 실적 발표 때의 베타를
         # 60달로 못 잰다. 받을 때 같은 달의 S&P 500 지수 월말과 월 수익률을 맞춰 본다 — 배당(달 0.2% 안팎)만큼만 달라야 한다.
-        from app.stock.techvalue import MARKET
+        from app.stock.earnings import MARKET
         t0 = time.perf_counter()
         try:
             spy = alphavantage.monthly(MARKET[1])

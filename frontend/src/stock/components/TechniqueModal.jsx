@@ -20,8 +20,63 @@ import ValuationSection, { realChart, ym } from './ValuationSection'
  *
  * 장기 지수 평가 넷(`need === 'index'`)은 실제 지수의 그 평가 계열이 붙는다(`live.measures`, backend/app/stock/valuation.py)
  * — '실제 지수에서' 절과, 예시 자리의 실제 계열 그림. 고를 사례가 없이 계열 전체를 그린다.
+ *
+ * 위에서 종목을 골랐으면(`co`) 그 종목에 기법을 돌린 그림과 계산 표가 '실제 종목' 절로 붙는다(docs/stock/picks.md).
  */
-export default function TechniqueModal({ t, needLabel, onClose, live, liveError }) {
+const ASSUME = new Set(['dcf', 'margin-of-safety', 'ddm', 'reverse-dcf'])
+
+/** 위에서 고른 종목에 이 기법을 돌린 것 — 그림과 마지막 달의 계산 표(techniques/longStock.js). */
+function StockSection({ t, co, stock }) {
+  const na = stock.NA_WHY[t.id]
+  const spec = na ? null : stock.chart(t.id, co)
+  const n = co.now
+  return (
+    <>
+      <h3>
+        실제 {co.label} <span className="badge">{co.symbol}</span>
+        {!na && (
+          <Hint
+            notes={[
+              '재무는 실적 발표 때 알려진 것입니다. 달마다 그달까지 발표된 마지막 실적으로 값을 내고 주가는 그달 수정 종가라, 발표와 발표 사이에는 선이 평평하고 주가만 움직입니다.',
+              '주가는 분할·배당을 반영한 수정 종가이고 로그 눈금입니다. 주당 값은 발표 때의 주식 수로 나눠 수정 주가와 같은 자로 맞췄습니다 — 표의 주당 값과 그림의 마지막 값이 조금 다를 수 있습니다.',
+              ASSUME.has(t.id)
+                ? `가정은 하나로 정해 두었습니다: 할인율 = 발표 전달의 10년 국채 + 베타 × ${n.erp}%, 5년 성장률 = 지난 ${n.growth_years}년 매출 성장률(${fmt(n.g_clip[0] * 100, 0)}~${fmt(n.g_clip[1] * 100, 0)}% 로 자름), 그 뒤 영구 성장 ${fmt(n.tg * 100, 1)}%. 계산 과정을 보이려는 것이지 적정가가 아닙니다 — 가정을 조금만 바꿔도 값이 크게 달라집니다.`
+                : null,
+              spec?.clipped ? '아래 칸에서 5~95% 밖의 값은 칸 끝에 붙였습니다 — 이익이 0 근처인 달의 배수가 칸을 납작하게 만들어서입니다.' : null,
+              '재무는 미국 SEC EDGAR, 주가는 Alpha Vantage 입니다.',
+            ]}
+          />
+        )}
+      </h3>
+      {na ? (
+        <p className="muted">해당 없음 — {na}</p>
+      ) : (
+        <>
+          <ExampleChart spec={spec} />
+          {stock.calc(t.id, co).map((c) => (
+            <div key={c.caption} className="tq-calc">
+              <div className="muted small">{c.caption}</div>
+              <div className="table-wrap">
+                <table className="coef">
+                  <thead>
+                    <tr>{c.cols.map((h, i) => <th key={i}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {c.rows.map((r, i) => (
+                      <tr key={i}>{r.map((v, j) => <td key={j}>{v}</td>)}</tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  )
+}
+
+export default function TechniqueModal({ t, needLabel, onClose, live, liveError, co, stock }) {
   const rule = live?.rules?.[t.id]
   const measure = live?.measures?.[t.id]
   const runs = live !== undefined && t.need === 'close'
@@ -58,6 +113,7 @@ export default function TechniqueModal({ t, needLabel, onClose, live, liveError 
       {values && (
         <ValuationSection id={t.id} live={live} error={liveError} ix={index?.id} setIx={setIx} />
       )}
+      {co && stock && <StockSection t={t} co={co} stock={stock} />}
 
       <h3>
         {vReal && showReal ? '실제 계열' : '예시'} <span className="badge">{virtual ? '가상 회사 숫자' : showReal ? `실제 ${index.label}` : '합성 데이터'}</span>

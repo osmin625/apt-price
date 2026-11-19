@@ -5,6 +5,7 @@ import { scrollToChart, TabContext } from './shared/ChartLink'
 import Hint from './shared/Hint'
 import ComplexDetail from './realestate/views/ComplexDetail'
 import { TABS as REALESTATE_TABS } from './realestate/tabs'
+import { StockPicker } from './stock/pick'
 import { TABS as STOCK_TABS } from './stock/tabs'
 
 /**
@@ -20,7 +21,8 @@ import { TABS as STOCK_TABS } from './stock/tabs'
  */
 const ASSETS = [
   { id: 'realestate', label: '부동산', tabs: REALESTATE_TABS },
-  { id: 'stock', label: '주식', tabs: STOCK_TABS },
+  // header — 탭 위에 두는 그 자산의 공통 머리. 주식은 종목 고르기(탭마다 같은 종목을 본다).
+  { id: 'stock', label: '주식', tabs: STOCK_TABS, header: () => <StockPicker /> },
 ].map((a) => ({ ...a, tabs: STATIC_MODE ? a.tabs.filter((t) => t.static) : a.tabs }))
 
 /** 탭 id 는 자산을 건너 겹치지 않는다 — 그래서 주소에 자산을 따로 적지 않아도 탭에서 자산이 나온다. */
@@ -32,10 +34,12 @@ const assetOfTab = (id) => ASSETS.find((a) => a.tabs.some((t) => t.id === id))
  * 그대로 부동산으로 열린다.
  */
 // 이름을 바꾼 탭의 옛 id → 새 id. 이미 나눈 링크가 첫 자산의 첫 탭으로 떨어지지 않게 한다.
-const TAB_ALIAS = { indices: 'index-analysis' }
+// tech-value: 기술주 가치 탭을 없애면서(2026-11-20) 종목을 다루는 장기 투자로 보낸다.
+const TAB_ALIAS = { indices: 'index-analysis', 'tech-value': 'long-term' }
 
 function readHash() {
-  const [raw, c] = decodeURIComponent(window.location.hash.replace(/^#/, '')).split('/')
+  // `?` 뒤는 탭이 아니라 보는 대상이다(주식의 고른 종목 `?sym=` — stock/pick.jsx).
+  const [raw, c] = decodeURIComponent(window.location.hash.replace(/^#/, '').split('?')[0]).split('/')
   const t = TAB_ALIAS[raw] || raw
   const byTab = assetOfTab(t)
   if (byTab) return { asset: byTab.id, tab: t, chart: c || null }
@@ -110,7 +114,10 @@ export default function App() {
     }
   }, [])
   const goTab = (id) => {
-    if (readHash().tab !== id || window.location.hash !== `#${id}`) window.history.pushState(null, '', `#${id}`)
+    // 같은 자산 안에서 탭을 옮기면 `?` 뒤(주식의 고른 종목)를 그대로 넘긴다 — 탭마다 같은 종목을 본다.
+    const q = assetOfTab(id)?.id === readHash().asset ? window.location.hash.split('?')[1] : null
+    const next = `#${id}${q ? `?${q}` : ''}`
+    if (readHash().tab !== id || window.location.hash !== next) window.history.pushState(null, '', next)
     setTab(id)
     setDetailId(null)
   }
@@ -193,6 +200,8 @@ export default function App() {
           <code>python -m scripts.ingest_trades</code> 를 실행하세요.
         </div>
       )}
+
+      {cur.header?.()}
 
       {cur.tabs.length > 0 && (
       <nav className="tabs">

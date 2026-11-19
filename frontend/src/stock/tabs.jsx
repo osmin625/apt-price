@@ -1,8 +1,8 @@
 import { api } from '../api'
 import * as LONG from './techniques/long'
+import * as STOCK from './techniques/longStock'
 import * as SHORT from './techniques/short'
 import IndexView from './views/IndexView'
-import TechValueView from './views/TechValueView'
 import TechniqueView from './views/TechniqueView'
 
 /**
@@ -12,15 +12,20 @@ import TechniqueView from './views/TechniqueView'
  * 첫 조각은 지수 둘이다. 맨 위는 경제지표의 영향(docs/stock/effects.md), 아래는 구간 예측(docs/stock/indices.md).
  * 2026-11 에 id 를 'indices'(지수 예측)에서 바꿨다 — 옛 주소는 App.jsx 의 `TAB_ALIAS` 가 이리로 보낸다.
  *
- * 순서는 부동산과 같은 원칙(큰 틀에서 상세로) — 시장 전체(지수 분석) → 종목 하나(기술주 가치) → 몇 년을 보는
- * 기법(장기 투자) → 며칠~몇 주를 보는 기법(단기 매매). 뒤의 둘은 기법 저장소다(2026-11-12 합의,
- * docs/stock/valuation.md · trading.md). 기술주 가치는 2026-11-14 요청(docs/stock/tech-value.md).
+ * 순서는 부동산과 같은 원칙(큰 틀에서 상세로) — 시장 전체(지수 분석) → 몇 년을 보는 기법(장기 투자) → 며칠~몇 주를
+ * 보는 기법(단기 매매). 뒤의 둘은 기법 저장소다(2026-11-12 합의, docs/stock/valuation.md · trading.md).
+ *
+ * 종목은 탭이 아니라 탭 위의 고르기다(`pick.jsx`, docs/stock/picks.md). 한때 '기술주 가치' 탭이 종목 하나의 가치를
+ * 따로 나눴는데(2026-11-14), 2026-11-20 에 없애고 고른 종목을 탭마다 그 탭의 방식으로 보게 바꿨다 — 지수 분석은
+ * 시장 몫을 뺀 수익률의 지표 영향, 장기 투자는 기법을 실제 재무에 돌린 계열. 단기 매매는 종목 일봉이 최근 100일뿐이라
+ * 보류했다. 옛 주소 `#tech-value` 는 App.jsx 의 `TAB_ALIAS` 가 장기 투자로 보낸다.
  * '단타' 대신 '단기 매매' 인 것은 받는 자료가 일봉이라 며칠~몇 주 매매가 중심이어서다.
  */
 const LONG_NOTES = [
   '버핏·그레이엄 같은 장기 투자자의 가치평가 기법을 모았습니다. 카드를 누르면 원리·쓰는 법·예시·함정·원전이 나옵니다.',
   '지수 평가 넷은 실제 S&P 500·KOSPI 에 돌렸습니다. 카드의 한 줄은 지금 값과 역사 백분위(그달까지의 값 가운데 아래인 비율)이고, 창에는 백분위 칸마다 그 뒤 5·10년 수익률과 실제 계열 그림이 있습니다.',
   '나머지는 한 회사의 재무에 쓰는 기법이라 가상 회사 숫자로 계산 과정을 보여 줍니다. 창에 그렇게 적었습니다.',
+  '위에서 종목을 고르면 그 종목의 실제 재무와 주가에 기법을 돌린 계열이 카드와 창에 붙습니다. 종목 하나에는 뜻이 없는 기법은 흐리게 둡니다.',
   '기법 설명이지 투자 권유가 아닙니다. 어느 기법도 언제 사고팔지를 보장하지 않습니다.',
 ]
 const SHORT_NOTES = [
@@ -32,10 +37,9 @@ const SHORT_NOTES = [
 
 export const TABS = [
   { id: 'index-analysis', label: '지수 분석', static: true, render: () => <IndexView /> },
-  { id: 'tech-value', label: '기술주 가치', static: true, render: () => <TechValueView /> },
   {
     id: 'long-term', label: '장기 투자', static: true,
-    render: () => <TechniqueView title="장기 투자 — 가치평가 기법" notes={LONG_NOTES} catalog={LONG} load={api.stockLongTerm} />,
+    render: () => <TechniqueView title="장기 투자 — 가치평가 기법" notes={LONG_NOTES} catalog={LONG} load={api.stockLongTerm} stock={STOCK} />,
   },
   {
     id: 'short-term', label: '단기 매매', static: true,
