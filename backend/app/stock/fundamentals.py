@@ -82,6 +82,17 @@ def ttm(rows: list[dict], concept: str, as_of: str | None = None, first: bool = 
     return out
 
 
+def instant(rows: list[dict], concept: str, end: str, as_of: str | None = None, first: bool = False) -> float | None:
+    """시점 값(대차대조표) 가운데 끝이 정확히 `end` 인 것."""
+    return {e: v for (s, e), v in pick(rows, concept, as_of, first).items() if not s}.get(end)
+
+
+def annual(rows: list[dict], concept: str, as_of: str | None = None, first: bool = False) -> list[tuple[str, float]]:
+    """(회계연도 끝, 1년 값) — 10-K 의 연간 기간(350~380일). 끝 날짜순."""
+    vals = pick(rows, concept, as_of, first)
+    return sorted((e, v) for (s, e), v in vals.items() if s and 350 <= _days(s, e) <= 380)
+
+
 def shares(rows: list[dict], as_of: str | None = None) -> dict | None:
     """주식 수 — 대차대조표 발행 주식 수가 희석 가중평균보다 오래되지 않았으면 그것, 아니면 희석 가중평균.
 

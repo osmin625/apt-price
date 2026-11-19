@@ -5,6 +5,7 @@ import Hint from '../../shared/Hint'
 import { nowShort } from '../components/LiveSection'
 import { valShort } from '../components/ValuationSection'
 import TechniqueModal from '../components/TechniqueModal'
+import { usePicked } from '../pick'
 
 /**
  * 기법 저장소 — 장기 투자·단기 매매 두 탭이 같은 화면을 쓴다(2026-11-12 합의 — 같은 꼴이라 읽기 쉽다).
@@ -18,9 +19,15 @@ import TechniqueModal from '../components/TechniqueModal'
  *
  * `load` 가 있으면 실제 지수에 돌린 결과를 받아, 카드에 지수마다 지금 상태 한 줄을 단다 — 단기 매매는 종가로 재는
  * 기법(backend/app/stock/trading.py, `live.rules`), 장기 투자는 지수 평가 넷(valuation.py, `live.measures`). 받는 동안에도 카드와 설명은 그대로 보인다 — 설명이 초점이라 기다리게 하지 않는다.
+ *
+ * `stock` 이 있으면(장기 투자) 위에서 고른 종목에 기법을 돌린 값이 카드에 한 줄 더 붙고 창에 그 종목의 그림이 나온다
+ * (`techniques/longStock.js`, docs/stock/picks.md). 종목 하나에는 뜻이 없는 기법은 흐리게 둔다. 단기 매매는 종목
+ * 일봉이 최근 100일뿐이라 아직 종목을 다루지 않는다 — 고른 종목이 있으면 그렇다고 한 줄 적는다.
  */
-export default function TechniqueView({ title, notes, catalog, load }) {
+export default function TechniqueView({ title, notes, catalog, load, stock }) {
   const { GROUPS, TECHNIQUES, NEED } = catalog
+  const { sym, pick: co, error: pickError, loading: pickLoading } = usePicked()
+  const picked = stock && co && !co.missing ? co : null
   const [pick, setPick] = useState(null)
   const [live, setLive] = useState(load ? null : undefined)
   const [error, setError] = useState(null)
@@ -50,6 +57,11 @@ export default function TechniqueView({ title, notes, catalog, load }) {
         <p className="muted small">
           기법 {TECHNIQUES.length}개 · 묶음 {GROUPS.length}개 · 카드를 누르면 설명
         </p>
+        {sym && !stock && <p className="muted small">고른 종목은 이 탭에 아직 없습니다 · 지수만 봅니다</p>}
+        {sym && stock && pickLoading && <p className="muted small">종목 불러오는 중…</p>}
+        {sym && stock && (pickError || co?.missing) && (
+          <p className="muted small">종목을 못 불러왔습니다 · {pickError ? pickError.message : co.missing}</p>
+        )}
         <div className="tq-jump">
           {GROUPS.map((g) => (
             <a key={g.id} className="chip" href={`#chart-${g.id}`}
@@ -72,7 +84,7 @@ export default function TechniqueView({ title, notes, catalog, load }) {
             {TECHNIQUES.filter((x) => x.group === g.id).map((x) => (
               <div
                 key={x.id}
-                className="rg-tile tq-tile"
+                className={`rg-tile tq-tile${picked && stock.NA_WHY[x.id] ? ' is-na' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => setPick(x.id)}
@@ -88,6 +100,12 @@ export default function TechniqueView({ title, notes, catalog, load }) {
                 </div>
                 <div className="muted small">{x.en}</div>
                 <p className="tq-one">{x.summary}</p>
+                {picked && (
+                  <div className="tq-pick">
+                    <span className="muted">{picked.label}</span>{' '}
+                    {stock.NA_WHY[x.id] ? '해당 없음' : stock.short(x.id, picked)}
+                  </div>
+                )}
                 {(live?.rules?.[x.id] || live?.measures?.[x.id]) && (
                   <ul className="tq-state">
                     {live.indices.map((ix) => (
@@ -109,7 +127,8 @@ export default function TechniqueView({ title, notes, catalog, load }) {
         </section>
       ))}
       {t && (
-        <TechniqueModal t={t} needLabel={NEED[t.need]} onClose={() => setPick(null)} live={live} liveError={error} />
+        <TechniqueModal t={t} needLabel={NEED[t.need]} onClose={() => setPick(null)} live={live} liveError={error}
+                        co={picked} stock={stock} />
       )}
     </>
   )

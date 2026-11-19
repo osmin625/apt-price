@@ -16,7 +16,7 @@ from . import effects as EF
 from . import forecast as F
 from . import store
 from . import trading as TR
-from . import techvalue as TV
+from . import pick as PK
 from . import valuation as VA
 from .indicators import BY_ID as INDICATOR, PAIRS, unit_of
 from .indices import INDICES, Index
@@ -88,7 +88,7 @@ def one(ix: Index) -> dict:
         "origin": s.months[t],
         "alpha": F.ALPHA, "min_train": F.MIN_TRAIN,
         "horizons": horizons,
-        "effects": effects_of(ix, s.close),
+        "effects": effects_of(PAIRS[ix.id], s.close),
     }
 
 
@@ -105,9 +105,11 @@ def _agree(r: dict | None, expect: int) -> str | None:
     return "yes" if (r["verdict"] == "pos") == (expect > 0) else "no"
 
 
-def effects_of(ix: Index, close: dict[str, float]) -> dict:
-    """{시점: {rows: [지표별 영향], joint: 함께 넣은 값}} — 화면의 단추 셋이 이것을 고른다."""
-    ids = PAIRS[ix.id]
+def effects_of(ids: tuple[str, ...], close: dict[str, float]) -> dict:
+    """{시점: {rows: [지표별 영향], joint: 함께 넣은 값}} — 화면의 단추 셋이 이것을 고른다.
+
+    close 는 {YYYYMM: 수준}. 지수는 월말 종가, 종목은 시장 몫을 뺀 계열(`pick.excess`)이다 — 같은 계산을 돌린다.
+    """
     xs = {i: EF.movement(INDICATOR[i].kind, macro_store.monthly(i)) for i in ids}
     out = {}
     for hz in EF.HORIZONS:
@@ -169,23 +171,29 @@ def long_term() -> dict:
     return got
 
 
-_tech: dict[tuple, dict] = {}
+_picks: dict[tuple, dict] = {}
 
 
-def tech_value() -> dict:
-    """기술주 가치 탭 — 종목마다 지금 주가·주식 수·지난 12개월 이익·베타·시나리오와 반영 분해(`techvalue.py`).
+def picks() -> dict:
+    """종목 비교 — 종목마다 시장 몫을 뺀 수익률의 지표 영향과 장기 기법 계열(`pick.py`).
 
-    반영 분해가 종목마다 부트스트랩 400번이라 몇 초 걸린다. 주가 마지막 날·재무 마지막 제출·거시 마지막 달로 기억한다.
+    지표 영향이 종목마다 지표 여섯 × 시점 셋이라 몇 초 걸린다. 주가 마지막 날·재무 마지막 제출·발표·거시 마지막 달로 기억한다.
     """
-    from .indicators import PAIRS
-
+    ids = PAIRS["spx"]
     key = (tuple(sorted(store.last_dates().items())), tuple(sorted(store.last_filed().items())),
            tuple(sorted(store.last_release().items())),
-           tuple(sorted(macro_store.last_period(list(PAIRS["spx"])).items())))
-    got = _tech.get(key)
+           tuple(sorted(macro_store.last_period(list(ids)).items())))
+    got = _picks.get(key)
     if got is None:
-        got = TV.overview()
-        _tech.clear()
-        _tech[key] = got
+        out = []
+        for co in PK.COMPANIES:
+            d = PK.company(co)
+            if "missing" not in d:
+                close, beta = PK.excess(co)
+                d["market_beta"] = beta
+                d["effects"] = effects_of(ids, close) if close else None
+            out.append(d)
+        got = {"companies": out, "erp": PK.ERP}
+        _picks.clear()
+        _picks[key] = got
     return got
-

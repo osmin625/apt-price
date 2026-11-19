@@ -60,11 +60,29 @@ HEADERS = {"User-Agent": "apt-price-research/1.0", "Accept-Encoding": "gzip"}
 
 # 우리 이름 → (택소노미, 개념 후보 — 앞의 것이 먼저, 단위)
 CONCEPTS: dict[str, tuple[str, tuple[str, ...], str]] = {
-    "net_income": ("us-gaap", ("NetIncomeLoss",), "USD"),
+    # IBM 은 2015 전 순이익을 NetIncomeLoss 로 내지 않는다 — 보통주 귀속 순이익(우선주가 없어 같은 값)으로 잇는다.
+    # ProfitLoss 는 쓰지 않는다: 비지배지분 몫이 들어 있어 테슬라(솔라시티 시절)는 값이 다르다.
+    "net_income": ("us-gaap", ("NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"), "USD"),
     "revenue": ("us-gaap", ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax"), "USD"),
     "operating_income": ("us-gaap", ("OperatingIncomeLoss",), "USD"),
     "shares_out": ("us-gaap", ("CommonStockSharesOutstanding",), "shares"),
     "shares_diluted": ("us-gaap", ("WeightedAverageNumberOfDilutedSharesOutstanding",), "shares"),
+    # 장기 기법을 실제 종목에 돌리는 재료(2026-11-20, docs/stock/picks.md '장기 투자'). 후보는 네 종목의 companyfacts 에
+    # 실제로 있는 이름을 재서 골랐다 — 알파벳은 감가상각을 2021 부터만 Depreciation 으로 내고, 테슬라는 장기 부채를
+    # 2014 뒤로 LongTermDebt(유동 몫 포함)로만 낸다. 알파벳은 매출총이익을 따로 내지 않아 매출원가로 만든다.
+    "equity": ("us-gaap", ("StockholdersEquity",), "USD"),
+    "assets": ("us-gaap", ("Assets",), "USD"),
+    "liabilities": ("us-gaap", ("Liabilities",), "USD"),
+    "assets_current": ("us-gaap", ("AssetsCurrent",), "USD"),
+    "liabilities_current": ("us-gaap", ("LiabilitiesCurrent",), "USD"),
+    "lt_debt": ("us-gaap", ("LongTermDebtNoncurrent", "LongTermDebt"), "USD"),
+    "cfo": ("us-gaap", ("NetCashProvidedByUsedInOperatingActivities",), "USD"),
+    "capex": ("us-gaap", ("PaymentsToAcquirePropertyPlantAndEquipment",), "USD"),
+    "dep": ("us-gaap", ("DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "Depreciation"), "USD"),
+    # 알파벳은 2026 에 우선주를 내면서 보통주 배당을 PaymentsOfOrdinaryDividends 로 옮겼다(PaymentsOfDividends 는 2026-03 까지).
+    "dividends": ("us-gaap", ("PaymentsOfDividendsCommonStock", "PaymentsOfOrdinaryDividends", "PaymentsOfDividends"), "USD"),
+    "gross_profit": ("us-gaap", ("GrossProfit",), "USD"),
+    "cost_of_revenue": ("us-gaap", ("CostOfRevenue",), "USD"),
 }
 
 
