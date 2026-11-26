@@ -772,6 +772,10 @@ tr.is-deleting td { opacity: 0.4; }
 /* 주식 기법 저장소(장기 투자·단기 매매) — 기법 카드와 설명 창. 카드는 요인 카드(.rg-tile)를 빌린다. */
 .tq-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tq-jump .chip { text-decoration: none; }
+/* 차트 탭(stock/views/ChartView.jsx) — 이름으로 찾는 칸, 그림 없는 항목의 배지. */
+.ch-search { width: 100%; max-width: 420px; margin-top: 8px; padding: 7px 10px; font: inherit; font-size: 13px;
+  color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); }
+.badge.is-muted { color: var(--text-muted); }
 .tq-tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .tq-tile { cursor: pointer; display: flex; flex-direction: column; }
 .tq-tile:hover, .tq-tile:focus-visible { border-color: var(--accent); outline: none; }

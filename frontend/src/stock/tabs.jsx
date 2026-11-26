@@ -2,6 +2,7 @@ import { api } from '../api'
 import * as LONG from './techniques/long'
 import * as STOCK from './techniques/longStock'
 import * as SHORT from './techniques/short'
+import ChartView from './views/ChartView'
 import IndexView from './views/IndexView'
 import TechniqueView from './views/TechniqueView'
 
@@ -45,4 +46,6 @@ export const TABS = [
     id: 'short-term', label: '단기 매매', static: true,
     render: () => <TechniqueView title="단기 매매 — 차트 기법" notes={SHORT_NOTES} catalog={SHORT} load={api.stockShortTerm} />,
   },
+  // 차트 — 앱의 차트 유형·오버레이·보조지표를 보는 법(2026-11-27 요청, docs/stock/charts.md). 백엔드를 부르지 않는다.
+  { id: 'charts', label: '차트', static: true, render: () => <ChartView /> },
 ]

@@ -19,6 +19,7 @@ import { fmt, useMeasure } from '../../shared/Charts'
  *   axis · dates        실제 지수 사례 — 가격 눈금을 저절로 잡고, 가로축 양 끝에 날짜를 적는다
  *   yDigits             세로축 숫자의 소수 자리 — 1달러 밑을 지나는 종목 주가(디웨이브)는 0 자리면 눈금이 겹친다
  *   markNames           ▲·▼ 의 이름(기본 진입·청산 — 패턴은 오름·내림 신호)
+ *   ohlc · area         캔들 대신 바(OHLC) 눈금으로, 종가 선 아래를 칠해서 — 차트 탭의 차트 유형 예시(stock/charts)
  *
  * 가격 축 숫자는 기본으로 적지 않는다 — 합성 가격이라 값에 뜻이 없고, 숫자가 있으면 실제 지수로 읽힌다.
  * 수준이 규칙인 것(RSI 70·30, CAPE 의 평균 배수)만 적는다. 표시 색은 화면 공통 규칙대로 ▲ 초록, ▼ 빨강.
@@ -131,6 +132,16 @@ export default function ExampleChart({ spec }) {
           ? candles.map((b, i) => {
               const up = b.c >= b.o
               const c = up ? 'var(--good)' : 'var(--neg)'
+              if (spec.ohlc) {
+                const t = Math.max(2, bw / 2)
+                return (
+                  <g key={i} stroke={c} strokeWidth={1.2}>
+                    <line x1={sx(i)} x2={sx(i)} y1={sy(b.h)} y2={sy(b.l)} />
+                    <line x1={sx(i) - t} x2={sx(i)} y1={sy(b.o)} y2={sy(b.o)} />
+                    <line x1={sx(i)} x2={sx(i) + t} y1={sy(b.c)} y2={sy(b.c)} />
+                  </g>
+                )
+              }
               return (
                 <g key={i}>
                   <line x1={sx(i)} x2={sx(i)} y1={sy(b.h)} y2={sy(b.l)} stroke={c} strokeWidth={1} />
@@ -139,7 +150,15 @@ export default function ExampleChart({ spec }) {
                 </g>
               )
             })
-          : <path d={line(close)} fill="none" stroke="var(--text-primary)" strokeWidth={1.4} />}
+          : (
+            <>
+              {spec.area && (
+                <path d={`${line(close)}L${sx(n - 1).toFixed(1)},${P.t + mainH}L${sx(0).toFixed(1)},${P.t + mainH}Z`}
+                      fill="var(--series-2)" opacity={0.18} />
+              )}
+              <path d={line(close)} fill="none" stroke="var(--text-primary)" strokeWidth={1.4} />
+            </>
+          )}
         {(spec.overlays || []).map((o) => (
           <path key={o.label} d={line(o.values)} fill="none" stroke={o.color} strokeWidth={1.6}
                 strokeDasharray={o.dash ? '5 4' : ''} />
