@@ -128,6 +128,7 @@ backend/
     verify_earnings.py      발표일 짝짓기(마지막 2.02·못 찾음·고쳐 낸 제출)·발표 뒤 제출을 흔들어도 같은지·SPY 대조·분할 단위
     verify_stock_facts.py   12개월 이익(4분기 차·고쳐진 값·빠진 분기)·베타·실제 12개월 합 = 10-K 연간 값
     verify_picks.py         종목 비교 — DCF 표·역 DCF·기준 판정의 '모름'·시장 몫 빼기·화면과 기법 목록 짝·미래 재무를 안 보는지
+    verify_charts.py        차트 탭 — 목록 id·단기 매매 연결·그림 선 길이·지표 12개 = 파이썬 식·지그재그가 꺾이는지
     verify_valuation.py     지수 평가가 미래(발표 시차 포함)를 안 보는지·범위가 5% 안팎인지·CAPE 가 실러 열과 같은지
     export_static.py        정적 사이트용 스냅샷
     build_sgg_shapes.py     행정동 경계 → 시군구 지도 경로(frontend/src/realestate/topics/sgg_shapes.json)
@@ -165,6 +166,8 @@ frontend/
   src/stock/views/TechniqueView.jsx  장기 투자·단기 매매 두 탭이 같이 쓰는 저장소 화면
   src/stock/components/TechniqueModal.jsx  기법 설명 창 · ExampleChart.jsx 예시 그림(선·캔들·띠·표시·아래 칸)
   src/stock/components/LiveSection.jsx    창의 '실제 지수에서' — 지금 상태·신호 뒤 성적·규칙대로 vs 사서 들고 있기
+  src/stock/charts/          차트 탭 — calc.js(지표 식)·sample.js(같은 합성 가격)·types·trend·volume.js(항목)·catalog.js(묶음·검색)
+  src/stock/views/ChartView.jsx   차트 탭 화면 — 찾는 칸·묶음별 카드·설명 창(예시 그림)
   src/stock/pick.jsx        탭 위의 종목 고르기(주소 ?sym=) · 고른 종목의 재료를 한 번 받아 둔다
   src/stock/techniques/longStock.js   장기 기법을 고른 종목에 — 그림 스펙·계산 표·카드 한 줄, 해당 없음과 그 까닭
   src/stock/components/ValuationSection.jsx   장기 지수 평가 창의 '실제 지수에서' — 지금 값·역사 백분위·백분위 칸별 뒤 5·10년 수익

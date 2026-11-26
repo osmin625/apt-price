@@ -33,6 +33,7 @@
 | [docs/stock/effects.md](docs/stock/effects.md) | 경제지표가 지수에 미친 영향 — 지표·짝·발표 시차·범위를 재는 법 (지수 분석 탭 맨 위) | 지표를 더하거나 영향을 재는 법을 바꿀 때 |
 | [docs/stock/picks.md](docs/stock/picks.md) | 종목 비교 — 고른 종목의 시장 몫을 뺀 수익률과 지표, 장기 기법을 실제 재무에 돌린 계열, 실적 발표 기준, 종목 주가·EDGAR 재무 출처 | 종목을 더하거나 종목에 돌리는 기법을 바꿀 때 |
 | [docs/stock/valuation.md](docs/stock/valuation.md) | 장기 투자 탭 — 가치평가 기법 저장소, 지수 평가의 출처, 가상 회사 예시 | 장기 기법을 더하거나 지수 평가를 붙일 때 |
+| [docs/stock/charts.md](docs/stock/charts.md) | 차트 탭 — 앱의 차트 유형·오버레이·보조지표를 보는 법, 같은 합성 가격에 돌린 예시, 앱 목록과 맞추기 | 지표를 더하거나 앱 목록에 맞출 때 |
 | [docs/stock/trading.md](docs/stock/trading.md) | 단기 매매 탭 — 차트 기법 저장소, 합성 예시를 만드는 법, grilling 으로 정한 것 | 단기 기법을 더하거나 실제 성적을 붙일 때 |
 | [docs/engineering/architecture.md](docs/engineering/architecture.md) | 어느 파일이 무엇을 맡는지 | 코드를 처음 열 때 |
 | [docs/engineering/glossary.md](docs/engineering/glossary.md) | 코드 이름과 뜻, 이름 짓는 규칙 | 이름이 헷갈리거나 새로 지을 때 |
