@@ -15,8 +15,17 @@
 
 - `diff`   — 1년 새 몇 %p 변했나. 금리·실업률처럼 이미 % 인 것
 - `growth` — 1년 상승률(%). 물가지수·M2·환율처럼 수준이 단위를 가진 것
-- `level`  — 수준 그대로. **미국 장단기 금리차만**이다. 역전(음수) 여부가 널리 알려진 신호라
-  변화로 바꾸면 그 신호를 버린다. 화면이 예외라고 적는다
+- `level`  — 수준 그대로. 수준 자체가 널리 알려진 신호인 것 — 장단기 금리차(역전 여부)와 '위험·여건'
+  묶음(VIX·신용 스프레드·금융여건지수)이다. 이 셋은 오래 높거나 낮게 머물지 않고 평소로 돌아오는 계열이라,
+  1년 변화로 바꾸면 '지금 겁먹었나' 라는 뜻이 흐려진다. 왜 수준인지(`note`)를 화면이 적는다
+
+## 오른 시기 vs 내린 시기를 나누는 선 — `split`
+
+창의 '오른 시기 vs 내린 시기' 표를 어디서 나누나. 비워 두면 꼴이 정한다(`effects.one` — growth 는 중앙값,
+나머지는 0). 0 에 뜻이 없는 수준(VIX·신용 스프레드는 늘 양수)은 `median` 으로 둔다 — 0 으로 나누면 한쪽이 빈다.
+금융여건지수는 0 이 1971년 이래의 평균이라 뜻이 있지만, S&P 500 의 10년은 거의 늘 음수여서 0 으로 나누니
+'죄인 달' 이 두 달뿐이었다(2026-11-29, 106달 대 2달) — 그래서 이것도 `median` 이다. 두 칸의 이름(`sides`)이
+꼴만으로 안 정해지면 여기 적는다(장단기 금리차의 '역전').
 
 ## 발표 시차 — `pub_lag`
 
@@ -43,12 +52,16 @@ from dataclasses import dataclass
 class Indicator:
     id: str        # macro.db 계열 이름
     label: str
-    group: str     # 금리 · 물가 · 통화량 · 환율·경기
+    group: str     # 금리 · 물가 · 통화량 · 환율·경기 · 위험·여건
     kind: str      # diff · growth · level
     pub_lag: int   # 개월
     source: str    # ECOS · FRED
     expect: int    # 상식의 방향: +1 정방향(같이 간다) · −1 역방향(거꾸로 간다)
     why: str       # 그 방향의 이유 — 화면 ⓘ
+    unit: str = ""         # 화면 단위. 비우면 꼴이 정한다(`unit_of`)
+    note: str = ""         # level 만 — 왜 변화가 아니라 수준인가(화면 ⓘ)
+    split: str = ""        # '오른/내린 시기' 를 나누는 선 — "" 꼴대로 · "median"
+    sides: tuple[str, str] | None = None  # 그 두 칸의 이름. None 이면 화면이 꼴로 짓는다
 
 
 _POLICY = "기준금리가 오르면 돈을 빌리는 값이 비싸지고, 기업의 미래 이익을 지금 값으로 깎는 할인율도 높아집니다."
@@ -61,11 +74,30 @@ INDICATORS: tuple[Indicator, ...] = (
     Indicator("us_10y", "미국 10년 국채", "금리", "diff", 0, "FRED", -1, _LONG),
     Indicator("us_term_spread", "미국 장단기 금리차", "금리", "level", 0, "FRED", +1,
               "장기 금리가 단기 금리보다 높은 것이 정상입니다. 역전(음수)은 경기 침체를 앞서 알리는 신호로 "
-              "알려져 있어, 금리차가 클수록 주가에 좋다고 봅니다."),
+              "알려져 있어, 금리차가 클수록 주가에 좋다고 봅니다.",
+              note="역전(음수) 여부가 신호라서입니다.", sides=("양수인 달", "역전된 달")),
     Indicator("us_cpi", "미국 소비자물가", "물가", "growth", 1, "FRED", -1, _CPI),
     Indicator("us_m2", "미국 M2", "통화량", "growth", 1, "FRED", +1, _M2),
     Indicator("us_unrate", "미국 실업률", "환율·경기", "diff", 1, "FRED", -1,
               "실업률이 오르면 경기가 식고 소비와 기업 이익이 줄어든다는 뜻입니다."),
+    # 위험·여건(2026-11-29 요청). 셋 다 '시장이 지금 얼마나 겁먹었나·돈줄이 얼마나 죄었나' 의 수준이다.
+    # 발표 시차: VIX·회사채 금리는 그날 알려진다. 금융여건지수는 금요일까지의 주 값을 다음 주 수요일에 내서
+    # 그 달 마지막 주 값이 다음 달에야 나온다 — 1. 게다가 **낼 때마다 과거 전체를 다시 추정한다**(docs/stock/effects.md '한계').
+    Indicator("us_vix", "VIX(변동성 지수)", "위험·여건", "level", 0, "FRED", -1,
+              "S&P 500 옵션 값에서 뽑은, 앞으로 30일 동안 시장이 예상하는 흔들림의 크기입니다. 높으면 겁먹은 "
+              "시장이라 주가가 약한 때라고 봅니다. 겁이 클 때 산 쪽이 그 뒤에 더 벌었다는 반론도 널리 알려져 있습니다.",
+              unit="pt", note="겁의 크기 자체가 신호이고, 오래 높거나 낮게 머물지 않아 1년 변화로는 뜻이 흐려집니다.",
+              split="median"),
+    Indicator("us_credit_spread", "미국 회사채 신용 스프레드", "위험·여건", "level", 0, "FRED", -1,
+              "신용이 낮은 회사채(무디스 Baa)가 국채보다 금리를 얼마나 더 얹어 주는가입니다. 벌어지면 돈을 빌려 "
+              "주는 쪽이 부도를 걱정한다는 뜻이라 경기와 주가에 나쁜 신호로 봅니다.",
+              note="웃돈의 크기 자체가 신호이고, 평소로 돌아오는 계열이라 1년 변화로는 뜻이 흐려집니다.",
+              split="median"),
+    Indicator("us_nfci", "미국 금융여건지수", "위험·여건", "level", 1, "FRED", -1,
+              "시카고 연은이 금리·신용·주식·자금 시장의 105개 지표를 하나로 묶은 값입니다. 0 이 평균이고 양수면 "
+              "평소보다 돈줄이 죄어 있다는 뜻이라 주가에 나쁘다고 봅니다.",
+              unit="σ", note="0 이 평균이고 1 이 표준편차 하나라, 수준이 곧 '평소보다 얼마나 죄었나' 입니다.",
+              split="median"),
     Indicator("base_rate", "한국 기준금리", "금리", "diff", 0, "ECOS", -1, _POLICY),
     Indicator("cpi", "한국 소비자물가", "물가", "growth", 1, "ECOS", -1, _CPI),
     Indicator("m2", "한국 M2", "통화량", "growth", 1, "ECOS", +1, _M2),
@@ -77,12 +109,15 @@ BY_ID = {i.id: i for i in INDICATORS}
 
 # 지수 → 견줄 지표. KOSPI 는 한국 지표에 미국 10년 금리를 더한다 — 외국인 자금이 KOSPI 를 크게
 # 움직여서다(합의). S&P 500 은 미국 지표만. 둘 다 미국이 먼저다(위 '미국이 먼저다').
+# VIX 도 KOSPI 에 붙인다 — 같은 이유다. 외국인이 위험을 줄일 때 신흥국 주식부터 판다. 신용 스프레드·금융여건지수는
+# 미국 안의 돈줄이라 S&P 500 에만 둔다.
 PAIRS: dict[str, tuple[str, ...]] = {
-    "spx": ("us_fedfunds", "us_10y", "us_term_spread", "us_cpi", "us_m2", "us_unrate"),
-    "kospi": ("us_10y", "base_rate", "cpi", "m2", "krw_usd"),
+    "spx": ("us_fedfunds", "us_10y", "us_term_spread", "us_cpi", "us_m2", "us_unrate",
+            "us_vix", "us_credit_spread", "us_nfci"),
+    "kospi": ("us_10y", "us_vix", "base_rate", "cpi", "m2", "krw_usd"),
 }
 
 
 def unit_of(ind: Indicator) -> str:
     """x 의 화면 단위."""
-    return "%" if ind.kind == "growth" else "%p"
+    return ind.unit or ("%" if ind.kind == "growth" else "%p")

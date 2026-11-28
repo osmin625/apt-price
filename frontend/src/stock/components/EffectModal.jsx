@@ -17,10 +17,15 @@ import Modal from '../../shared/Modal'
 const signed = (v, d = 1) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}`)
 const ym = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}`
 const tone = (verdict) => (verdict === 'pos' ? 'tone-pos' : verdict === 'neg' ? 'tone-neg' : 'muted')
+// 평소 폭 — 수준은 그 달의 값이 퍼진 폭이고, 나머지는 1년 움직임이 퍼진 폭이다. 지표 카드도 쓴다.
+export const spread = (r) => `${r.kind === 'level' ? '' : '1년 '}${fmt(r.sd, 2)}${r.unit}`
 const VERDICT = { pos: '+ 뚜렷함', neg: '− 뚜렷함', none: '뚜렷하지 않음' }
 
 function sides(r) {
-  if (r.kind === 'level') return ['양수인 달', '역전된 달']
+  // 꼴만으로 이름이 안 정해지는 지표(장단기 금리차·금융여건지수)는 백엔드가 이름을 준다.
+  if (r.sides) return r.sides
+  if (r.split === 'median') return [`${fmt(r.cut, 1)}${r.unit} 이상(중앙값 위)`, `${fmt(r.cut, 1)}${r.unit} 미만`]
+  if (r.kind === 'level') return ['0 이상인 달', '0 미만인 달']
   // 상승률은 중앙값으로 나눈다(effects.py). 중앙값이 음수일 수 있어(환율) '빨리 오른' 이라 하지 않는다.
   if (r.kind === 'growth') return [`1년 상승률 ${signed(r.cut, 1)}% 이상(중앙값 위)`, `${signed(r.cut, 1)}% 미만`]
   return ['1년 새 오른 달', '1년 새 내린 달']
@@ -79,7 +84,7 @@ export default function EffectModal({ ix, row: r, joint, horizonLabel, onClose }
   return (
     <Modal title={`${r.label} → ${ix.label} · ${horizonLabel}`} onClose={onClose} wide>
       <p>
-        평소 폭(1년 {fmt(r.sd, 2)}{r.unit})만큼 움직일 때 <strong className={tone(r.verdict)}>{signed(r.bar)}%</strong>
+        평소 폭({spread(r)})만큼 움직일 때 <strong className={tone(r.verdict)}>{signed(r.bar)}%</strong>
         {' '}(95% 범위 {signed(r.lo)} ~ {signed(r.hi)}%) · 1{r.unit}당 {signed(r.slope, 2)}% ·{' '}
         <span className={tone(r.verdict)}>{VERDICT[r.verdict]}</span>
         <Hint
@@ -88,7 +93,7 @@ export default function EffectModal({ ix, row: r, joint, horizonLabel, onClose }
             r.pub_lag
               ? `이 지표는 다음 달에야 발표됩니다. '그 뒤' 는 발표된 달부터 셉니다.`
               : '이 지표는 그날 알려지므로 그 달 말부터 셉니다.',
-            r.kind === 'level' ? '장단기 금리차만 1년 변화가 아니라 수준입니다 — 역전(음수) 여부가 신호라서입니다.' : null,
+            r.kind === 'level' ? `1년 변화가 아니라 수준입니다${r.note ? ` — ${r.note}` : '.'}` : null,
             `출처: ${r.source}.`,
           ]}
         />
