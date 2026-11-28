@@ -4,7 +4,7 @@ import { api } from '../../api'
 import ChartLink from '../../shared/ChartLink'
 import { fmt } from '../../shared/Charts'
 import Hint from '../../shared/Hint'
-import EffectModal from '../components/EffectModal'
+import EffectModal, { spread } from '../components/EffectModal'
 import ForecastCard from '../components/ForecastCard'
 import { usePicked } from '../pick'
 
@@ -43,11 +43,12 @@ const ym = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}`
 const signed = (v, d = 1) => `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), d)}`
 const tone = (verdict) => (verdict === 'pos' ? 'tone-pos' : verdict === 'neg' ? 'tone-neg' : 'muted')
 const AGREE = { yes: '상식대로', no: '상식과 반대', unclear: '뚜렷하지 않음' }
-const KIND = {
-  level: '수준(%p) 그대로 봅니다 — 역전 여부가 신호라서입니다.',
+// 왜 수준인지는 지표마다 다르다(백엔드 `indicators.Indicator.note`) — 장단기 금리차는 역전, VIX 는 겁의 크기.
+const kindNote = (r) => ({
+  level: `수준(${r.unit}) 그대로 봅니다${r.note ? ` — ${r.note}` : '.'}`,
   growth: '1년 상승률(%)로 봅니다.',
   diff: '1년 변화(%p)로 봅니다.',
-}
+}[r.kind])
 
 /** 0 을 가운데 둔 작은 띠 — 가는 선이 95% 범위, 굵은 칸이 막대. 색은 부호(뚜렷하지 않으면 무채색). */
 function Strip({ r, ext }) {
@@ -78,9 +79,9 @@ function IndicatorTile({ r, ext, onPick }) {
         <Hint
           notes={[
             `상식: ${r.why}`,
-            KIND[r.kind],
+            kindNote(r),
             r.n
-              ? `평소 폭(1년 ${fmt(r.sd, 2)}${r.unit})만큼 오를 때 ${signed(r.bar)}% · 1${r.unit}당 `
+              ? `평소 폭(${spread(r)})만큼 오를 때 ${signed(r.bar)}% · 1${r.unit}당 `
                 + `${signed(r.slope, 2)}% · 95% 범위 ${signed(r.lo)} ~ ${signed(r.hi)}% · ${r.n}개월`
               : null,
             r.pub_lag ? "다음 달에야 발표되어 '그 뒤' 는 한 달 밀어 셉니다." : null,
@@ -158,10 +159,10 @@ function EffectCard({ ix, stock }) {
               ? `${stock.label} 의 월 수익률에서 베타(${fmt(stock.market_beta.value, 2)}, ${ym(stock.market_beta.from)}~${ym(stock.market_beta.to)} ${stock.market_beta.months}달로 맞춤) × SPY 월 수익률을 뺀 것을 이어 붙여, 지수 자리에 넣고 같은 계산을 돌렸습니다. 시장 전체가 움직인 몫을 빼고 이 종목만의 움직임이 지표와 어땠는지를 봅니다.`
               : null,
             '정방향·역방향은 상식입니다 — 그 지표가 오를 때 주가가 같이 오른다고(정방향) 또는 내린다고(역방향) 흔히 말하는 쪽입니다. 잰 값이 아니라 잰 값과 견줄 기준이라 손으로 적었습니다. 이유는 카드의 ⓘ 에 있습니다.',
-            '값은 지표가 평소 폭(1년 움직임의 표준편차)만큼 올랐을 때 지수 수익률이 평균 몇 % 달랐나입니다. 단위가 다른 지표를 같은 길이로 견주려고 평소 폭으로 맞췄습니다.',
+            '값은 지표가 평소 폭(1년 움직임의 표준편차, 수준으로 보는 지표는 수준의 표준편차)만큼 올랐을 때 지수 수익률이 평균 몇 % 달랐나입니다. 단위가 다른 지표를 같은 길이로 견주려고 평소 폭으로 맞췄습니다.',
             '띠의 가는 선은 95% 범위입니다. 범위가 0 을 넘지 않으면 초록(+)·빨강(−)이고 상식과 맞는지를 적습니다. 넘으면 회색(뚜렷하지 않음)이고 값이 상식 쪽인지 반대 쪽인지만 덧붙입니다. 한 지수 안의 띠는 같은 자입니다.',
-            '같은 1년: 지표가 움직인 그 1년 동안의 지수. 그 뒤: 지표를 알 수 있게 된 뒤부터의 지수입니다 — 물가·M2·실업률은 다음 달에야 발표되어 한 달 밀어 셉니다.',
-            '금리·실업률은 1년 변화(%p), 물가·M2·환율은 1년 상승률(%)입니다. 미국 장단기 금리차만 수준(%p)입니다 — 역전 여부가 신호라서입니다.',
+            '같은 1년: 지표가 움직인 그 1년 동안의 지수. 그 뒤: 지표를 알 수 있게 된 뒤부터의 지수입니다 — 물가·M2·실업률·금융여건지수는 다음 달에야 발표되어 한 달 밀어 셉니다.',
+            '금리·실업률은 1년 변화(%p), 물가·M2·환율은 1년 상승률(%)입니다. 장단기 금리차와 위험·여건(VIX·신용 스프레드·금융여건지수)은 수준 그대로입니다 — 수준 자체가 신호라서입니다.',
             '연관이지 원인이 아닙니다. 금리가 오른 해에 주가가 내렸어도 경기가 둘을 같이 움직였을 수 있습니다. 지표가 여럿이라 우연히 뚜렷해 보이는 것도 섞일 수 있습니다.',
             '시기에 따라 다름: 표본을 시간순으로 반 나눠 다시 재면 방향이 다릅니다.',
             stock

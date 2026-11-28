@@ -116,10 +116,11 @@ def effects_of(ids: tuple[str, ...], close: dict[str, float]) -> dict:
         rows = []
         for i in ids:
             ind = INDICATOR[i]
-            r = EF.one(xs[i], close, hz, ind.pub_lag, ind.kind)
+            r = EF.one(xs[i], close, hz, ind.pub_lag, ind.kind, ind.split)
             rows.append({"id": i, "label": ind.label, "group": ind.group, "kind": ind.kind,
                          "unit": unit_of(ind), "pub_lag": ind.pub_lag, "source": ind.source,
-                         "expect": ind.expect, "why": ind.why,
+                         "expect": ind.expect, "why": ind.why, "note": ind.note or None,
+                         "split": ind.split or None, "sides": list(ind.sides) if ind.sides else None,
                          **(r or {"n": 0}), "agree": _agree(r, ind.expect),
                          # 뚜렷하지 않아도 막대가 어느 쪽으로 기울었나 — 화면이 '상식 쪽으로 기움' 으로 적는다.
                          "lean": None if not r else (r["bar"] > 0) == (ind.expect > 0)})
@@ -177,7 +178,7 @@ _picks: dict[tuple, dict] = {}
 def picks() -> dict:
     """종목 비교 — 종목마다 시장 몫을 뺀 수익률의 지표 영향과 장기 기법 계열(`pick.py`).
 
-    지표 영향이 종목마다 지표 여섯 × 시점 셋이라 몇 초 걸린다. 주가 마지막 날·재무 마지막 제출·발표·거시 마지막 달로 기억한다.
+    지표 영향이 종목마다 S&P 500 의 지표 전부 × 시점 셋이라 몇 초 걸린다. 주가 마지막 날·재무 마지막 제출·발표·거시 마지막 달로 기억한다.
     """
     ids = PAIRS["spx"]
     key = (tuple(sorted(store.last_dates().items())), tuple(sorted(store.last_filed().items())),

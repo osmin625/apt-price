@@ -128,8 +128,9 @@ def _verdict(lo: float, hi: float) -> str:
     return "pos" if lo > 0 else "neg" if hi < 0 else "none"
 
 
-def one(x: dict[str, float], close: dict[str, float], horizon: str, pub_lag: int, kind: str) -> dict | None:
-    """지표 하나 × 시점 하나의 영향."""
+def one(x: dict[str, float], close: dict[str, float], horizon: str, pub_lag: int, kind: str,
+        split: str = "") -> dict | None:
+    """지표 하나 × 시점 하나의 영향. split 은 '오른/내린 시기' 를 나누는 선(`indicators.Indicator.split`)."""
     ps = pairs(x, close, horizon, pub_lag)
     if len(ps) < MIN_N:
         return None
@@ -148,11 +149,12 @@ def one(x: dict[str, float], close: dict[str, float], horizon: str, pub_lag: int
 
     # 오른 시기 vs 내린 시기. 나누는 선은 지표의 꼴마다 다르다.
     #   diff   — 0: 1년 새 올랐나 내렸나(금리·실업률)
-    #   level  — 0: 금리차가 양수인가 역전인가
+    #   level  — 0: 금리차가 양수인가 역전인가, 금융여건이 평균보다 죄었나
     #   growth — 중앙값: 물가·M2 는 1년 상승률이 거의 늘 양수라 0 으로 나누면 한쪽에 몇 달만 남는다
     #            (재 보니 한국 물가 306달 대 3달). '평소보다 빨리 오른 해 vs 느리게 오른 해' 로 나눈다.
+    #   split="median" — 늘 양수인 수준(VIX·신용 스프레드). 0 으로 나누면 '내린 시기' 가 빈다.
     # diff 는 변화가 0 인 달(기준금리가 1년 내내 그대로)을 양쪽 다 뺀다 — '오른 시기' 에 넣으면 거짓이다.
-    cut = sorted(xs)[len(xs) // 2] if kind == "growth" else 0.0
+    cut = sorted(xs)[len(xs) // 2] if (kind == "growth" or split == "median") else 0.0
     up = [p[2] for p in ps if (p[1] > cut if kind == "diff" else p[1] >= cut)]
     down = [p[2] for p in ps if p[1] < cut]
 
@@ -188,7 +190,7 @@ def joint(xs: dict[str, dict[str, float]], close: dict[str, float], horizon: str
         ps = pairs({t: 0.0}, close, horizon, lag)
         if ps:
             rows.append((t, [xs[i][t] for i in ids], ps[0][2]))
-    # 독립인 해가 계수 수보다 넉넉해야 한다 — S&P 500 의 10년에 지표 여섯을 넣으면 자유도가 바닥난다.
+    # 독립인 해가 계수 수보다 넉넉해야 한다 — S&P 500 의 10년에 지표를 여럿 넣으면 자유도가 바닥난다.
     if len(rows) / OVERLAP < len(ids) + 4:
         return None
     b, se, c = ols_hh([r[1] for r in rows], [r[2] for r in rows])

@@ -20,7 +20,7 @@ backend/
     macro/models.py         macro_points — (계열 id, 주기, 시점) 한 줄
     macro/clients/ecos.py   한국은행 ECOS — M2·기준금리·소비자물가·대출/예금 금리·KOSPI 시가총액·PER·국고채 10년·명목 GDP (키 없으면 sample 폴백)
                             fetch_table 은 표 하나를 그대로 — KOSPI 일별도 이것으로 받는다
-    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 금리·물가·M2·실업률·시가총액·GDP(SERIES)·S&P 500(SP500, 최근 10년)
+    macro/clients/fred.py   FRED — 키 없는 CSV. 미국 금리·물가·M2·실업률·VIX·신용 스프레드·금융여건지수·시가총액·GDP(SERIES)·S&P 500(SP500, 최근 10년)
     macro/clients/shiller.py   실러 교수의 ie_data.xls — S&P 500 1871~ 월별 주가·이익·물가·10년 금리·CAPE (비공식, 받을 때 FRED 와 대조)
 
     stock/                  주식 — 지수(다음은 종목)의 월~분기 수익률 구간 예측
